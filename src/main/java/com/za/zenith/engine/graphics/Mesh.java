@@ -159,12 +159,13 @@ public class Mesh {
             glEnableVertexAttribArray(3);
             glVertexAttribPointer(4, 1, GL_FLOAT, false, stride, 11 * Float.BYTES);
             glEnableVertexAttribArray(4);
-            glVertexAttribPointer(5, 1, GL_FLOAT, false, stride, 12 * Float.BYTES);
-            glEnableVertexAttribArray(5);
-            glVertexAttribPointer(6, 2, GL_FLOAT, false, stride, 13 * Float.BYTES);
+            // location = 5 is reserved for aInstanceData in vertex.glsl
+            glVertexAttribPointer(6, 1, GL_FLOAT, false, stride, 12 * Float.BYTES);
             glEnableVertexAttribArray(6);
-            glVertexAttribPointer(7, 1, GL_FLOAT, false, stride, 15 * Float.BYTES);
+            glVertexAttribPointer(7, 2, GL_FLOAT, false, stride, 13 * Float.BYTES);
             glEnableVertexAttribArray(7);
+            glVertexAttribPointer(8, 1, GL_FLOAT, false, stride, 15 * Float.BYTES);
+            glEnableVertexAttribArray(8);
         }
     }
 

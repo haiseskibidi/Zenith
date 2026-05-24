@@ -264,6 +264,7 @@ public class OverlayRenderSystem {
             Matrix4f model = RenderContext.getMatrix();
             model.translate(breakingPos.x(), breakingPos.y(), breakingPos.z());
             shader.setMatrix4f("model", model);
+            shader.setBoolean("uIsProxy", false);
             if (holeMesh != null) holeMesh.render(shader);
         }
 

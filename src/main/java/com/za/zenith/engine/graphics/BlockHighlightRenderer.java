@@ -84,6 +84,7 @@ public class BlockHighlightRenderer {
         
         blockShader.setVector3f("uOverrideLight", new Vector3f(-1.0f, -1.0f, -1.0f));
         blockShader.setBoolean("uIsProxy", false);
+        blockShader.setFloat("uSwayOverride", -1.0f);
         blockShader.setInt("highlightPass", 0);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glEnable(GL_CULL_FACE);

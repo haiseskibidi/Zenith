@@ -69,8 +69,14 @@ public class ChunkMeshGenerator {
         private final Chunk[][] neighborhood = new Chunk[3][3];
         private final int centerChunkX;
         private final int centerChunkZ;
+        private final BlockPos breakingPos;
 
         public ChunkNeighborhood(World world, int cx, int cz) {
+            this(world, cx, cz, null);
+        }
+
+        public ChunkNeighborhood(World world, int cx, int cz, BlockPos breakingPos) {
+            this.breakingPos = breakingPos;
             this.centerChunkX = cx;
             this.centerChunkZ = cz;
             for (int dx = -1; dx <= 1; dx++) {
@@ -78,6 +84,10 @@ public class ChunkMeshGenerator {
                     neighborhood[dx + 1][dz + 1] = world.getChunkInternal(cx + dx, cz + dz);
                 }
             }
+        }
+
+        public boolean isBreaking(int x, int y, int z) {
+            return breakingPos != null && breakingPos.x() == x && breakingPos.y() == y && breakingPos.z() == z;
         }
 
         public Chunk getChunk(int worldX, int worldZ) {
@@ -88,6 +98,7 @@ public class ChunkMeshGenerator {
         }
 
         public int getRawBlockData(int x, int y, int z) {
+            if (isBreaking(x, y, z)) return 0;
             if (y < 0 || y >= Chunk.CHUNK_HEIGHT) return 0;
             Chunk c = getChunk(x, z);
             if (c == null) return 0;
@@ -97,12 +108,43 @@ public class ChunkMeshGenerator {
         public int getSunlight(int x, int y, int z) {
             if (y >= Chunk.CHUNK_HEIGHT) return 15;
             if (y < 0) return 0;
+            if (breakingPos != null && x == breakingPos.x() && y == breakingPos.y() && z == breakingPos.z()) {
+                int maxSun = 0;
+                maxSun = Math.max(maxSun, getSunlightRaw(x + 1, y, z));
+                maxSun = Math.max(maxSun, getSunlightRaw(x - 1, y, z));
+                maxSun = Math.max(maxSun, getSunlightRaw(x, y + 1, z));
+                maxSun = Math.max(maxSun, getSunlightRaw(x, y - 1, z));
+                maxSun = Math.max(maxSun, getSunlightRaw(x, y, z + 1));
+                maxSun = Math.max(maxSun, getSunlightRaw(x, y, z - 1));
+                return maxSun;
+            }
+            return getSunlightRaw(x, y, z);
+        }
+
+        private int getSunlightRaw(int x, int y, int z) {
+            if (y >= Chunk.CHUNK_HEIGHT) return 15;
+            if (y < 0) return 0;
             Chunk c = getChunk(x, z);
             if (c == null || !c.isReady()) return (y >= 128) ? 15 : 0;
             return c.getSunlight(x & 15, y, z & 15);
         }
 
         public int getBlockLight(int x, int y, int z) {
+            if (y < 0 || y >= Chunk.CHUNK_HEIGHT) return 0;
+            if (breakingPos != null && x == breakingPos.x() && y == breakingPos.y() && z == breakingPos.z()) {
+                int maxBlock = 0;
+                maxBlock = Math.max(maxBlock, getBlockLightRaw(x + 1, y, z));
+                maxBlock = Math.max(maxBlock, getBlockLightRaw(x - 1, y, z));
+                maxBlock = Math.max(maxBlock, getBlockLightRaw(x, y + 1, z));
+                maxBlock = Math.max(maxBlock, getBlockLightRaw(x, y - 1, z));
+                maxBlock = Math.max(maxBlock, getBlockLightRaw(x, y, z + 1));
+                maxBlock = Math.max(maxBlock, getBlockLightRaw(x, y, z - 1));
+                return maxBlock;
+            }
+            return getBlockLightRaw(x, y, z);
+        }
+
+        private int getBlockLightRaw(int x, int y, int z) {
             if (y < 0 || y >= Chunk.CHUNK_HEIGHT) return 0;
             Chunk c = getChunk(x, z);
             if (c == null || !c.isReady()) return 0;
@@ -278,8 +320,12 @@ public class ChunkMeshGenerator {
             float totalSun = 0;
             float totalBlock = 0;
 
-            float centralSun = neighborhood.getSunlight(fx, fy, fz);
-            float centralBlock = neighborhood.getBlockLight(fx, fy, fz);
+            int cx = fx, cy = fy, cz = fz;
+            if (neighborhood.isBreaking(fx, fy, fz)) {
+                cx = x; cy = y; cz = z;
+            }
+            float centralSun = neighborhood.getSunlight(cx, cy, cz);
+            float centralBlock = neighborhood.getBlockLight(cx, cy, cz);
             
             for (int i = 0; i < 4; i++) {
                 int sx = fx, sy = fy, sz = fz;
@@ -294,8 +340,12 @@ public class ChunkMeshGenerator {
                     if (i == 2 || i == 3) sz += nz;
                 }
                 
-                totalSun += neighborhood.getSunlight(sx, sy, sz);
-                totalBlock += neighborhood.getBlockLight(sx, sy, sz);
+                int sx2 = sx, sy2 = sy, sz2 = sz;
+                if (neighborhood.isBreaking(sx, sy, sz)) {
+                    sx2 = x; sy2 = y; sz2 = z;
+                }
+                totalSun += neighborhood.getSunlight(sx2, sy2, sz2);
+                totalBlock += neighborhood.getBlockLight(sx2, sy2, sz2);
             }
 
             out[0] = Math.max(centralSun, totalSun * 0.25f);
@@ -375,7 +425,7 @@ public class ChunkMeshGenerator {
             // Calculate AABB in background thread
             org.joml.Vector3f min = new org.joml.Vector3f(Float.MAX_VALUE);
             org.joml.Vector3f max = new org.joml.Vector3f(-Float.MAX_VALUE);
-            for (int i = 0; i < dLen; i += 16) {
+            for (int i = 0; i < dLen; i += 7) {
                 float px = internal[i];
                 float py = internal[i+1];
                 float pz = internal[i+2];
@@ -420,7 +470,7 @@ public class ChunkMeshGenerator {
 
         ChunkNeighborhood neighborhood = null;
         if (world != null && pos != null) {
-            neighborhood = new ChunkNeighborhood(world, pos.x() >> 4, pos.z() >> 4);
+            neighborhood = new ChunkNeighborhood(world, pos.x() >> 4, pos.z() >> 4, pos);
         }
 
         if (def.getPlacementType() == com.za.zenith.world.blocks.PlacementType.CROSS_PLANE || def.getPlacementType() == com.za.zenith.world.blocks.PlacementType.DOUBLE_PLANT) {
@@ -492,7 +542,7 @@ public class ChunkMeshGenerator {
     public static Mesh generateHoleMesh(BlockPos pos, World world, DynamicTextureAtlas atlas) {
         MeshData data = new MeshData(512);
         int[] oppositeFaces = {1, 0, 3, 2, 5, 4}; 
-        ChunkNeighborhood neighborhood = new ChunkNeighborhood(world, pos.x() >> 4, pos.z() >> 4);
+        ChunkNeighborhood neighborhood = new ChunkNeighborhood(world, pos.x() >> 4, pos.z() >> 4, pos);
 
         for (int face = 0; face < 6; face++) {
             Direction dir = Direction.values()[face];
