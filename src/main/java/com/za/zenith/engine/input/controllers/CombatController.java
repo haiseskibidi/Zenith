@@ -2,7 +2,7 @@ package com.za.zenith.engine.input.controllers;
 
 import com.za.zenith.engine.event.EventBus;
 import com.za.zenith.engine.event.events.PlayerAttackEntityEvent;
-import com.za.zenith.entities.LivingEntity;
+import com.za.zenith.entities.components.HealthComponent;
 import com.za.zenith.utils.Logger;
 
 /**
@@ -15,12 +15,13 @@ public class CombatController {
     }
 
     private void onPlayerAttack(PlayerAttackEntityEvent event) {
-        if (event.target() instanceof LivingEntity living) {
+        HealthComponent health = event.target().getComponent(HealthComponent.class);
+        if (health != null) {
             event.player().swing();
             // In the future, apply custom attributes & affixes for damage calculations
-            living.takeDamage(2.0f);
+            health.takeDamage(2.0f);
             event.player().addBlood(0.15f);
-            Logger.info("Attacked %s, hands are now bloody", living.getClass().getSimpleName());
+            Logger.info("Attacked entity through HealthComponent, hands are now bloody");
         }
     }
 }

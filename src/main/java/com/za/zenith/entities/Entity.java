@@ -25,6 +25,20 @@ public abstract class Entity {
     protected static final float GRAVITY = -28.0f;
     protected static final float TERMINAL_VELOCITY = -50.0f;
 
+    private final java.util.Map<Class<? extends com.za.zenith.entities.components.EntityComponent>, com.za.zenith.entities.components.EntityComponent> components = new java.util.HashMap<>();
+
+    public <T extends com.za.zenith.entities.components.EntityComponent> T getComponent(Class<T> type) {
+        return type.cast(components.get(type));
+    }
+
+    public <T extends com.za.zenith.entities.components.EntityComponent> boolean hasComponent(Class<T> type) {
+        return components.containsKey(type);
+    }
+
+    public void addComponent(com.za.zenith.entities.components.EntityComponent component) {
+        components.put(component.getClass(), component);
+    }
+
     public Entity(Vector3f position, float width, float height) {
         this.position = new Vector3f(position);
         this.prevPosition = new Vector3f(position);
@@ -55,6 +69,11 @@ public abstract class Entity {
         prevRotation.set(rotation);
         
         onUpdate(deltaTime, world);
+
+        // Обновляем компоненты
+        for (com.za.zenith.entities.components.EntityComponent component : components.values()) {
+            component.update(this, deltaTime, world);
+        }
 
         // Snap very small residual velocities to zero
         if (Math.abs(velocity.x) < 0.005f) velocity.x = 0f;

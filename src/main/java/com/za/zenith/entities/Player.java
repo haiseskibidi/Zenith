@@ -107,6 +107,7 @@ public class Player extends LivingEntity {
               com.za.zenith.world.physics.PhysicsSettings.getInstance().standingHeight, 
               20.0f);
         this.inventory = new Inventory();
+        this.addComponent(new com.za.zenith.entities.components.InventoryComponent(this.inventory));
         
         com.za.zenith.world.physics.PhysicsSettings settings = com.za.zenith.world.physics.PhysicsSettings.getInstance();
         this.currentEyeHeight = settings.standingEyeHeight;
@@ -828,7 +829,7 @@ public class Player extends LivingEntity {
     public void setMode(com.za.zenith.engine.core.PlayerMode mode) { this.mode = mode; }
 
     public float getStat(com.za.zenith.utils.Identifier statId) {
-        float total = stats.get(statId);
+        float total = getStats().get(statId);
         
         // Add active hand item bonus
         ItemStack held = inventory.getSelectedItemStack();
@@ -854,7 +855,7 @@ public class Player extends LivingEntity {
 
     private void updateEquipmentStats() {
         // Clear old equipment modifiers
-        stats.removeModifiersFrom(com.za.zenith.utils.Identifier.of("zenith:equipment"));
+        getStats().removeModifiersFrom(com.za.zenith.utils.Identifier.of("zenith:equipment"));
 
         // 1. Sum stats from all equipment slots (PASSIVE bonuses)
         for (int i = 0; i < inventory.size(); i++) {
@@ -866,7 +867,7 @@ public class Player extends LivingEntity {
                 for (com.za.zenith.world.items.stats.StatDefinition def : com.za.zenith.world.items.stats.StatRegistry.getAll()) {
                     float value = stack.getStat(def.identifier());
                     if (value != 0) {
-                        stats.addModifier(def.identifier(), new com.za.zenith.world.items.stats.StatModifier(
+                        getStats().addModifier(def.identifier(), new com.za.zenith.world.items.stats.StatModifier(
                             com.za.zenith.utils.Identifier.of("zenith:equipment"),
                             com.za.zenith.world.items.stats.StatModifier.Operation.ADD,
                             value

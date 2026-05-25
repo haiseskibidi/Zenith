@@ -1,54 +1,62 @@
 package com.za.zenith.entities;
 
+import com.za.zenith.entities.components.HealthComponent;
 import org.joml.Vector3f;
 
 /**
  * Base class for all living entities (Players, Mobs).
- * Adds health and combat mechanics.
+ * Adds health and combat mechanics via HealthComponent delegator (ECS Lite).
  */
 public abstract class LivingEntity extends Entity {
-    protected float health;
-    protected float maxHealth;
-    protected final com.za.zenith.world.items.stats.StatContainer stats = new com.za.zenith.world.items.stats.StatContainer();
 
     public LivingEntity(Vector3f position, float width, float height, float maxHealth) {
         super(position, width, height);
-        this.maxHealth = maxHealth;
-        this.health = maxHealth;
+        this.addComponent(new HealthComponent(maxHealth));
     }
 
     public void takeDamage(float amount) {
-        float defense = getDefense();
-        // Formula: damage = base_damage * (100 / (100 + defense))
-        // 100 defense = 50% reduction, 200 = 66% reduction
-        float multiplier = 100.0f / (100.0f + Math.max(0, defense));
-        float finalDamage = amount * multiplier;
-        
-        this.health = Math.max(0, this.health - finalDamage);
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        if (healthComp != null) {
+            healthComp.takeDamage(amount);
+        }
     }
 
     public float getDefense() {
-        return stats.get(com.za.zenith.world.items.stats.StatRegistry.DEFENSE);
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        return healthComp != null ? healthComp.getDefense() : 0.0f;
     }
 
     public float getStat(com.za.zenith.utils.Identifier statId) {
-        return stats.get(statId);
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        return healthComp != null ? healthComp.getStat(statId) : 0.0f;
     }
 
     public com.za.zenith.world.items.stats.StatContainer getStats() {
-        return stats;
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        return healthComp != null ? healthComp.getStats() : null;
     }
 
     public void heal(float amount) {
-        this.health = Math.min(this.maxHealth, this.health + amount);
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        if (healthComp != null) {
+            healthComp.heal(amount);
+        }
     }
 
     public boolean isDead() {
-        return health <= 0;
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        return healthComp != null && healthComp.isDead();
     }
 
-    public float getHealth() { return health; }
-    public float getMaxHealth() { return maxHealth; }
+    public float getHealth() {
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        return healthComp != null ? healthComp.getHealth() : 0.0f;
+    }
+
+    public float getMaxHealth() {
+        HealthComponent healthComp = getComponent(HealthComponent.class);
+        return healthComp != null ? healthComp.getMaxHealth() : 0.0f;
+    }
 
     @Override
     protected void onUpdate(float deltaTime, com.za.zenith.world.World world) {
@@ -56,5 +64,3 @@ public abstract class LivingEntity extends Entity {
         move(world, velocity.x * deltaTime, velocity.y * deltaTime, velocity.z * deltaTime);
     }
 }
-
-

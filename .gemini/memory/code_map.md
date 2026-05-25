@@ -170,7 +170,14 @@
 ## Entity System (v5.6 NEW)
 ### com.za.zenith.entities.Entity (UPDATED)
 Назначение: Базовый класс для всех сущностей (игрок, мобы, предметы).
-Функции: Реализует интерполяцию (`prevPosition`, `prevRotation`), систему выталкивания из блоков (`Unstuck`) и общую логику перемещения `move()` с коллизиями.
+Функции: Добавлена Zero-Alloc мапа компонентов (`components`), методы `getComponent()`, `addComponent()` и `hasComponent()`. Реализует интерполяцию (`prevPosition`, `prevRotation`), систему выталкивания из блоков (`Unstuck`) и общую логику перемещения `move()` с коллизиями.
+
+### com.za.zenith.entities.components (NEW — ECS Lite)
+Назначение: Компоненты для гибридной архитектуры сущностей.
+- `EntityComponent.java`: Маркерный интерфейс жизненного цикла тиков для всех компонентов.
+- `HealthComponent.java`: Компонент здоровья, расчета урона с броней, регенерации и стат-контейнера.
+- `InventoryComponent.java`: Унифицированная обертка инвентаря сущностей.
+- `AIComponent.java`: Модульный ИИ, управляющий состояниями (Wander, Search, Chase, Idle), восприятием шума и зрения.
 
 ### com.za.zenith.entities.ItemEntity (UPDATED)
 Назначение: Сущность предмета, выброшенного в мир.
