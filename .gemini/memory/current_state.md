@@ -7,6 +7,11 @@
   - Полный рефакторинг `DataLoader`. Загрузка ресурсов теперь делегирована специализированным классам (`ActionDataLoader`, `BlockDataLoader`, `ItemDataLoader` и т.д.).
   - Поддержка **Hot Reload**: Реализована система синхронизации `ItemStack` при обновлении определений предметов "на лету" через рефлексию.
   - Интерфейс `LiveReloadable`: Унифицированный механизм отслеживания путей к исходным JSON файлам для всех игровых данных.
+- **Lightweight Event Bus & Decoupled Controllers**:
+  - Реализовано ядро реактивной шины событий `EventBus` и базовый интерфейс `Event` для полной развязки систем.
+  - Внедрены события `PlayerAttackEntityEvent`, `PlayerPickupEvent` и `BlockLeftClickEvent` с поддержкой consumption-логики для управления жизненным циклом действий.
+  - Создан новый слой контроллеров (`CombatController`, `InteractionController`), куда перенесена вся тяжелая игровая логика (нанесение урона, эффекты крови, подбор лута, кулдауны).
+  - Слой ввода `InteractionInputHandler` полностью избавлен от геймплейного кода и переведен на трансляцию нажатий в события шины. Контроллеры инициализируются в `InputManager`, исключая утечки памяти подписчиков.
 - **RenderPass & ShaderStateManager Pipeline**:
   - Полный рефакторинг оверлей-системы рендеринга. Монолитный `OverlayRenderSystem` разделен на независимые, изолированные проходы `RenderPass` (`BlockEntityRenderPass`, `PersistentScarsRenderPass`, `HighlightRenderPass`, `PreviewRenderPass`, `BreakingRenderPass`).
   - Внедрен централизованный `ShaderStateManager` для жесткого контроля стейта шейдеров. Вызов `resetToBaseline()` гарантированно сбрасывает OpenGL юниформы перед каждым проходом, полностью исключая утечки стейта (state leaks), мигание листвы и баги хайлайта.

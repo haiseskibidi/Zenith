@@ -53,29 +53,18 @@ public class InteractionInputHandler {
 
         if (lm) {
             boolean actionConsumed = false;
-            if (isNewLeftClick && hitEntity instanceof LivingEntity living) {
-                player.swing();
-                living.takeDamage(2.0f);
-                player.addBlood(0.15f);
-                com.za.zenith.utils.Logger.info("Attacked %s, hands are now bloody", living.getClass().getSimpleName());
-                actionConsumed = true;
-            } else if (isNewLeftClick && hitEntity instanceof com.za.zenith.entities.ResourceEntity resource) {
-                if (!player.isSwinging()) {
-                    player.interact(PhysicsSettings.getInstance().baseMiningCooldown);
-                    player.getInventory().addItem(resource.getStack());
-                    resource.setRemoved();
-                    com.za.zenith.utils.Logger.info("Picked up resource %s", resource.getStack().getItem().getName());
+            if (isNewLeftClick && hitEntity != null) {
+                if (hitEntity instanceof LivingEntity) {
+                    com.za.zenith.engine.event.EventBus.getInstance().publish(
+                        new com.za.zenith.engine.event.events.PlayerAttackEntityEvent(player, hitEntity, currentStack)
+                    );
+                    actionConsumed = true;
+                } else if (hitEntity instanceof com.za.zenith.entities.ResourceEntity || hitEntity instanceof com.za.zenith.entities.ItemEntity) {
+                    com.za.zenith.engine.event.EventBus.getInstance().publish(
+                        new com.za.zenith.engine.event.events.PlayerPickupEvent(player, hitEntity)
+                    );
+                    actionConsumed = true;
                 }
-                actionConsumed = true;
-            } else if (isNewLeftClick && hitEntity instanceof com.za.zenith.entities.ItemEntity itemEntity) {
-                if (!player.isSwinging()) {
-                    player.interact(PhysicsSettings.getInstance().baseMiningCooldown);
-                    if (player.getInventory().addItem(itemEntity.getStack(), true)) {
-                        itemEntity.setRemoved();
-                        com.za.zenith.utils.Logger.info("Picked up item %s", itemEntity.getStack().getItem().getName());
-                    }
-                }
-                actionConsumed = true;
             }
 
             if (!actionConsumed && raycast.isHit()) {
@@ -88,7 +77,12 @@ public class InteractionInputHandler {
                 float rz = raycast.getHitPoint().z - hitPos.z() - 0.5f;
                 Vector3f localHit = new Vector3f(rx, ry, rz);
 
-                if (blockDef.onLeftClick(world, hitPos, player, currentStack, rx + 0.5f, ry, rz + 0.5f, isNewLeftClick)) {
+                com.za.zenith.engine.event.events.BlockLeftClickEvent leftClickEvent = new com.za.zenith.engine.event.events.BlockLeftClickEvent(
+                    player, world, hitPos, currentStack, rx + 0.5f, ry, rz + 0.5f, isNewLeftClick
+                );
+                com.za.zenith.engine.event.EventBus.getInstance().publish(leftClickEvent);
+
+                if (leftClickEvent.isConsumed()) {
                     manager.setLeftMousePressed(true);
                     return null; 
                 }
@@ -160,28 +154,13 @@ public class InteractionInputHandler {
             }
 
             // Entity Interaction (RMB Pickup)
-            if (!actionConsumed && isNewRightClick) {
-                if (hitEntity instanceof com.za.zenith.entities.ResourceEntity resource) {
-                    if (!player.isSwinging()) {
-                        float cooldown = resource.getStack().getItem().getInteractionCooldown();
-                        player.interact(cooldown);
-                        if (player.getInventory().addItem(resource.getStack())) {
-                            resource.setRemoved();
-                            com.za.zenith.utils.Logger.info("Picked up %s (RMB)", resource.getStack().getItem().getName());
-                            actionConsumed = true;
-                            manager.setPlaceDelayTimer(manager.PLACE_COOLDOWN);
-                        }
-                    }
-                } else if (hitEntity instanceof com.za.zenith.entities.ItemEntity itemEntity) {
-                    if (!player.isSwinging()) {
-                        float cooldown = itemEntity.getStack().getItem().getInteractionCooldown();
-                        player.interact(cooldown);
-                        if (player.getInventory().addItem(itemEntity.getStack())) {
-                            itemEntity.setRemoved();
-                            com.za.zenith.utils.Logger.info("Picked up %s (RMB)", itemEntity.getStack().getItem().getName());
-                            actionConsumed = true;
-                            manager.setPlaceDelayTimer(manager.PLACE_COOLDOWN);
-                        }
+            if (!actionConsumed && isNewRightClick && hitEntity != null) {
+                if (hitEntity instanceof com.za.zenith.entities.ResourceEntity || hitEntity instanceof com.za.zenith.entities.ItemEntity) {
+                    com.za.zenith.engine.event.events.PlayerPickupEvent pickupEvent = new com.za.zenith.engine.event.events.PlayerPickupEvent(player, hitEntity);
+                    com.za.zenith.engine.event.EventBus.getInstance().publish(pickupEvent);
+                    if (pickupEvent.isConsumed()) {
+                        actionConsumed = true;
+                        manager.setPlaceDelayTimer(manager.PLACE_COOLDOWN);
                     }
                 }
             }

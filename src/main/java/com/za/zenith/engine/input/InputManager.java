@@ -49,6 +49,10 @@ public class InputManager {
     private final InteractionInputHandler interactionHandler = new InteractionInputHandler();
     private final HotbarInputHandler hotbarHandler = new HotbarInputHandler();
 
+    // Controllers
+    private final com.za.zenith.engine.input.controllers.CombatController combatController = new com.za.zenith.engine.input.controllers.CombatController();
+    private final com.za.zenith.engine.input.controllers.InteractionController interactionController = new com.za.zenith.engine.input.controllers.InteractionController();
+
     // Event handling sync
     private int lastHandledKey = -1;
     private long lastHandledFrame = -1;
@@ -101,6 +105,10 @@ public class InputManager {
         previousPos = new Vector2f();
         currentPos = new Vector2f();
         this.miningController = new MiningController();
+        
+        // Initialize event-driven controllers
+        this.combatController.init();
+        this.interactionController.init();
     }
     
     public MiningController getMiningController() { return miningController; }
