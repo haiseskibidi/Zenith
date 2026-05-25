@@ -47,3 +47,13 @@ bin/
 .DS_Store
 
 .zenith-Classic-Forever-master/
+
+# Zenith Academy documentation and web portal
+# We allow committing the markdown files and portal source code,
+# but strictly ignore build artifacts and node dependencies.
+/academy-web/node_modules/
+/academy-web/dist/
+/academy-web/npm-debug.log*
+/academy-web/yarn-debug.log*
+/academy-web/yarn-error.log*
+/academy-web/.pnpm-debug.log*
