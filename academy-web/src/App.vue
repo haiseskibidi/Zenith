@@ -325,7 +325,7 @@ export default {
   border-radius: 4px;
   color: #798299;
   padding: 8px 0;
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -362,7 +362,7 @@ export default {
 
 .menu-title {
   color: #4b5269;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -382,7 +382,7 @@ export default {
   border-radius: 4px;
   color: #a0a6b5;
   padding: 10px 12px;
-  font-size: 13.5px;
+  font-size: 15px;
   text-align: left;
   cursor: pointer;
   display: flex;
@@ -405,7 +405,7 @@ export default {
 
 .menu-num {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: #4b5269;
   width: 14px;
   display: inline-block;
@@ -431,7 +431,7 @@ export default {
   border: none;
   color: #6c748c;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 13.5px;
   text-align: left;
   cursor: pointer;
   transition: color 0.15s ease;
@@ -474,7 +474,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 14.5px;
 }
 
 .bc-parent {
@@ -494,7 +494,7 @@ export default {
   background: transparent;
   border: none;
   color: #3b82f6;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   padding: 0;
@@ -537,7 +537,7 @@ export default {
   border-radius: 6px;
   color: #a0a6b5;
   padding: 10px 18px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -572,7 +572,7 @@ export default {
 
 .lab-desc {
   color: #798299;
-  font-size: 14px;
+  font-size: 15.5px;
   line-height: 1.5;
   margin: 0;
 }

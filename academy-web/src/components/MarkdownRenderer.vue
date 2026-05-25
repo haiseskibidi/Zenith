@@ -315,14 +315,14 @@ export default {
 
 .markdown-body {
   color: #c9ccd6;
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: 17px;
+  line-height: 1.7;
   font-weight: 400;
 }
 
 .md-h1 {
   color: #ffffff;
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 600;
   margin-top: 0;
   margin-bottom: 24px;
@@ -332,7 +332,7 @@ export default {
 
 .md-h2 {
   color: #ffffff;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
   margin-top: 40px;
   margin-bottom: 16px;
@@ -343,7 +343,7 @@ export default {
 
 .md-h3 {
   color: #06b6d4; /* Красивый бирюзовый тон */
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 600;
   margin-top: 24px;
   margin-bottom: 12px;
@@ -367,7 +367,7 @@ export default {
   border: 1px solid #282c37;
   color: #e06c75;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
+  font-size: 14.5px;
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -393,8 +393,8 @@ pre[class*="language-"] {
 
 code[class*="language-"] {
   font-family: 'JetBrains Mono', monospace !important;
-  font-size: 13px !important;
-  line-height: 1.5 !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
 }
 
 /* Стилизация GitHub Alerts */
@@ -410,7 +410,7 @@ code[class*="language-"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: bold;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -422,9 +422,9 @@ code[class*="language-"] {
 
 .alert-content {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 15px;
   color: #a0a6b5;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 /* Цветовые схемы алертов */
