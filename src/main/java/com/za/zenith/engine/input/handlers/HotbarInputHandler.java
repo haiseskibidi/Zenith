@@ -4,9 +4,13 @@ import com.za.zenith.engine.core.GameLoop;
 import com.za.zenith.engine.core.PlayerMode;
 import com.za.zenith.engine.core.Window;
 import com.za.zenith.entities.Player;
+import com.za.zenith.engine.input.InputAction;
 
+/**
+ * Обрабатывает выбор и быстрые действия с хотбаром.
+ * Полностью интегрирован со слоем InputAction, исключая локальное отслеживание состояний.
+ */
 public class HotbarInputHandler {
-    private boolean[] numKeysPressed = new boolean[9];
     
     public void update(Window window, Player player, com.za.zenith.engine.input.InputManager manager) {
         boolean inventoryOpen = GameLoop.getInstance().isInventoryOpen();
@@ -16,15 +20,16 @@ public class HotbarInputHandler {
         // Блокируем хотбар во время скалывания, инвентаря или любых других экранов (настройки, инспектор)
         if (!nappingOpen && !anyScreen) {
             for (int i = 0; i < 9; i++) {
-                if (manager.isActionPressed("slot_" + (i + 1))) {
+                InputAction action = InputAction.values()[InputAction.SLOT_1.ordinal() + i];
+                if (manager.isPressed(action)) {
                     player.getInventory().setSelectedSlot(i);
                     break;
                 }
             }
         } else if (inventoryOpen) {
             for (int i = 0; i < 9; i++) {
-                boolean pressed = manager.isActionPressed("slot_" + (i + 1));
-                if (pressed && !numKeysPressed[i]) {
+                InputAction action = InputAction.values()[InputAction.SLOT_1.ordinal() + i];
+                if (manager.wasJustPressed(action)) {
                     if (manager.getHoveredSlot() != null) {
                         player.getInventory().swapWithHotbar(manager.getHoveredSlot(), i);
                     } else if (player.getMode() == PlayerMode.DEVELOPER) {
@@ -34,11 +39,7 @@ public class HotbarInputHandler {
                         }
                     }
                 }
-                numKeysPressed[i] = pressed;
             }
-        } else {
-            // Reset num keys state when neither condition is met
-            for (int i = 0; i < 9; i++) numKeysPressed[i] = false;
         }
     }
 }

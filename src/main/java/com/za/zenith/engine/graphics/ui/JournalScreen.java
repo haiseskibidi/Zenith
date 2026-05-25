@@ -369,12 +369,9 @@ public class JournalScreen implements Screen {
     @Override
     public boolean handleKeyPress(int key) {
         if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_J || key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-            // Save scroll state before closing
+            // Save scroll state before closing centralistically in GameLoop
             JournalRegistry.setLastScrollY(contentScroller.getOffset());
-            
-            com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().closeScreen();
-            com.za.zenith.engine.core.GameLoop.getInstance().toggleJournal();
-            return true;
+            return false; // Delegate closing to GameLoop to prevent double-trigger flashing
         }
         return false;
     }

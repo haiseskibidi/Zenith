@@ -53,6 +53,10 @@ public class InputManager {
     private final com.za.zenith.engine.input.controllers.CombatController combatController = new com.za.zenith.engine.input.controllers.CombatController();
     private final com.za.zenith.engine.input.controllers.InteractionController interactionController = new com.za.zenith.engine.input.controllers.InteractionController();
 
+    // Action State Buffers for Zero-Alloc Input-Action Layer
+    private final boolean[] pressedStates = new boolean[InputAction.values().length];
+    private final boolean[] prevPressedStates = new boolean[InputAction.values().length];
+
     // Event handling sync
     private int lastHandledKey = -1;
     private long lastHandledFrame = -1;
@@ -90,7 +94,7 @@ public class InputManager {
     public com.za.zenith.world.items.ItemStack getLootboxStack() { return lootboxStack; }
     public void setLootboxStack(ItemStack stack) { this.lootboxStack = stack; }
 
-    public boolean isActionPressed(String actionId) {
+    public boolean isActionPressedRaw(String actionId) {
         int keyCode = com.za.zenith.engine.core.SettingsManager.getInstance().getKeyCode(actionId);
         if (keyCode == -1) return false;
         
@@ -99,6 +103,22 @@ public class InputManager {
         }
         
         return GameLoop.getInstance().getWindow().isKeyPressed(keyCode);
+    }
+
+    public boolean isActionPressed(String actionId) {
+        return isActionPressedRaw(actionId);
+    }
+
+    public boolean isPressed(InputAction action) {
+        return pressedStates[action.ordinal()];
+    }
+
+    public boolean wasJustPressed(InputAction action) {
+        return pressedStates[action.ordinal()] && !prevPressedStates[action.ordinal()];
+    }
+
+    public boolean wasJustReleased(InputAction action) {
+        return !pressedStates[action.ordinal()] && prevPressedStates[action.ordinal()];
     }
 
     public InputManager() {
@@ -559,6 +579,14 @@ public class InputManager {
     }
 
     public RaycastResult input(Window window, Camera camera, Player player, float deltaTime, com.za.zenith.engine.graphics.Renderer renderer, World world, com.za.zenith.network.GameClient networkClient) {
+        // Копируем текущее состояние в предыдущее
+        System.arraycopy(pressedStates, 0, prevPressedStates, 0, pressedStates.length);
+
+        // Опрашиваем новые физические нажатия для Zero-Alloc Input-Action слоя
+        for (InputAction action : InputAction.values()) {
+            pressedStates[action.ordinal()] = isActionPressedRaw(action.getSettingsKey());
+        }
+
         miningController.setDependencies(renderer, networkClient);
 
         // Обновляем Raycast 1 раз

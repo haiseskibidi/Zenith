@@ -4,7 +4,9 @@ import com.za.zenith.engine.graphics.Camera;
 import com.za.zenith.engine.graphics.Renderer;
 import com.za.zenith.engine.graphics.ui.Hotbar;
 import com.za.zenith.engine.graphics.ui.editor.animation.AnimationEditorScreen;
+import com.za.zenith.engine.graphics.ui.DevInspectorScreen;
 import com.za.zenith.engine.input.InputManager;
+import com.za.zenith.engine.input.InputAction;
 import com.za.zenith.entities.Player;
 import com.za.zenith.network.GameClient;
 import com.za.zenith.network.GameServer;
@@ -30,11 +32,7 @@ public class GameLoop {
     private boolean running;
     private boolean paused = false;
     private boolean inventoryOpen = false;
-    private boolean jPressed = false;
-    private boolean f8Pressed = false;
-    private boolean ePressed = false;
-    private boolean escPressed = false;
-    private boolean f9Pressed = false;
+    private float screenToggleCooldown = 0.0f;
     
     private GameMode gameMode;
     private GameServer localServer;
@@ -137,48 +135,86 @@ public class GameLoop {
     }
     
     private void input(float deltaTime) {
+        screenToggleCooldown = Math.max(0, screenToggleCooldown - deltaTime);
         com.za.zenith.engine.graphics.ui.Screen active = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
         
-        boolean f8Key = inputManager.isActionPressed("editor_toggle");
-        if (f8Key && !f8Pressed && !paused && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("editor_toggle"))) {
-            toggleAnimationEditor();
+        // F8 - Editor Toggle
+        if (inputManager.wasJustPressed(InputAction.EDITOR_TOGGLE) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("editor_toggle"))) {
+            if (active instanceof AnimationEditorScreen) {
+                toggleAnimationEditor();
+                screenToggleCooldown = 0.25f;
+            } else if (active == null) {
+                toggleAnimationEditor();
+                screenToggleCooldown = 0.25f;
+            }
         }
-        f8Pressed = f8Key;
 
-        boolean eKey = inputManager.isActionPressed("inventory");
-        if (eKey && !ePressed && !paused && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("inventory"))) {
-            if (active != null) {
-                if (active.handleKeyPress(SettingsManager.getInstance().getKeyCode("inventory"))) return;
+        // F9 - Live Inspector
+        if (inputManager.wasJustPressed(InputAction.LIVE_INSPECTOR) && SettingsManager.getInstance().isDevMode() && screenToggleCooldown <= 0) {
+            if (active instanceof DevInspectorScreen) {
                 com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().closeScreen();
+                inputManager.enableMouseCapture(window);
+                screenToggleCooldown = 0.25f;
+            } else if (active == null) {
+                inputManager.disableMouseCapture(window);
+                com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().openScreen(new com.za.zenith.engine.graphics.ui.DevInspectorScreen(), window.getWidth(), window.getHeight());
+                screenToggleCooldown = 0.25f;
+            }
+        }
+
+        // J - Journal Toggle
+        if (inputManager.wasJustPressed(InputAction.JOURNAL) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("journal"))) {
+            if (active instanceof com.za.zenith.engine.graphics.ui.JournalScreen) {
+                toggleJournal();
+                screenToggleCooldown = 0.25f;
+            } else if (active == null) {
+                toggleJournal();
+                screenToggleCooldown = 0.25f;
+            }
+        }
+
+        // E - Inventory Toggle
+        if (inputManager.wasJustPressed(InputAction.INVENTORY) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("inventory"))) {
+            if (active instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen) {
                 toggleInventory();
-            } else toggleInventory();
-        }
-        ePressed = eKey;
-
-        boolean jKey = inputManager.isActionPressed("journal");
-        if (jKey && !jPressed && !paused && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("journal"))) {
-            if (active != null && active.handleKeyPress(SettingsManager.getInstance().getKeyCode("journal"))) { }
-            else toggleJournal();
-        }
-        jPressed = jKey;
-
-        boolean escKey = inputManager.isActionPressed("pause");
-        if (escKey && !escPressed && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("pause"))) {
-            if (active != null && active.handleKeyPress(SettingsManager.getInstance().getKeyCode("pause"))) { }
-            else if (inventoryOpen) {
-                com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().closeScreen();
+                screenToggleCooldown = 0.25f;
+            } else if (active == null) {
                 toggleInventory();
-            } else if (currentNappingSession != null) closeNappingWithWaste();
-            else togglePause();
+                screenToggleCooldown = 0.25f;
+            }
         }
-        escPressed = escKey;
 
-        boolean f9Key = window.isKeyPressed(GLFW_KEY_F9);
-        if (f9Key && !f9Pressed && SettingsManager.getInstance().isDevMode()) {
-            inputManager.disableMouseCapture(window);
-            com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().openScreen(new com.za.zenith.engine.graphics.ui.DevInspectorScreen(), window.getWidth(), window.getHeight());
+        // ESC - Pause Toggle
+        if (inputManager.wasJustPressed(InputAction.PAUSE) && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("pause"))) {
+            if (active instanceof com.za.zenith.engine.graphics.ui.PauseScreen) {
+                togglePause();
+                screenToggleCooldown = 0.25f;
+            } else if (active instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen || 
+                       active instanceof com.za.zenith.engine.graphics.ui.JournalScreen || 
+                       active instanceof AnimationEditorScreen || 
+                       active instanceof DevInspectorScreen) {
+                // Закрываем активный экран при нажатии ESC
+                if (active instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen) {
+                    toggleInventory();
+                } else if (active instanceof com.za.zenith.engine.graphics.ui.JournalScreen) {
+                    toggleJournal();
+                } else if (active instanceof AnimationEditorScreen) {
+                    toggleAnimationEditor();
+                } else if (active instanceof DevInspectorScreen) {
+                    com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().closeScreen();
+                    inputManager.enableMouseCapture(window);
+                }
+                screenToggleCooldown = 0.25f;
+            } else if (active == null) {
+                if (currentNappingSession != null) {
+                    closeNappingWithWaste();
+                    screenToggleCooldown = 0.25f;
+                } else {
+                    togglePause();
+                    screenToggleCooldown = 0.25f;
+                }
+            }
         }
-        f9Pressed = f9Key;
 
         highlightedBlock = inputManager.input(window, camera, player, deltaTime, renderer, world, networkClient);
     }

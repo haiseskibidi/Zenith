@@ -6,15 +6,13 @@ import com.za.zenith.engine.core.SettingsManager;
 import com.za.zenith.engine.core.Window;
 import com.za.zenith.entities.Player;
 import com.za.zenith.world.items.ItemStack;
+import com.za.zenith.engine.input.InputAction;
 
+/**
+ * Обрабатывает системные и административные действия игрока.
+ * Полностью переведен на Input-Action Layer без локального отслеживания состояний.
+ */
 public class SystemInputHandler {
-    private boolean fKeyPressed = false;
-    private boolean gKeyPressed = false;
-    private boolean rKeyPressed = false;
-    private boolean zKeyPressed = false;
-    private boolean f3KeyPressed = false;
-    private boolean f9KeyPressed = false;
-    private boolean qKeyPressed = false;
     
     private boolean verticalMode = false;
     
@@ -25,15 +23,12 @@ public class SystemInputHandler {
         boolean paused = GameLoop.getInstance().isPaused();
         
         // F - Toggle Fly
-        boolean fKeyCurrentlyPressed = manager.isActionPressed("toggle_fly");
-        if (fKeyCurrentlyPressed && !fKeyPressed && !anyScreen && !nappingOpen) {
+        if (manager.wasJustPressed(InputAction.TOGGLE_FLY) && !anyScreen && !nappingOpen) {
             player.setFlying(!player.isFlying());
         }
-        fKeyPressed = fKeyCurrentlyPressed;
 
         // F3 - Debug Menu / Developer Mode
-        boolean f3KeyCurrentlyPressed = manager.isActionPressed("debug_menu");
-        if (f3KeyCurrentlyPressed && !f3KeyPressed && !anyScreen && !nappingOpen) {
+        if (manager.wasJustPressed(InputAction.DEBUG_MENU) && !anyScreen && !nappingOpen) {
             boolean visible = !SettingsManager.getInstance().isDebugOverlayVisible();
             SettingsManager.getInstance().setDebugOverlayVisible(visible);
             
@@ -41,41 +36,25 @@ public class SystemInputHandler {
             player.setMode(newMode);
             com.za.zenith.utils.Logger.info("Debug HUD: %b, Player mode: %s", visible, newMode);
         }
-        f3KeyPressed = f3KeyCurrentlyPressed;
 
-        // F9 - Live Inspector
-        boolean f9KeyCurrentlyPressed = manager.isActionPressed("live_inspector");
-        if (f9KeyCurrentlyPressed && !f9KeyPressed && !anyScreen && !nappingOpen) {
-            com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().openScreen(
-                new com.za.zenith.engine.graphics.ui.DevInspectorScreen(), window.getWidth(), window.getHeight());
-            manager.disableMouseCapture(window);
-        }
-        f9KeyPressed = f9KeyCurrentlyPressed;
         
         // R - Vertical Mode (for slabs)
-        boolean rKeyCurrentlyPressed = manager.isActionPressed("toggle_vertical_mode");
-        if (rKeyCurrentlyPressed && !rKeyPressed && !anyScreen && !nappingOpen) {
+        if (manager.wasJustPressed(InputAction.TOGGLE_VERTICAL_MODE) && !anyScreen && !nappingOpen) {
             verticalMode = !verticalMode;
         }
-        rKeyPressed = rKeyCurrentlyPressed;
         
         // G - Toggle FXAA
-        boolean gKeyCurrentlyPressed = manager.isActionPressed("toggle_fxaa");
-        if (gKeyCurrentlyPressed && !gKeyPressed && !anyScreen && !nappingOpen) {
+        if (manager.wasJustPressed(InputAction.TOGGLE_FXAA) && !anyScreen && !nappingOpen) {
             GameLoop.getInstance().getRenderer().toggleFXAA();
         }
-        gKeyPressed = gKeyCurrentlyPressed;
 
         // Z - Sort Inventory
-        boolean zKeyCurrentlyPressed = manager.isActionPressed("sort_inventory");
-        if (zKeyCurrentlyPressed && !zKeyPressed && inventoryOpen) {
+        if (manager.wasJustPressed(InputAction.SORT_INVENTORY) && inventoryOpen) {
             player.getInventory().sortMainInventory();
         }
-        zKeyPressed = zKeyCurrentlyPressed;
 
         // Q - Drop Item
-        boolean qKeyCurrentlyPressed = manager.isActionPressed("drop");
-        if (qKeyCurrentlyPressed && !qKeyPressed && !paused && !nappingOpen) {
+        if (manager.wasJustPressed(InputAction.DROP) && !paused && !nappingOpen) {
             if (inventoryOpen) {
                 if (manager.getHoveredSlot() != null) {
                     ItemStack stack = manager.getHoveredSlot().getStack();
@@ -94,7 +73,6 @@ public class SystemInputHandler {
                 }
             }
         }
-        qKeyPressed = qKeyCurrentlyPressed;
     }
     
     public boolean isVerticalMode() {

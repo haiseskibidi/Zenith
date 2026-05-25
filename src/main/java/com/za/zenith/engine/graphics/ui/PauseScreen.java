@@ -148,8 +148,7 @@ public class PauseScreen implements Screen {
     @Override
     public boolean handleKeyPress(int key) {
         if (key == GLFW.GLFW_KEY_ESCAPE) {
-            GameLoop.getInstance().togglePause();
-            return true;
+            return false; // Delegate closing to GameLoop to prevent double-trigger flashing
         }
         return false;
     }

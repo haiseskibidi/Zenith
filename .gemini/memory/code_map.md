@@ -248,7 +248,8 @@
 
 ### com.za.zenith.engine.input (UPDATED v2.0)
 Назначение: Архитектура ввода на основе Domain Controllers.
-- **InputManager.java**: Event Dispatcher. Хранит глобальный контекст и делегирует события (Raycast, клики, клавиши) специализированным контроллерам. Полностью очищен от хардкода GLFW.
+- **InputManager.java**: Event Dispatcher. Хранит глобальный контекст, централизованно отслеживает фазы нажатий на основе плоских Zero-Alloc буферов и делегирует события специализированным хэндлерам.
+- **InputAction.java**: (NEW) Перечисление всех абстрактных логических действий игрока, связывающее настройки SettingsManager с геймплейным кодом.
 - **handlers/SystemInputHandler.java**: (NEW) Обработка системных горячих клавиш (F, F3, F9, Z, Q).
 - **handlers/MovementInputHandler.java**: (NEW) Расчет вектора движения, прыжков, физики камеры (pitch/yaw) и взаимодействия с паркуром.
 - **handlers/InventoryInputHandler.java**: (NEW) Логика UI инвентаря: курсор, Drag & Drop, слияние стаков (Shift+клик), NappingGUI.

@@ -444,9 +444,7 @@ public class DevInspectorScreen implements Screen {
             return true;
         }
         if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_F9) {
-            ScreenManager.getInstance().closeScreen();
-            GameLoop.getInstance().getInputManager().enableMouseCapture(GameLoop.getInstance().getWindow());
-            return true;
+            return false; // Delegate closing to GameLoop to prevent double-trigger flashing
         }
         return false;
     }

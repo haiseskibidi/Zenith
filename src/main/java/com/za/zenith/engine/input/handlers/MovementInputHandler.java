@@ -7,13 +7,16 @@ import com.za.zenith.engine.core.Window;
 import com.za.zenith.engine.graphics.Camera;
 import com.za.zenith.entities.Player;
 import com.za.zenith.world.physics.PhysicsSettings;
+import com.za.zenith.engine.input.InputAction;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
+/**
+ * Обрабатывает перемещение игрока, вращение камеры и паркур.
+ * Полностью интегрирован со слоем InputAction, исключая локальное отслеживание состояний.
+ */
 public class MovementInputHandler {
     
-    private boolean spaceKeyPressed = false;
-
     public void update(Window window, Camera camera, Player player, float deltaTime, com.za.zenith.engine.input.InputManager manager) {
         boolean anyScreen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().isAnyScreenOpen();
         boolean nappingOpen = GameLoop.getInstance().isNappingOpen();
@@ -78,22 +81,21 @@ public class MovementInputHandler {
         Vector2f moveVector = new Vector2f();
 
         if (!anyScreen && !nappingOpen) {
-            if (manager.isActionPressed("move_forward")) moveVector.y = 1;
-            if (manager.isActionPressed("move_back")) moveVector.y = -1;
-            if (manager.isActionPressed("move_left")) moveVector.x = -1;
-            if (manager.isActionPressed("move_right")) moveVector.x = 1;
+            if (manager.isPressed(InputAction.MOVE_FORWARD)) moveVector.y = 1;
+            if (manager.isPressed(InputAction.MOVE_BACK)) moveVector.y = -1;
+            if (manager.isPressed(InputAction.MOVE_LEFT)) moveVector.x = -1;
+            if (manager.isPressed(InputAction.MOVE_RIGHT)) moveVector.x = 1;
         }
         
         float moveY = 0;
-        boolean spaceDown = manager.isActionPressed("jump");
-        boolean spaceNewPress = spaceDown && !spaceKeyPressed;
-        spaceKeyPressed = spaceDown;
+        boolean spaceDown = manager.isPressed(InputAction.JUMP);
+        boolean spaceNewPress = manager.wasJustPressed(InputAction.JUMP);
 
         if (!anyScreen && !nappingOpen) {
             if (spaceDown) moveY = 1;
         }
         
-        boolean shiftPressed = manager.isActionPressed("sneak");
+        boolean shiftPressed = manager.isPressed(InputAction.SNEAK);
         if (shiftPressed && !anyScreen && !nappingOpen) moveY = -1;
         
         boolean sneaking = shiftPressed && !player.isFlying() && !anyScreen && !nappingOpen;
@@ -102,7 +104,7 @@ public class MovementInputHandler {
         boolean inParkour = parkour.isInParkour();
 
         boolean physicallySneaking = player.isPhysicallySneaking();
-        boolean sprinting = manager.isActionPressed("sprint") && !anyScreen && !nappingOpen;
+        boolean sprinting = manager.isPressed(InputAction.SPRINT) && !anyScreen && !nappingOpen;
         player.setSprinting(sprinting);
         
         float baseSpeed = player.isFlying() ? settings.flySpeed : (physicallySneaking ? settings.baseMoveSpeed * settings.sneakSpeedMultiplier : settings.baseMoveSpeed);

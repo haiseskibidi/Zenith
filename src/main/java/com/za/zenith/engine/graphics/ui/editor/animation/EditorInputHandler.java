@@ -164,7 +164,7 @@ public class EditorInputHandler {
                 transformController.cancelTransform(state);
                 return true;
             }
-            GameLoop.getInstance().toggleAnimationEditor(); return true;
+            return false; // Delegate closing/toggle to GameLoop to prevent double-trigger flashing
         }
         if (key == GLFW_KEY_SPACE) { state.isPlaying = !state.isPlaying; return true; }
         if (key == GLFW_KEY_LEFT) { if (shift) jumpToKeyframe(state, -1); else state.currentTime = Math.max(0, state.currentTime - 0.01f); return true; }

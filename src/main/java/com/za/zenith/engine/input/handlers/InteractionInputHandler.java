@@ -34,8 +34,8 @@ public class InteractionInputHandler {
         ItemStack currentStack = player.getInventory().getSelectedItemStack();
         Item currentItem = currentStack != null ? currentStack.getItem() : null;
 
-        boolean lm = manager.isActionPressed("attack_mine");
-        boolean isNewLeftClick = lm && !manager.isLeftMousePressed();
+        boolean lm = manager.isPressed(com.za.zenith.engine.input.InputAction.ATTACK_MINE);
+        boolean isNewLeftClick = manager.wasJustPressed(com.za.zenith.engine.input.InputAction.ATTACK_MINE);
 
         com.za.zenith.engine.input.MiningController miningController = manager.getMiningController();
         com.za.zenith.entities.Entity hitEntity = manager.getHitEntity();
@@ -104,8 +104,8 @@ public class InteractionInputHandler {
         }
         manager.setLeftMousePressed(lm);
         
-        boolean rm = manager.isActionPressed("interact_place");
-        boolean isNewRightClick = rm && !manager.isRightMousePressed();
+        boolean rm = manager.isPressed(com.za.zenith.engine.input.InputAction.INTERACT_PLACE);
+        boolean isNewRightClick = manager.wasJustPressed(com.za.zenith.engine.input.InputAction.INTERACT_PLACE);
         
         if (rm) {
             boolean actionConsumed = false;

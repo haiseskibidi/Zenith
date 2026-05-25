@@ -6,14 +6,15 @@ import com.za.zenith.engine.core.Window;
 import com.za.zenith.entities.Player;
 import com.za.zenith.world.items.Item;
 import com.za.zenith.world.items.ItemStack;
+import com.za.zenith.engine.input.InputAction;
 import org.joml.Vector2f;
 
-import static org.lwjgl.glfw.GLFW.*;
-
+/**
+ * Обрабатывает интерфейсы инвентаря, драг-энд-дроп и скалывание (Napping).
+ * Полностью переведен на использование InputAction без локального хранения состояния клавиш.
+ */
 public class InventoryInputHandler {
 
-    private boolean leftMousePressed = false;
-    private boolean rightMousePressed = false;
     private int lastQuickMovedSlot = -1;
     private int lastQuickCopiedDevItem = -1;
 
@@ -21,8 +22,12 @@ public class InventoryInputHandler {
         boolean inventoryOpen = GameLoop.getInstance().isInventoryOpen();
         boolean nappingOpen = GameLoop.getInstance().isNappingOpen();
 
+        boolean isLeftPressed = manager.isPressed(InputAction.ATTACK_MINE);
+        boolean isLeftJustPressed = manager.wasJustPressed(InputAction.ATTACK_MINE);
+        boolean isRightPressed = manager.isPressed(InputAction.INTERACT_PLACE);
+
         if (nappingOpen) {
-            if (window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_1) && !leftMousePressed) {
+            if (isLeftJustPressed) {
                 int slotIdx = com.za.zenith.engine.graphics.ui.NappingGUI.getSlotIndexAt(currentPos.x, currentPos.y, window.getWidth(), window.getHeight());
                 if (slotIdx != -1) {
                     com.za.zenith.world.recipes.NappingSession session = GameLoop.getInstance().getNappingSession();
@@ -40,8 +45,7 @@ public class InventoryInputHandler {
                         
                         player.getInventory().addItem(result.getResult());
                         GameLoop.getInstance().closeNapping();
-                        leftMousePressed = true;
-                        rightMousePressed = false;
+                        
                         manager.setLeftMousePressed(true);
                         manager.setRightMousePressed(false);
                         return;
@@ -49,10 +53,8 @@ public class InventoryInputHandler {
                 }
             }
             
-            leftMousePressed = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_1);
-            rightMousePressed = window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_2);
-            manager.setLeftMousePressed(leftMousePressed);
-            manager.setRightMousePressed(rightMousePressed);
+            manager.setLeftMousePressed(isLeftPressed);
+            manager.setRightMousePressed(isRightPressed);
         }
 
         if (inventoryOpen) {
@@ -67,7 +69,8 @@ public class InventoryInputHandler {
                 manager.setHoveredSlot(newHovered);
                 
                 // Mouse Tweaks: Shift + Drag quick move
-                if (window.isMouseButtonPressed(GLFW_MOUSE_BUTTON_1) && (window.isKeyPressed(GLFW_KEY_LEFT_SHIFT) || window.isKeyPressed(GLFW_KEY_RIGHT_SHIFT))) {
+                boolean shiftPressed = window.isKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT) || window.isKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT);
+                if (isLeftPressed && shiftPressed) {
                     if (slotUI != null && slotUI.getSlot() != null && manager.getHeldStack() == null) {
                         int slotKey = System.identityHashCode(slotUI.getSlot());
                         if (slotKey != lastQuickMovedSlot) {
