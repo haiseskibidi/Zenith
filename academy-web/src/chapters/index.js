@@ -6,6 +6,8 @@ import chapter4 from '../../../docs/academy/chapter_4_procedural_physics_and_mat
 import chapter5 from '../../../docs/academy/chapter_5_event_driven_architecture.md?raw';
 import chapter6 from '../../../docs/academy/chapter_6_ui_and_font_rendering.md?raw';
 import chapter7 from '../../../docs/academy/chapter_7_concurrency_and_threading.md?raw';
+import chapter9 from '../../../docs/academy/chapter_9_rpg_and_loot_generation.md?raw';
+import chapter10 from '../../../docs/academy/chapter_10_viewmodel_physics_and_magnetism.md?raw';
 import chapter8 from '../../../docs/academy/chapter_8_interview_cheat_sheet.md?raw';
 
 import { quizzes } from './quizzes.js';
@@ -101,6 +103,20 @@ export const chapters = [
     rawContent: chapter7,
     sections: parseSections(chapter7),
     quiz: quizzes.chapter_7
+  },
+  {
+    id: "chapter_9",
+    title: "Глава 9. RPG-система & Генератор Лута",
+    rawContent: chapter9,
+    sections: parseSections(chapter9),
+    quiz: quizzes.chapter_9
+  },
+  {
+    id: "chapter_10",
+    title: "Глава 10. Физика Viewmodel & Магнитный Лут",
+    rawContent: chapter10,
+    sections: parseSections(chapter10),
+    quiz: quizzes.chapter_10
   },
   {
     id: "chapter_8",

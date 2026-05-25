@@ -7,6 +7,8 @@
         <SpringSimulator v-if="block.name === 'SPRING_SIMULATOR'" />
         <VertexCompressor v-if="block.name === 'VERTEX_COMPRESSOR'" />
         <TextEffects v-if="block.name === 'TEXT_EFFECTS'" />
+        <LootGenerator v-if="block.name === 'LOOT_GENERATOR'" />
+        <MagneticPickup v-if="block.name === 'MAGNETIC_PICKUP'" />
       </div>
 
       <!-- 2. Специфические GitHub-алерты -->
@@ -35,6 +37,8 @@ import SpringSimulator from './SpringSimulator.vue';
 import VertexCompressor from './VertexCompressor.vue';
 import TextEffects from './TextEffects.vue';
 import QuizComponent from './QuizComponent.vue';
+import LootGenerator from './LootGenerator.vue';
+import MagneticPickup from './MagneticPickup.vue';
 
 export default {
   name: 'MarkdownRenderer',
@@ -42,7 +46,9 @@ export default {
     SpringSimulator,
     VertexCompressor,
     TextEffects,
-    QuizComponent
+    QuizComponent,
+    LootGenerator,
+    MagneticPickup
   },
   props: {
     content: {
