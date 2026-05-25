@@ -254,6 +254,16 @@
 - **handlers/InventoryInputHandler.java**: (NEW) Логика UI инвентаря: курсор, Drag & Drop, слияние стаков (Shift+клик), NappingGUI.
 - **handlers/InteractionInputHandler.java**: (NEW) Взаимодействие с миром: ЛКМ (добыча, атака), ПКМ (установка блоков, еда, лутбоксы).
 - **handlers/HotbarInputHandler.java**: (NEW) Выбор слотов хотбара 1-9 и копирование предметов разработчика.
+- **controllers/CombatController.java**: (NEW) Контроллер сражений. Подписывается на `PlayerAttackEntityEvent` и обрабатывает урон по врагам.
+- **controllers/InteractionController.java**: (NEW) Контроллер взаимодействия. Подписывается на `PlayerPickupEvent` и `BlockLeftClickEvent` для обработки подбора лута и кастомного поведения блоков.
+
+### com.za.zenith.engine.event (NEW v2.0)
+Назначение: Потокобезопасная Zero-Alloc реактивная шина игровых событий.
+- **Event.java**: Базовый маркерный интерфейс для событий.
+- **EventBus.java**: Высокопроизводительная шина событий, реализующая шаблон Publish-Subscribe с потокобезопасным хранением слушателей.
+- **events/PlayerAttackEntityEvent.java**: Событие атаки сущности игроком.
+- **events/PlayerPickupEvent.java**: Событие подбора предмета/ресурса игроком. Поддерживает динамическое поглощение (consumption).
+- **events/BlockLeftClickEvent.java**: Событие левого клика по блоку. Поддерживает динамическое поглощение.
 
 ### com.za.zenith.engine.input.MiningController (NEW)
 Назначение: Контроллер процесса добычи блоков.
