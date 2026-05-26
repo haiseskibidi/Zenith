@@ -33,8 +33,7 @@ const openDocsPlugin = () => ({
 });
 
 export default defineConfig(({ mode }) => ({
-  // GitHub Pages деплоит на https://<user>.github.io/<repo>/
-  base: mode === 'production' ? '/Zenith/' : '/',
+  base: '/',
   plugins: [
     vue(),
     // openDocsPlugin использует child_process — бесполезен в production
