@@ -79,12 +79,24 @@
           >
             🌈 Шейдерные эффекты текста
           </button>
+          <button 
+            @click="activeLabWidget = 'loot'" 
+            :class="['menu-item', { 'menu-item-active': activeLabWidget === 'loot' }]"
+          >
+            💎 Генератор RPG-лута
+          </button>
+          <button 
+            @click="activeLabWidget = 'magnet'" 
+            :class="['menu-item', { 'menu-item-active': activeLabWidget === 'magnet' }]"
+          >
+            🧲 Магнитное притягивание лута
+          </button>
         </div>
       </div>
       
       <!-- Подвал сайдбара -->
       <div class="sidebar-footer">
-        <span>Zenith Engine v2.5</span>
+        <span>Zenith Engine</span>
       </div>
     </aside>
 
@@ -145,6 +157,8 @@
           <SpringSimulator v-if="activeLabWidget === 'spring'" />
           <VertexCompressor v-if="activeLabWidget === 'compressor'" />
           <TextEffects v-if="activeLabWidget === 'text'" />
+          <LootGenerator v-if="activeLabWidget === 'loot'" />
+          <MagneticPickup v-if="activeLabWidget === 'magnet'" />
         </div>
       </div>
     </main>
@@ -157,6 +171,8 @@ import MarkdownRenderer from './components/MarkdownRenderer.vue';
 import SpringSimulator from './components/SpringSimulator.vue';
 import VertexCompressor from './components/VertexCompressor.vue';
 import TextEffects from './components/TextEffects.vue';
+import LootGenerator from './components/LootGenerator.vue';
+import MagneticPickup from './components/MagneticPickup.vue';
 
 export default {
   name: 'App',
@@ -164,7 +180,9 @@ export default {
     MarkdownRenderer,
     SpringSimulator,
     VertexCompressor,
-    TextEffects
+    TextEffects,
+    LootGenerator,
+    MagneticPickup
   },
   data() {
     return {
@@ -215,7 +233,9 @@ export default {
       const titles = {
         spring: 'Симулятор пружины 2-го порядка',
         compressor: 'Сжиматель воксельных вершин',
-        text: 'Шейдерные эффекты текста'
+        text: 'Шейдерные эффекты текста',
+        loot: 'Генератор RPG-лута',
+        magnet: 'Магнитное притягивание лута'
       };
       return titles[this.activeLabWidget] || 'Песочница';
     },
@@ -230,7 +250,9 @@ export default {
         'chapter_5_event_driven_architecture': 5,
         'chapter_6_ui_and_font_rendering': 6,
         'chapter_7_concurrency_and_threading': 7,
-        'chapter_8_interview_cheat_sheet': 8
+        'chapter_9_rpg_and_loot_generation': 8,
+        'chapter_10_viewmodel_physics_and_magnetism': 9,
+        'chapter_8_interview_cheat_sheet': 10
       };
       const cleanFileName = fileName.replace(/^\.\//, '');
       const index = mapping[cleanFileName];
