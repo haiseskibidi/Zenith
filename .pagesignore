@@ -1,0 +1,15 @@
+# Игнорируем тяжелые папки Java-проекта при сборке в Cloudflare Pages
+.git
+.gradle
+.idea
+build
+gradle
+src
+*ButBetter
+out
+logs
+bin
+*.jar
+*.zip
+*.tar.gz
+*.exe
