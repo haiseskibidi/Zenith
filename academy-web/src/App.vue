@@ -243,16 +243,17 @@ export default {
       const mapping = {
         'readme': 0,
         'README': 0,
-        'chapter_1_jvm_and_memory': 1,
-        'chapter_2_opengl_pipeline': 2,
-        'chapter_3_gpu_driven_rendering': 3,
-        'chapter_4_procedural_physics_and_math': 4,
-        'chapter_5_event_driven_architecture': 5,
-        'chapter_6_ui_and_font_rendering': 6,
-        'chapter_7_concurrency_and_threading': 7,
-        'chapter_9_rpg_and_loot_generation': 8,
-        'chapter_10_viewmodel_physics_and_magnetism': 9,
-        'chapter_8_interview_cheat_sheet': 10
+        'chapter_0_algorithms_for_beginners': 1,
+        'chapter_1_jvm_and_memory': 2,
+        'chapter_2_opengl_pipeline': 3,
+        'chapter_3_gpu_driven_rendering': 4,
+        'chapter_4_procedural_physics_and_math': 5,
+        'chapter_5_event_driven_architecture': 6,
+        'chapter_6_ui_and_font_rendering': 7,
+        'chapter_7_concurrency_and_threading': 8,
+        'chapter_9_rpg_and_loot_generation': 9,
+        'chapter_10_viewmodel_physics_and_magnetism': 10,
+        'chapter_8_interview_cheat_sheet': 11
       };
       const cleanFileName = fileName.replace(/^\.\//, '');
       const index = mapping[cleanFileName];

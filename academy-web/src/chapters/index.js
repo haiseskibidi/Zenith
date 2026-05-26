@@ -1,4 +1,5 @@
 import readme from '../../../docs/academy/README.md?raw';
+import chapter0 from '../../../docs/academy/chapter_0_algorithms_for_beginners.md?raw';
 import chapter1 from '../../../docs/academy/chapter_1_jvm_and_memory.md?raw';
 import chapter2 from '../../../docs/academy/chapter_2_opengl_pipeline.md?raw';
 import chapter3 from '../../../docs/academy/chapter_3_gpu_driven_rendering.md?raw';
@@ -53,6 +54,13 @@ export const chapters = [
     title: "Введение & Карта курса",
     rawContent: readme,
     sections: parseSections(readme),
+    quiz: null
+  },
+  {
+    id: "chapter_0",
+    title: "Глава 0. Основы алгоритмов",
+    rawContent: chapter0,
+    sections: parseSections(chapter0),
     quiz: null
   },
   {
