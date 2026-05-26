@@ -34,7 +34,7 @@ const openDocsPlugin = () => ({
 
 export default defineConfig(({ mode }) => ({
   // GitHub Pages деплоит на https://<user>.github.io/<repo>/
-  base: mode === 'production' ? '/MinecraftButBetter/' : '/',
+  base: mode === 'production' ? '/Zenith/' : '/',
   plugins: [
     vue(),
     // openDocsPlugin использует child_process — бесполезен в production
