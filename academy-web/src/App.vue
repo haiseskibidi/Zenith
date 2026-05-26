@@ -600,3 +600,22 @@ export default {
   margin: 0;
 }
 </style>
+
+<style>
+/* ─── ГЛОБАЛЬНЫЕ СТИЛИ СКРОЛЛБАРА ─── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background-color: #0b0c10;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #22252e;
+  border-radius: 5px;
+  border: 2px solid #0b0c10;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #3b82f6;
+}
+</style>
