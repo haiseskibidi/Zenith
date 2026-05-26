@@ -4,14 +4,13 @@ import { fileURLToPath, URL } from 'node:url';
 import { exec } from 'node:child_process';
 import path from 'node:path';
 
-// Кастомный плагин для открытия папки docs в проводнике Windows
+// Кастомный плагин для открытия папки docs в проводнике Windows (только dev)
 const openDocsPlugin = () => ({
   name: 'open-docs-plugin',
   configureServer(server) {
     server.middlewares.use((req, res, next) => {
       if (req.url === '/api/open-docs') {
         const docsPath = path.resolve(__dirname, '../docs/academy');
-        // В Windows надежнее использовать cmd /c start для беспрепятственного открытия папки
         const command = process.platform === 'win32'
           ? `cmd /c start "" "${docsPath}"`
           : `open "${docsPath}"`;
@@ -33,8 +32,14 @@ const openDocsPlugin = () => ({
   }
 });
 
-export default defineConfig({
-  plugins: [vue(), openDocsPlugin()],
+export default defineConfig(({ mode }) => ({
+  // GitHub Pages деплоит на https://<user>.github.io/<repo>/
+  base: mode === 'production' ? '/MinecraftButBetter/' : '/',
+  plugins: [
+    vue(),
+    // openDocsPlugin использует child_process — бесполезен в production
+    mode !== 'production' && openDocsPlugin()
+  ].filter(Boolean),
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
@@ -43,4 +48,4 @@ export default defineConfig({
   server: {
     port: 3000
   }
-});
+}));

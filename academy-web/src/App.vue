@@ -110,7 +110,7 @@
           <span class="bc-active">{{ currentTab === 'learn' ? currentChapter.title : getLabWidgetTitle() }}</span>
         </div>
         <div class="header-actions">
-          <button @click="openDocsFolder" class="docs-folder-btn">
+          <button v-if="isDev" @click="openDocsFolder" class="docs-folder-btn">
             📁 Открыть папку docs
           </button>
         </div>
@@ -195,6 +195,9 @@ export default {
   computed: {
     currentChapter() {
       return this.chapters[this.activeChapterIndex];
+    },
+    isDev() {
+      return import.meta.env.DEV;
     }
   },
   methods: {
