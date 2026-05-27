@@ -43,6 +43,12 @@
         >
           🔬 Лаборатория
         </button>
+        <button 
+          @click="currentTab = 'glossary'" 
+          :class="['tab-btn', { 'tab-active': currentTab === 'glossary' }]"
+        >
+          📚 Словарь
+        </button>
       </nav>
 
       <!-- Навигация по главам (если вкладка - Обучение) -->
@@ -77,7 +83,7 @@
       </div>
 
       <!-- Боковая панель Лаборатории -->
-      <div v-else class="sidebar-menu">
+      <div v-else-if="currentTab === 'lab'" class="sidebar-menu">
         <span class="menu-title">Физические песочницы:</span>
         <div class="menu-list">
           <button 
@@ -112,6 +118,28 @@
           </button>
         </div>
       </div>
+
+      <!-- Боковая панель Словаря -->
+      <div v-else-if="currentTab === 'glossary'" class="sidebar-menu">
+        <span class="menu-title">Навигация:</span>
+        <div class="menu-list">
+          <div class="glossary-sidebar-info">
+            <p style="color: #a0a6b5; font-size: 13px; line-height: 1.4; margin: 0 0 12px 0;">
+              Используйте поиск и фильтрацию по категориям в правой части экрана для быстрого нахождения терминов.
+            </p>
+            <div class="glossary-stats" style="background: #16171d; padding: 12px; border-radius: 6px; border: 1px solid #22252e;">
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #798299; margin-bottom: 6px;">
+                <span>Всего терминов:</span>
+                <span style="color: #3b82f6; font-weight: bold; font-family: monospace;">13</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #798299;">
+                <span>Категории:</span>
+                <span style="color: #10b981; font-weight: bold; font-family: monospace;">HW, Eng, Math</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <!-- Подвал сайдбара -->
       <div class="sidebar-footer">
@@ -124,9 +152,13 @@
       <!-- Верхний Header -->
       <header class="main-header">
         <div class="header-breadcrumbs">
-          <span class="bc-parent">{{ currentTab === 'learn' ? 'Обучение' : 'Лаборатория' }}</span>
+          <span class="bc-parent">
+            {{ currentTab === 'learn' ? 'Обучение' : currentTab === 'lab' ? 'Лаборатория' : 'Справочник' }}
+          </span>
           <span class="bc-separator">/</span>
-          <span class="bc-active">{{ currentTab === 'learn' ? currentChapter.title : getLabWidgetTitle() }}</span>
+          <span class="bc-active">
+            {{ currentTab === 'learn' ? currentChapter.title : currentTab === 'lab' ? getLabWidgetTitle() : 'Словарь абстракций' }}
+          </span>
         </div>
         <div class="header-actions">
           <button v-if="isDev" @click="openDocsFolder" class="docs-folder-btn">
@@ -165,7 +197,7 @@
         </div>
 
         <!-- 2. Вкладка Лаборатории (Песочницы) -->
-        <div v-else class="lab-view">
+        <div v-else-if="currentTab === 'lab'" class="lab-view">
           <div class="lab-intro-box">
             <h2 class="lab-title">Экспериментальная Лаборатория Zenith</h2>
             <p class="lab-desc">
@@ -178,6 +210,11 @@
           <TextEffects v-if="activeLabWidget === 'text'" />
           <LootGenerator v-if="activeLabWidget === 'loot'" />
           <MagneticPickup v-if="activeLabWidget === 'magnet'" />
+        </div>
+
+        <!-- 3. Вкладка Словаря -->
+        <div v-else-if="currentTab === 'glossary'" class="glossary-view">
+          <GlossaryComponent />
         </div>
       </div>
     </main>
@@ -192,6 +229,7 @@ import VertexCompressor from './components/VertexCompressor.vue';
 import TextEffects from './components/TextEffects.vue';
 import LootGenerator from './components/LootGenerator.vue';
 import MagneticPickup from './components/MagneticPickup.vue';
+import GlossaryComponent from './components/GlossaryComponent.vue';
 
 export default {
   name: 'App',
@@ -201,7 +239,8 @@ export default {
     VertexCompressor,
     TextEffects,
     LootGenerator,
-    MagneticPickup
+    MagneticPickup,
+    GlossaryComponent
   },
   data() {
     return {
@@ -710,7 +749,8 @@ export default {
   cursor: not-allowed;
 }
 
-.lab-view {
+.lab-view,
+.glossary-view {
   max-width: 900px;
   margin: 0 auto;
 }
