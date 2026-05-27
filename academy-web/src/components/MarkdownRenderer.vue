@@ -39,6 +39,8 @@
 <script>
 import { nextTick } from 'vue';
 import mermaid from 'mermaid';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import SpringSimulator from './SpringSimulator.vue';
 import VertexCompressor from './VertexCompressor.vue';
 import TextEffects from './TextEffects.vue';
@@ -264,8 +266,46 @@ export default {
     },
     renderInlineMarkdown(text) {
       if (!text) return '';
-      let html = this.escapeHtml(text);
       
+      const placeholders = [];
+      let tempText = text;
+
+      // 1. Извлекаем блочные формулы $$...$$
+      tempText = tempText.replace(/\$\$(.*?)\$\$/g, (match, formula) => {
+        try {
+          const rendered = katex.renderToString(formula.trim(), {
+            displayMode: true,
+            throwOnError: false
+          });
+          const id = `___LATEX_BLOCK_${placeholders.length}___`;
+          placeholders.push({ id, html: rendered });
+          return id;
+        } catch (err) {
+          console.error('KaTeX block render error:', err);
+          return match;
+        }
+      });
+
+      // 2. Извлекаем строчные формулы $...$
+      tempText = tempText.replace(/\$(.*?)\$/g, (match, formula) => {
+        try {
+          const rendered = katex.renderToString(formula.trim(), {
+            displayMode: false,
+            throwOnError: false
+          });
+          const id = `___LATEX_INLINE_${placeholders.length}___`;
+          placeholders.push({ id, html: rendered });
+          return id;
+        } catch (err) {
+          console.error('KaTeX inline render error:', err);
+          return match;
+        }
+      });
+
+      // 3. Экранируем остальной HTML
+      let html = this.escapeHtml(tempText);
+      
+      // 4. Парсим стандартные маркеры Markdown
       // Ссылки: [text](url)
       html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="md-link">$1</a>');
       // Жирный: **text**
@@ -274,8 +314,11 @@ export default {
       html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
       // Моноширинный inline-код: `code`
       html = html.replace(/`(.*?)`/g, '<code class="inline-code">$1</code>');
-      // LaTeX формулы простые: $formula$
-      html = html.replace(/\$(.*?)\$/g, '<span class="latex-inline">$1</span>');
+
+      // 5. Возвращаем KaTeX HTML на место плейсхолдеров
+      for (const ph of placeholders) {
+        html = html.replace(ph.id, ph.html);
+      }
       
       return html;
     },
