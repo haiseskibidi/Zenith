@@ -584,7 +584,6 @@ public class SimpleThreadPool {
   border-radius: 12px;
   padding: 24px;
   backdrop-filter: blur(16px);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -592,26 +591,9 @@ public class SimpleThreadPool {
   overflow: hidden;
 }
 
-.term-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 3px;
-  height: 100%;
-  background: #3b82f6;
-  opacity: 0.15;
-  transition: opacity 0.3s ease;
-}
-
 .term-card:hover {
-  border-color: rgba(59, 130, 246, 0.25);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2), 0 0 20px rgba(59, 130, 246, 0.05);
-  transform: translateY(-2px);
-}
-
-.term-card:hover::before {
-  opacity: 0.8;
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
 .card-top {
@@ -669,7 +651,7 @@ public class SimpleThreadPool {
 .analogy-box {
   background: rgba(11, 12, 16, 0.5);
   border-radius: 8px;
-  border-left: 2px solid #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.15);
   padding: 12px 16px;
 }
 
