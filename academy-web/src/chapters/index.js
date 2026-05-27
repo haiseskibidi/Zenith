@@ -11,7 +11,7 @@ import chapter9 from '../../../docs/academy/chapter_9_rpg_and_loot_generation.md
 import chapter10 from '../../../docs/academy/chapter_10_viewmodel_physics_and_magnetism.md?raw';
 import chapter8 from '../../../docs/academy/chapter_8_interview_cheat_sheet.md?raw';
 
-import { quizzes } from './quizzes.js';
+import { quizzes } from './quizzes/index.js';
 
 // Функция для авто-парсинга разделов (заголовков ##) из Markdown текста
 function parseSections(markdownText) {
@@ -61,7 +61,7 @@ export const chapters = [
     title: "Глава 0. Основы алгоритмов",
     rawContent: chapter0,
     sections: parseSections(chapter0),
-    quiz: null
+    quiz: quizzes.chapter_0
   },
   {
     id: "chapter_1",
