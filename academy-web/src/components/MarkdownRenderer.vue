@@ -20,7 +20,12 @@
         <p class="alert-content" v-html="renderInlineMarkdown(block.content)"></p>
       </div>
 
-      <!-- 3. Обычные блоки контента (текст, код, списки) рендерим как HTML -->
+      <!-- 3. Mermaid диаграммы -->
+      <div v-else-if="block.type === 'mermaid'" class="mermaid-container">
+        <pre class="mermaid-chart">{{ block.content }}</pre>
+      </div>
+
+      <!-- 4. Обычные блоки контента (текст, код, списки) рендерим как HTML -->
       <div v-else v-html="block.html" class="html-block"></div>
     </div>
 
@@ -33,6 +38,7 @@
 
 <script>
 import { nextTick } from 'vue';
+import mermaid from 'mermaid';
 import SpringSimulator from './SpringSimulator.vue';
 import VertexCompressor from './VertexCompressor.vue';
 import TextEffects from './TextEffects.vue';
@@ -87,19 +93,26 @@ export default {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
-        // 1. Обработка блоков кода ( ```java )
+        // 1. Обработка блоков кода ( ```java или ```mermaid )
         if (line.trim().startsWith('```')) {
           if (inCodeBlock) {
             // Закрываем блок кода
             inCodeBlock = false;
             flushText();
             
-            // Защита от экранирования XML в Prism.js
-            const escapedCode = this.escapeHtml(codeContent.join('\n'));
-            blocks.push({
-              type: 'html',
-              html: `<pre class="line-numbers"><code class="language-${codeLanguage}">${escapedCode}</code></pre>`
-            });
+            if (codeLanguage === 'mermaid') {
+              blocks.push({
+                type: 'mermaid',
+                content: codeContent.join('\n')
+              });
+            } else {
+              // Защита от экранирования XML в Prism.js
+              const escapedCode = this.escapeHtml(codeContent.join('\n'));
+              blocks.push({
+                type: 'html',
+                html: `<pre class="line-numbers"><code class="language-${codeLanguage}">${escapedCode}</code></pre>`
+              });
+            }
             codeContent = [];
           } else {
             // Открываем блок кода
@@ -176,6 +189,21 @@ export default {
     }
   },
   mounted() {
+    // Инициализируем Mermaid с красивой темной темой
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'loose',
+      themeVariables: {
+        background: '#111216',
+        primaryColor: '#1b1c24',
+        primaryTextColor: '#c9ccd6',
+        primaryBorderColor: '#3b82f6',
+        lineColor: '#3b82f6',
+        secondaryColor: '#1e1e2e',
+        tertiaryColor: '#111216'
+      }
+    });
     this.triggerHighlight();
     this.$el.addEventListener('click', this.handleLinkClick);
   },
@@ -188,7 +216,22 @@ export default {
         if (window.Prism) {
           window.Prism.highlightAll();
         }
+        this.renderCharts();
       });
+    },
+    async renderCharts() {
+      await nextTick();
+      try {
+        const els = this.$el.querySelectorAll('.mermaid-chart');
+        if (els.length > 0) {
+          // Инициализируем парсинг на найденных DOM-элементах
+          await mermaid.run({
+            nodes: els
+          });
+        }
+      } catch (err) {
+        console.error('Mermaid render error:', err);
+      }
     },
     handleLinkClick(e) {
       const target = e.target.closest('a');
@@ -478,5 +521,32 @@ code[class*="language-"] {
   color: #60a5fa;
   border-bottom-style: solid;
   border-bottom-color: #60a5fa;
+}
+
+/* Стилизация контейнера Mermaid-диаграмм */
+.mermaid-container {
+  background-color: #111216;
+  border: 1px solid #22252e;
+  border-radius: 8px;
+  padding: 24px;
+  margin: 28px 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.mermaid-chart {
+  font-family: 'JetBrains Mono', monospace !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #c9ccd6;
+}
+
+/* Корректировка стилей сгенерированного SVG внутри Mermaid */
+.mermaid-chart svg {
+  max-width: 100%;
+  height: auto;
 }
 </style>
