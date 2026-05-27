@@ -11,6 +11,13 @@ import chapter9 from '../../../docs/academy/chapter_9_rpg_and_loot_generation.md
 import chapter10 from '../../../docs/academy/chapter_10_viewmodel_physics_and_magnetism.md?raw';
 import chapter8 from '../../../docs/academy/chapter_8_interview_cheat_sheet.md?raw';
 
+// Импорты для нового курса "Железо"
+import hwIntro from '../../../docs/academy/hardware/chapter_0_intro.md?raw';
+import hwCpu from '../../../docs/academy/hardware/chapter_1_cpu.md?raw';
+import hwMemory from '../../../docs/academy/hardware/chapter_2_memory.md?raw';
+import hwPcie from '../../../docs/academy/hardware/chapter_3_pcie.md?raw';
+import hwOs from '../../../docs/academy/hardware/chapter_4_os.md?raw';
+
 import { quizzes } from './quizzes/index.js';
 
 // Функция для авто-парсинга разделов (заголовков ##) из Markdown текста
@@ -48,89 +55,142 @@ function parseSections(markdownText) {
   return sections;
 }
 
-export const chapters = [
-  {
-    id: "readme",
-    title: "Введение & Карта курса",
-    rawContent: readme,
-    sections: parseSections(readme),
-    quiz: null
+export const courses = {
+  hardware: {
+    id: "hardware",
+    title: "Железо & Архитектура ПК",
+    icon: "💻",
+    tag: "Silicon Level",
+    description: "Разбор устройства полупроводников, физики CPU, кэшей памяти, PCIe и операционной системы с нуля.",
+    chapters: [
+      {
+        id: "hw_intro",
+        title: "Глава 0. От кремния к транзистору",
+        rawContent: hwIntro,
+        sections: parseSections(hwIntro),
+        quiz: quizzes.chapter_hw_0
+      },
+      {
+        id: "hw_cpu",
+        title: "Глава 1. Анатомия процессорных ядер",
+        rawContent: hwCpu,
+        sections: parseSections(hwCpu),
+        quiz: quizzes.chapter_hw_1
+      },
+      {
+        id: "hw_memory",
+        title: "Глава 2. Иерархия памяти и CPU кэши",
+        rawContent: hwMemory,
+        sections: parseSections(hwMemory),
+        quiz: quizzes.chapter_hw_2
+      },
+      {
+        id: "hw_pcie",
+        title: "Глава 3. Системная шина PCIe и DMA",
+        rawContent: hwPcie,
+        sections: parseSections(hwPcie),
+        quiz: quizzes.chapter_hw_3
+      },
+      {
+        id: "hw_os",
+        title: "Глава 4. ОС и виртуальная память",
+        rawContent: hwOs,
+        sections: parseSections(hwOs),
+        quiz: quizzes.chapter_hw_4
+      }
+    ]
   },
-  {
-    id: "chapter_0",
-    title: "Глава 0. Основы алгоритмов",
-    rawContent: chapter0,
-    sections: parseSections(chapter0),
-    quiz: quizzes.chapter_0
-  },
-  {
-    id: "chapter_1",
-    title: "Глава 1. Управление памятью JVM",
-    rawContent: chapter1,
-    sections: parseSections(chapter1),
-    quiz: quizzes.chapter_1
-  },
-  {
-    id: "chapter_2",
-    title: "Глава 2. Графический конвейер OpenGL",
-    rawContent: chapter2,
-    sections: parseSections(chapter2),
-    quiz: quizzes.chapter_2
-  },
-  {
-    id: "chapter_3",
-    title: "Глава 3. GPU-Driven Rendering",
-    rawContent: chapter3,
-    sections: parseSections(chapter3),
-    quiz: quizzes.chapter_3
-  },
-  {
-    id: "chapter_4",
-    title: "Глава 4. Процедурная физика & IK",
-    rawContent: chapter4,
-    sections: parseSections(chapter4),
-    quiz: quizzes.chapter_4
-  },
-  {
-    id: "chapter_5",
-    title: "Глава 5. Реактивная шина событий",
-    rawContent: chapter5,
-    sections: parseSections(chapter5),
-    quiz: quizzes.chapter_5
-  },
-  {
-    id: "chapter_6",
-    title: "Глава 6. Рендеринг интерфейсов & Шрифты",
-    rawContent: chapter6,
-    sections: parseSections(chapter6),
-    quiz: quizzes.chapter_6
-  },
-  {
-    id: "chapter_7",
-    title: "Глава 7. Асинхронность & Многопоточность",
-    rawContent: chapter7,
-    sections: parseSections(chapter7),
-    quiz: quizzes.chapter_7
-  },
-  {
-    id: "chapter_9",
-    title: "Глава 9. RPG-система & Генератор Лута",
-    rawContent: chapter9,
-    sections: parseSections(chapter9),
-    quiz: quizzes.chapter_9
-  },
-  {
-    id: "chapter_10",
-    title: "Глава 10. Физика Viewmodel & Магнитный Лут",
-    rawContent: chapter10,
-    sections: parseSections(chapter10),
-    quiz: quizzes.chapter_10
-  },
-  {
-    id: "chapter_8",
-    title: "Глава 8. Шпаргалка IT-собеседований",
-    rawContent: chapter8,
-    sections: parseSections(chapter8),
-    quiz: quizzes.chapter_8
+  engine: {
+    id: "engine",
+    title: "Разработка 3D-Движка",
+    icon: "🪐",
+    tag: "Zenith Engine",
+    description: "Написание высокопроизводительного воксельного игрового движка на Java и OpenGL с нуля.",
+    chapters: [
+      {
+        id: "readme",
+        title: "Введение & Карта курса",
+        rawContent: readme,
+        sections: parseSections(readme),
+        quiz: null
+      },
+      {
+        id: "chapter_0",
+        title: "Глава 0. Основы алгоритмов",
+        rawContent: chapter0,
+        sections: parseSections(chapter0),
+        quiz: quizzes.chapter_0
+      },
+      {
+        id: "chapter_1",
+        title: "Глава 1. Управление памятью JVM",
+        rawContent: chapter1,
+        sections: parseSections(chapter1),
+        quiz: quizzes.chapter_1
+      },
+      {
+        id: "chapter_2",
+        title: "Глава 2. Графический конвейер OpenGL",
+        rawContent: chapter2,
+        sections: parseSections(chapter2),
+        quiz: quizzes.chapter_2
+      },
+      {
+        id: "chapter_3",
+        title: "Глава 3. GPU-Driven Rendering",
+        rawContent: chapter3,
+        sections: parseSections(chapter3),
+        quiz: quizzes.chapter_3
+      },
+      {
+        id: "chapter_4",
+        title: "Глава 4. Процедурная физика & IK",
+        rawContent: chapter4,
+        sections: parseSections(chapter4),
+        quiz: quizzes.chapter_4
+      },
+      {
+        id: "chapter_5",
+        title: "Глава 5. Реактивная шина событий",
+        rawContent: chapter5,
+        sections: parseSections(chapter5),
+        quiz: quizzes.chapter_5
+      },
+      {
+        id: "chapter_6",
+        title: "Глава 6. Рендеринг интерфейсов & Шрифты",
+        rawContent: chapter6,
+        sections: parseSections(chapter6),
+        quiz: quizzes.chapter_6
+      },
+      {
+        id: "chapter_7",
+        title: "Глава 7. Асинхронность & Многопоточность",
+        rawContent: chapter7,
+        sections: parseSections(chapter7),
+        quiz: quizzes.chapter_7
+      },
+      {
+        id: "chapter_9",
+        title: "Глава 9. RPG-система & Генератор Лута",
+        rawContent: chapter9,
+        sections: parseSections(chapter9),
+        quiz: quizzes.chapter_9
+      },
+      {
+        id: "chapter_10",
+        title: "Глава 10. Физика Viewmodel & Магнитный Лут",
+        rawContent: chapter10,
+        sections: parseSections(chapter10),
+        quiz: quizzes.chapter_10
+      },
+      {
+        id: "chapter_8",
+        title: "Глава 8. Шпаргалка IT-собеседований",
+        rawContent: chapter8,
+        sections: parseSections(chapter8),
+        quiz: quizzes.chapter_8
+      }
+    ]
   }
-];
+};

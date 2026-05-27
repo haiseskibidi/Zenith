@@ -10,6 +10,13 @@ import { chapter_8 } from './chapter_8.js';
 import { chapter_9 } from './chapter_9.js';
 import { chapter_10 } from './chapter_10.js';
 
+// Импорты квизов для курса "Железо"
+import { chapter_hw_0 } from './chapter_hw_0.js';
+import { chapter_hw_1 } from './chapter_hw_1.js';
+import { chapter_hw_2 } from './chapter_hw_2.js';
+import { chapter_hw_3 } from './chapter_hw_3.js';
+import { chapter_hw_4 } from './chapter_hw_4.js';
+
 export const quizzes = {
   chapter_0,
   chapter_1,
@@ -21,5 +28,12 @@ export const quizzes = {
   chapter_7,
   chapter_8,
   chapter_9,
-  chapter_10
+  chapter_10,
+  
+  // Квизы для курса "Железо"
+  chapter_hw_0,
+  chapter_hw_1,
+  chapter_hw_2,
+  chapter_hw_3,
+  chapter_hw_4
 };

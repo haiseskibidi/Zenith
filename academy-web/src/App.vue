@@ -10,6 +10,25 @@
         </div>
       </div>
 
+      <!-- ВЫБОР АКТИВНОГО КУРСА -->
+      <div class="course-selector-box">
+        <span class="menu-title">Выбор направления:</span>
+        <div class="course-cards">
+          <button 
+            v-for="course in courses" 
+            :key="course.id" 
+            @click="selectCourse(course.id)"
+            :class="['course-card', { 'course-card-active': currentCourseId === course.id }]"
+          >
+            <span class="course-icon">{{ course.icon }}</span>
+            <div class="course-info">
+              <span class="course-card-title">{{ course.title }}</span>
+              <span class="course-card-tag">{{ course.tag }}</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
       <!-- Вкладки верхнего уровня -->
       <nav class="sidebar-tabs">
         <button 
@@ -166,7 +185,7 @@
 </template>
 
 <script>
-import { chapters } from './chapters/index.js';
+import { courses } from './chapters/index.js';
 import MarkdownRenderer from './components/MarkdownRenderer.vue';
 import SpringSimulator from './components/SpringSimulator.vue';
 import VertexCompressor from './components/VertexCompressor.vue';
@@ -186,21 +205,36 @@ export default {
   },
   data() {
     return {
-      chapters: chapters,
+      courses: courses,
+      currentCourseId: 'engine', // 'engine' или 'hardware'
       activeChapterIndex: 0,
       currentTab: 'learn', // 'learn' или 'lab'
       activeLabWidget: 'spring' // 'spring', 'compressor', 'text'
     };
   },
   computed: {
+    currentCourse() {
+      return this.courses[this.currentCourseId];
+    },
+    chapters() {
+      return this.currentCourse.chapters;
+    },
     currentChapter() {
-      return this.chapters[this.activeChapterIndex];
+      return this.chapters[this.activeChapterIndex] || this.chapters[0];
     },
     isDev() {
       return import.meta.env.DEV;
     }
   },
   methods: {
+    selectCourse(courseId) {
+      this.currentCourseId = courseId;
+      this.activeChapterIndex = 0;
+      this.currentTab = 'learn';
+      this.$nextTick(() => {
+        this.$refs.scrollContainer.scrollTop = 0;
+      });
+    },
     selectChapter(index) {
       this.activeChapterIndex = index;
       this.currentTab = 'learn';
@@ -243,6 +277,24 @@ export default {
       return titles[this.activeLabWidget] || 'Песочница';
     },
     onNavigateChapter(fileName) {
+      const cleanFileName = fileName.replace(/^\.\//, '').replace('.md', '');
+      
+      if (this.currentCourseId === 'hardware') {
+        const mapping = {
+          'chapter_0_intro': 0,
+          'chapter_1_cpu': 1,
+          'chapter_2_memory': 2,
+          'chapter_3_pcie': 3,
+          'chapter_4_os': 4
+        };
+        const index = mapping[cleanFileName];
+        if (index !== undefined) {
+          this.selectChapter(index);
+        }
+        return;
+      }
+
+      // Для курса разработки движка
       const mapping = {
         'readme': 0,
         'README': 0,
@@ -258,7 +310,6 @@ export default {
         'chapter_10_viewmodel_physics_and_magnetism': 10,
         'chapter_8_interview_cheat_sheet': 11
       };
-      const cleanFileName = fileName.replace(/^\.\//, '');
       const index = mapping[cleanFileName];
       if (index !== undefined) {
         this.selectChapter(index);
@@ -292,6 +343,85 @@ export default {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+}
+
+/* Стили блока выбора курса */
+.course-selector-box {
+  padding: 16px 20px 8px 20px;
+  border-bottom: 1px solid #22252e;
+}
+
+.course-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.course-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #16171d;
+  border: 1px solid #22252e;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+}
+
+.course-card:hover {
+  border-color: #3b82f6;
+  background-color: #1b1c24;
+  transform: translateY(-1px);
+}
+
+.course-card-active {
+  background-color: #1b1c24;
+  border-color: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+}
+
+.course-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.course-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.course-card-title {
+  color: #c9ccd6;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.course-card:hover .course-card-title,
+.course-card-active .course-card-title {
+  color: #ffffff;
+}
+
+.course-card-active .course-card-title {
+  color: #3b82f6;
+}
+
+.course-card-tag {
+  color: #4b5269;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
 }
 
 @media (max-width: 768px) {
