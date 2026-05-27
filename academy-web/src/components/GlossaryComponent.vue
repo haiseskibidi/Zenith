@@ -585,7 +585,7 @@ public class SimpleThreadPool {
 
 .term-card {
   background: rgba(22, 23, 29, 0.45);
-  border: 1px solid rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(34, 37, 46, 0.7);
   border-radius: 12px;
   padding: 24px;
   backdrop-filter: blur(16px);
@@ -594,11 +594,7 @@ public class SimpleThreadPool {
   gap: 14px;
   position: relative;
   overflow: hidden;
-}
-
-.term-card:hover {
-  border-color: rgba(59, 130, 246, 0.2);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
 }
 
 .card-top {
