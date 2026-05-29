@@ -175,7 +175,7 @@ public class GameLoop {
 
         // E - Inventory Toggle
         if (inputManager.wasJustPressed(InputAction.INVENTORY) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("inventory"))) {
-            if (active instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen) {
+            if (active instanceof com.za.zenith.engine.graphics.ui.InventoryScreen) {
                 toggleInventory();
                 screenToggleCooldown = 0.25f;
             } else if (active == null) {
@@ -189,12 +189,12 @@ public class GameLoop {
             if (active instanceof com.za.zenith.engine.graphics.ui.PauseScreen) {
                 togglePause();
                 screenToggleCooldown = 0.25f;
-            } else if (active instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen || 
+            } else if (active instanceof com.za.zenith.engine.graphics.ui.InventoryScreen || 
                        active instanceof com.za.zenith.engine.graphics.ui.JournalScreen || 
                        active instanceof AnimationEditorScreen || 
                        active instanceof DevInspectorScreen) {
                 // Закрываем активный экран при нажатии ESC
-                if (active instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen) {
+                if (active instanceof com.za.zenith.engine.graphics.ui.InventoryScreen) {
                     toggleInventory();
                 } else if (active instanceof com.za.zenith.engine.graphics.ui.JournalScreen) {
                     toggleJournal();
@@ -255,6 +255,7 @@ public class GameLoop {
         if (inventoryOpen) inputManager.disableMouseCapture(window);
         else {
             inputManager.enableMouseCapture(window);
+            com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().closeScreen();
             com.za.zenith.world.items.ItemStack held = inputManager.getHeldStack();
             if (held != null) {
                 player.getInventory().addItem(held);
