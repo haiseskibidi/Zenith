@@ -6,6 +6,7 @@ import com.za.zenith.world.blocks.Blocks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.StampedLock;
 
 public class Chunk {
     public static final int CHUNK_SIZE = 16;
@@ -14,6 +15,47 @@ public class Chunk {
     public static final int CHUNK_HEIGHT = MAX_Y - MIN_Y;
     public static final int LOGICAL_OFFSET_Y = 128; // Logical Y 0 is at Internal Y 128
     public static final int NUM_SECTIONS = CHUNK_HEIGHT / ChunkSection.SECTION_SIZE;
+    
+    private final StampedLock lock = new StampedLock();
+    
+    private final java.util.List<com.za.zenith.world.BlockPos> localBlockEntities = new java.util.ArrayList<>();
+    private final java.util.List<Long> localBlockDamage = new java.util.ArrayList<>();
+
+    public java.util.List<com.za.zenith.world.BlockPos> getLocalBlockEntities() {
+        return localBlockEntities;
+    }
+
+    public java.util.List<Long> getLocalBlockDamage() {
+        return localBlockDamage;
+    }
+
+    public void addLocalBlockEntity(com.za.zenith.world.BlockPos pos) {
+        synchronized (localBlockEntities) {
+            if (!localBlockEntities.contains(pos)) {
+                localBlockEntities.add(pos);
+            }
+        }
+    }
+
+    public void removeLocalBlockEntity(com.za.zenith.world.BlockPos pos) {
+        synchronized (localBlockEntities) {
+            localBlockEntities.remove(pos);
+        }
+    }
+
+    public void addLocalBlockDamage(long packedPos) {
+        synchronized (localBlockDamage) {
+            if (!localBlockDamage.contains(packedPos)) {
+                localBlockDamage.add(packedPos);
+            }
+        }
+    }
+
+    public void removeLocalBlockDamage(long packedPos) {
+        synchronized (localBlockDamage) {
+            localBlockDamage.remove(packedPos);
+        }
+    }
     
     private final ChunkPos position;
     private final ChunkSection[] sections;
@@ -110,7 +152,7 @@ public class Chunk {
         section.setBlockIndex(x, y & 15, z, paletteIndex, wasAir, isAir);
     }
 
-    private synchronized void setBlockByIndex(int x, int y, int z, int packedData) {
+    private void setBlockByIndex(int x, int y, int z, int packedData) {
         setBlockByIndexInternal(x, y, z, packedData);
     }
 
@@ -201,24 +243,54 @@ public class Chunk {
         return (byte)(getRawBlockData(x, y, z) & 0xFF);
     }
     
-    public synchronized void setBlock(int x, int y, int z, Block block) {
+    private int getRawBlockDataInternal(int x, int y, int z) {
+        ChunkSection section = getSection(y);
+        if (section == null || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return 0;
+        short blockIdx = section.getBlockIndex(x, y & 15, z);
+        int paletteSize = palette.size();
+        return (blockIdx >= 0 && blockIdx < paletteSize) ? palette.get(blockIdx) : 0;
+    }
+
+    public void setBlock(int x, int y, int z, Block block) {
         setBlock(x, y, z, block.getType(), block.getMetadata());
     }
 
-    public synchronized void setBlock(int x, int y, int z, int type, int metadata) {
+    public void setBlock(int x, int y, int z, int type, int metadata) {
         if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE) return;
-        int oldPacked = getRawBlockData(x, y, z);
-        int packed = (type << 8) | (metadata & 0xFF);
-        if (oldPacked == packed) return;
-        setBlockByIndex(x, y, z, packed);
-        heightMap[z * CHUNK_SIZE + x] = -1;
-        dirtyCounter.incrementAndGet();
+        
+        long stamp = lock.writeLock();
+        try {
+            int oldPacked = getRawBlockDataInternal(x, y, z);
+            int packed = (type << 8) | (metadata & 0xFF);
+            if (oldPacked == packed) return;
+            setBlockByIndexInternal(x, y, z, packed);
+            heightMap[z * CHUNK_SIZE + x] = -1;
+            dirtyCounter.incrementAndGet();
+        } finally {
+            lock.unlockWrite(stamp);
+        }
     }
     
     public int getRawBlockData(int x, int y, int z) {
         ChunkSection section = getSection(y);
         if (section == null || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return 0;
-        return palette.get(section.getBlockIndex(x, y & 15, z));
+        
+        long stamp = lock.tryOptimisticRead();
+        short blockIdx = section.getBlockIndex(x, y & 15, z);
+        int paletteSize = palette.size();
+        int type = (blockIdx >= 0 && blockIdx < paletteSize) ? palette.get(blockIdx) : 0;
+        
+        if (!lock.validate(stamp)) {
+            stamp = lock.readLock();
+            try {
+                blockIdx = section.getBlockIndex(x, y & 15, z);
+                paletteSize = palette.size();
+                type = (blockIdx >= 0 && blockIdx < paletteSize) ? palette.get(blockIdx) : 0;
+            } finally {
+                lock.unlockRead(stamp);
+            }
+        }
+        return type;
     }
     
     public ChunkPos getPosition() {
@@ -290,31 +362,53 @@ public class Chunk {
         return data; 
     }
 
-    public synchronized DataSnapshot getSnapshot(int[] outBlockData, byte[] outLightData) {
-        for (int y = 0; y < CHUNK_HEIGHT; y++) {
-            ChunkSection sec = getSection(y);
-            if (sec == null) continue;
-            short[] indices = sec.getBlockIndices();
-            int baseIdx = y * 256;
-            int localY = y & 15;
-            for (int z = 0; z < CHUNK_SIZE; z++) {
-                for (int x = 0; x < CHUNK_SIZE; x++) {
-                    int palIdx = indices[localY * 256 + z * 16 + x] & 0xFFFF;
-                    if (palIdx < palette.size()) {
-                        outBlockData[baseIdx + z * 16 + x] = palette.get(palIdx);
-                    } else {
-                        com.za.zenith.utils.Logger.error("Palette corruption in chunk %s at local [%d, %d, %d]: Index %d out of bounds for palette size %d. Resetting to Air.", 
-                            position, x, y, z, palIdx, palette.size());
-                        outBlockData[baseIdx + z * 16 + x] = 0;
-                        // Attempt to repair the index in the section
-                        sec.setBlockIndex(x, localY, z, (short)0, false, true);
+    public DataSnapshot getSnapshot(int[] outBlockData, byte[] outLightData) {
+        long stamp = lock.readLock();
+        java.util.List<com.za.zenith.world.BlockPos> corrupted = null;
+        try {
+            for (int y = 0; y < CHUNK_HEIGHT; y++) {
+                ChunkSection sec = getSection(y);
+                if (sec == null) continue;
+                short[] indices = sec.getBlockIndices();
+                int baseIdx = y * 256;
+                int localY = y & 15;
+                for (int z = 0; z < CHUNK_SIZE; z++) {
+                    for (int x = 0; x < CHUNK_SIZE; x++) {
+                        int palIdx = indices[localY * 256 + z * 16 + x] & 0xFFFF;
+                        if (palIdx < palette.size()) {
+                            outBlockData[baseIdx + z * 16 + x] = palette.get(palIdx);
+                        } else {
+                            com.za.zenith.utils.Logger.error("Palette corruption in chunk %s at local [%d, %d, %d]: Index %d out of bounds for palette size %d. Resetting to Air.", 
+                                position, x, y, z, palIdx, palette.size());
+                            outBlockData[baseIdx + z * 16 + x] = 0;
+                            if (corrupted == null) {
+                                corrupted = new java.util.ArrayList<>();
+                            }
+                            corrupted.add(new com.za.zenith.world.BlockPos(x, y, z));
+                        }
                     }
                 }
             }
+            for (int i = 0; i < NUM_SECTIONS; i++) {
+                System.arraycopy(sections[i].getLightData(), 0, outLightData, i * ChunkSection.SECTION_VOLUME, ChunkSection.SECTION_VOLUME);
+            }
+            return new DataSnapshot(position, outBlockData, outLightData);
+        } finally {
+            lock.unlockRead(stamp);
+            
+            if (corrupted != null) {
+                long writeStamp = lock.writeLock();
+                try {
+                    for (com.za.zenith.world.BlockPos pos : corrupted) {
+                        ChunkSection sec = getSection(pos.y());
+                        if (sec != null) {
+                            sec.setBlockIndex(pos.x(), pos.y() & 15, pos.z(), (short)0, false, true);
+                        }
+                    }
+                } finally {
+                    lock.unlockWrite(writeStamp);
+                }
+            }
         }
-        for (int i = 0; i < NUM_SECTIONS; i++) {
-            System.arraycopy(sections[i].getLightData(), 0, outLightData, i * ChunkSection.SECTION_VOLUME, ChunkSection.SECTION_VOLUME);
-        }
-        return new DataSnapshot(position, outBlockData, outLightData);
     }
 }

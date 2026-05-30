@@ -124,7 +124,9 @@ void main() {
     // Zero-Alloc GPU-Driven Hiding in Vertex Shader
     // Collapses the vertices of active breaking blocks to (0,0,0) so the GPU clips them out.
     // This fully bypasses fragment shading and keeps Early-Z activated!
-    if (!uIsProxy) {
+    // IMPORTANT: Only hide in batch chunk renders (uIsBatch) where packedPos is valid.
+    // Single-mesh renders (HoleMesh, BreakingProxy) have invalid packedPos and must be skipped.
+    if (!uIsProxy && uIsBatch) {
         for (int i = 0; i < uHiddenCount; i++) {
             if (vBlockPos == ivec3(uHiddenPositions[i])) {
                 gl_Position = vec4(0.0);

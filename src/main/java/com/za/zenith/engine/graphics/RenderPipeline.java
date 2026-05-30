@@ -200,8 +200,10 @@ public class RenderPipeline {
         int hiddenCount = 0;
         com.za.zenith.world.BlockPos bPos = overlaySystem.getBreakingPos();
         if (bPos != null) {
-            blockShader.setVector3f("uHiddenPositions[" + hiddenCount + "]", bPos.x(), bPos.y(), bPos.z());
-            hiddenCount++;
+            if (overlaySystem.getBreakingProgress() > 0.0f || overlaySystem.getWobbleTimer() < 0.5f) {
+                blockShader.setVector3f("uHiddenPositions[" + hiddenCount + "]", bPos.x(), bPos.y(), bPos.z());
+                hiddenCount++;
+            }
         }
         for (var entry : state.getWorld().getBlockDamageMap().entrySet()) {
             if (hiddenCount >= 16) break;

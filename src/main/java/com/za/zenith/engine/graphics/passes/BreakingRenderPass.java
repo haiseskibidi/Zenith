@@ -19,6 +19,11 @@ public class BreakingRenderPass implements RenderPass {
     public void render(SceneState state, Shader shader, ShaderStateManager stateManager, DynamicTextureAtlas atlas, Renderer wrapper, OverlayRenderSystem system) {
         if (system.getBreakingPos() == null) return;
         
+        // Skip rendering overlay for blocks under cursor that haven't been hit yet
+        if (system.getBreakingProgress() <= 0.0f && system.getWobbleTimer() >= 0.5f) {
+            return;
+        }
+        
         stateManager.setBoolean("uIsBatch", false);
         stateManager.setFloat("uSwayOverride", -1.0f);
         

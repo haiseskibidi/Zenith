@@ -330,25 +330,23 @@ public class World {
                     Chunk chunk = entry.getValue();
                     com.za.zenith.world.lighting.LightManager.onChunkUnload(chunk);
                     
-                    // Clear damage info for this chunk using packed coordinates
-                    blockDamageMap.keySet().removeIf(packedPos -> {
-                        int bx = unpackBlockX(packedPos);
-                        int bz = unpackBlockZ(packedPos);
-                        return (bx >> 4) == cx && (bz >> 4) == cz;
-                    });
+                    // Ultra-fast chunk-local O(1) clear for block damage
+                    for (long packedPos : chunk.getLocalBlockDamage()) {
+                        blockDamageMap.remove(packedPos);
+                    }
+                    chunk.getLocalBlockDamage().clear();
 
-                    // Clear block entities for this chunk
-                    blockEntities.keySet().removeIf(pos -> {
-                        if ((pos.x() >> 4) == cx && (pos.z() >> 4) == cz) {
-                            BlockEntity be = blockEntities.get(pos);
-                            if (be != null) {
-                                be.setRemoved();
-                                if (be instanceof ITickable) tickableBlockEntities.remove(be);
+                    // Ultra-fast chunk-local O(1) clear for block entities
+                    for (com.za.zenith.world.BlockPos pos : chunk.getLocalBlockEntities()) {
+                        BlockEntity be = blockEntities.remove(pos);
+                        if (be != null) {
+                            be.setRemoved();
+                            if (be instanceof ITickable) {
+                                tickableBlockEntities.remove(be);
                             }
-                            return true;
                         }
-                        return false;
-                    });
+                    }
+                    chunk.getLocalBlockEntities().clear();
 
                     // CRITICAL FIX: Properly remove the entire chunk from groundEntityMap
                     groundEntityMap.remove(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
@@ -723,7 +721,12 @@ public class World {
     public void setBlockDamage(BlockPos pos, float damage, List<Vector4f> history) {
         long packed = packBlockPos(pos.x(), pos.y(), pos.z());
         if (damage <= 0.0f) {
-            blockDamageMap.remove(packed);
+            if (blockDamageMap.remove(packed) != null) {
+                Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
+                if (chunk != null) {
+                    chunk.removeLocalBlockDamage(packed);
+                }
+            }
         } else {
             BlockDamageInstance info = blockDamageMap.get(packed);
             if (info != null) {
@@ -744,6 +747,10 @@ public class World {
                 }
             } else {
                 blockDamageMap.put(packed, new BlockDamageInstance(damage, getBlock(pos).copy(), new ArrayList<>(history)));
+                Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
+                if (chunk != null) {
+                    chunk.addLocalBlockDamage(packed);
+                }
             }
         }
     }
@@ -847,6 +854,7 @@ public class World {
                 be.setWorld(this);
                 blockEntities.put(pos, be);
                 if (be instanceof ITickable) tickableBlockEntities.add((ITickable) be);
+                chunk.addLocalBlockEntity(pos);
             }
         }
     }
@@ -870,7 +878,13 @@ public class World {
         removeBlockEntity(pos);
 
         // IMPORTANT: Clear any damage/proxy data at this position immediately
-        blockDamageMap.remove(packBlockPos(x, y, z));
+        long packedPos = packBlockPos(x, y, z);
+        if (blockDamageMap.remove(packedPos) != null) {
+            Chunk chunk = chunks.get(ChunkPos.pack(x >> 4, z >> 4));
+            if (chunk != null) {
+                chunk.removeLocalBlockDamage(packedPos);
+            }
+        }
 
         long packed = ChunkPos.pack(x >> 4, z >> 4);
         Chunk chunk = chunks.get(packed);
@@ -973,6 +987,7 @@ public class World {
         // Trigger mesh update for the chunk
         com.za.zenith.world.chunks.Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
         if (chunk != null) {
+            chunk.addLocalBlockEntity(pos);
             chunk.setNeedsMeshUpdate(true);
         }
     }
@@ -985,9 +1000,13 @@ public class World {
         BlockEntity entity = blockEntities.remove(pos);
         if (entity != null) {
             entity.setRemoved();
+            if (entity instanceof ITickable) {
+                tickableBlockEntities.remove(entity);
+            }
             // Trigger mesh update for the chunk
             com.za.zenith.world.chunks.Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
             if (chunk != null) {
+                chunk.removeLocalBlockEntity(pos);
                 chunk.setNeedsMeshUpdate(true);
             }
         }

@@ -8,20 +8,31 @@ import com.za.zenith.world.items.ItemStack;
 
 /**
  * Event triggered when a player left-clicks on a block in the world.
- * This class is mutable to allow listeners to consume the click action.
+ * Optimized with high-performance object pooling to achieve Zero-Allocation at runtime.
  */
 public class BlockLeftClickEvent implements Event {
-    private final Player player;
-    private final World world;
-    private final BlockPos pos;
-    private final ItemStack heldItem;
-    private final float hitX;
-    private final float hitY;
-    private final float hitZ;
-    private final boolean isNewClick;
+    private static final java.util.Queue<BlockLeftClickEvent> POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    private Player player;
+    private World world;
+    private BlockPos pos;
+    private ItemStack heldItem;
+    private float hitX;
+    private float hitY;
+    private float hitZ;
+    private boolean isNewClick;
     private boolean consumed = false;
 
-    public BlockLeftClickEvent(Player player, World world, BlockPos pos, ItemStack heldItem, float hitX, float hitY, float hitZ, boolean isNewClick) {
+    public static BlockLeftClickEvent obtain(Player player, World world, BlockPos pos, ItemStack heldItem, float hitX, float hitY, float hitZ, boolean isNewClick) {
+        BlockLeftClickEvent event = POOL.poll();
+        if (event == null) {
+            event = new BlockLeftClickEvent();
+        }
+        event.init(player, world, pos, heldItem, hitX, hitY, hitZ, isNewClick);
+        return event;
+    }
+
+    private void init(Player player, World world, BlockPos pos, ItemStack heldItem, float hitX, float hitY, float hitZ, boolean isNewClick) {
         this.player = player;
         this.world = world;
         this.pos = pos;
@@ -30,6 +41,15 @@ public class BlockLeftClickEvent implements Event {
         this.hitY = hitY;
         this.hitZ = hitZ;
         this.isNewClick = isNewClick;
+        this.consumed = false;
+    }
+
+    public void release() {
+        this.player = null;
+        this.world = null;
+        this.pos = null;
+        this.heldItem = null;
+        POOL.offer(this);
     }
 
     public Player getPlayer() { return player; }

@@ -55,14 +55,14 @@ public class InteractionInputHandler {
             boolean actionConsumed = false;
             if (isNewLeftClick && hitEntity != null) {
                 if (hitEntity instanceof LivingEntity) {
-                    com.za.zenith.engine.event.EventBus.getInstance().publish(
-                        new com.za.zenith.engine.event.events.PlayerAttackEntityEvent(player, hitEntity, currentStack)
-                    );
+                    var event = com.za.zenith.engine.event.events.PlayerAttackEntityEvent.obtain(player, hitEntity, currentStack);
+                    com.za.zenith.engine.event.EventBus.getInstance().publish(event);
+                    event.release();
                     actionConsumed = true;
                 } else if (hitEntity instanceof com.za.zenith.entities.ResourceEntity || hitEntity instanceof com.za.zenith.entities.ItemEntity) {
-                    com.za.zenith.engine.event.EventBus.getInstance().publish(
-                        new com.za.zenith.engine.event.events.PlayerPickupEvent(player, hitEntity)
-                    );
+                    var event = com.za.zenith.engine.event.events.PlayerPickupEvent.obtain(player, hitEntity);
+                    com.za.zenith.engine.event.EventBus.getInstance().publish(event);
+                    event.release();
                     actionConsumed = true;
                 }
             }
@@ -77,12 +77,15 @@ public class InteractionInputHandler {
                 float rz = raycast.getHitPoint().z - hitPos.z() - 0.5f;
                 Vector3f localHit = new Vector3f(rx, ry, rz);
 
-                com.za.zenith.engine.event.events.BlockLeftClickEvent leftClickEvent = new com.za.zenith.engine.event.events.BlockLeftClickEvent(
+                com.za.zenith.engine.event.events.BlockLeftClickEvent leftClickEvent = com.za.zenith.engine.event.events.BlockLeftClickEvent.obtain(
                     player, world, hitPos, currentStack, rx + 0.5f, ry, rz + 0.5f, isNewLeftClick
                 );
                 com.za.zenith.engine.event.EventBus.getInstance().publish(leftClickEvent);
 
-                if (leftClickEvent.isConsumed()) {
+                boolean consumed = leftClickEvent.isConsumed();
+                leftClickEvent.release();
+
+                if (consumed) {
                     manager.setLeftMousePressed(true);
                     return null; 
                 }
@@ -94,6 +97,9 @@ public class InteractionInputHandler {
                 miningController.mine(world, player, hitPos, blockType, blockDef, currentStack, currentItem, isNewLeftClick, localHit, raycast.getNormal());
             }
         } else {
+            if (miningController.getBreakingBlockPos() != null) {
+                miningController.stopMining();
+            }
             if (raycast.isHit()) {
                 Block block = world.getBlock(raycast.getBlockPos());
                 float rx = raycast.getHitPoint().x - raycast.getBlockPos().x();
@@ -156,11 +162,15 @@ public class InteractionInputHandler {
             // Entity Interaction (RMB Pickup)
             if (!actionConsumed && isNewRightClick && hitEntity != null) {
                 if (hitEntity instanceof com.za.zenith.entities.ResourceEntity || hitEntity instanceof com.za.zenith.entities.ItemEntity) {
-                    com.za.zenith.engine.event.events.PlayerPickupEvent pickupEvent = new com.za.zenith.engine.event.events.PlayerPickupEvent(player, hitEntity);
-                    com.za.zenith.engine.event.EventBus.getInstance().publish(pickupEvent);
-                    if (pickupEvent.isConsumed()) {
-                        actionConsumed = true;
-                        manager.setPlaceDelayTimer(manager.PLACE_COOLDOWN);
+                    com.za.zenith.engine.event.events.PlayerPickupEvent pickupEvent = com.za.zenith.engine.event.events.PlayerPickupEvent.obtain(player, hitEntity);
+                    try {
+                        com.za.zenith.engine.event.EventBus.getInstance().publish(pickupEvent);
+                        if (pickupEvent.isConsumed()) {
+                            actionConsumed = true;
+                            manager.setPlaceDelayTimer(manager.PLACE_COOLDOWN);
+                        }
+                    } finally {
+                        pickupEvent.release();
                     }
                 }
             }

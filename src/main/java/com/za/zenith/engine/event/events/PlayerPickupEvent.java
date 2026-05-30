@@ -6,16 +6,34 @@ import com.za.zenith.entities.Entity;
 
 /**
  * Event triggered when a player attempts to pick up a resource or item entity from the world.
- * This class is mutable to allow controllers to signal successful pickup consumption.
+ * Optimized with high-performance object pooling to achieve Zero-Allocation at runtime.
  */
 public class PlayerPickupEvent implements Event {
-    private final Player player;
-    private final Entity targetEntity;
+    private static final java.util.Queue<PlayerPickupEvent> POOL = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    private Player player;
+    private Entity targetEntity;
     private boolean consumed = false;
 
-    public PlayerPickupEvent(Player player, Entity targetEntity) {
+    public static PlayerPickupEvent obtain(Player player, Entity targetEntity) {
+        PlayerPickupEvent event = POOL.poll();
+        if (event == null) {
+            event = new PlayerPickupEvent();
+        }
+        event.init(player, targetEntity);
+        return event;
+    }
+
+    private void init(Player player, Entity targetEntity) {
         this.player = player;
         this.targetEntity = targetEntity;
+        this.consumed = false;
+    }
+
+    public void release() {
+        this.player = null;
+        this.targetEntity = null;
+        POOL.offer(this);
     }
 
     public Player getPlayer() { return player; }

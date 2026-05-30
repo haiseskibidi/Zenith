@@ -359,6 +359,20 @@ public class ChunkMeshGenerator {
                 maxY = Math.max(maxY, fp[v*3+1]);
             }
 
+            // CRITICAL: Compute packedPos ONCE from the quad center, not per-vertex.
+            // Cross-plane vertices (e.g. grass at (x,y,z)) extend to (x+1,y+1,z+1),
+            // so per-vertex floor() would assign edge vertices to the ADJACENT block's packedPos.
+            // This caused partial vertex hiding (gray triangle to crosshair).
+            float centerX = (fp[0] + fp[3] + fp[6] + fp[9]) * 0.25f;
+            float centerY = (fp[1] + fp[4] + fp[7] + fp[10]) * 0.25f;
+            float centerZ = (fp[2] + fp[5] + fp[8] + fp[11]) * 0.25f;
+            int lx = ((int) Math.floor(centerX)) & 15;
+            int lz = ((int) Math.floor(centerZ)) & 15;
+            int ly = (int) Math.floor(centerY);
+            if (ly < 0) ly = 0;
+            if (ly > 255) ly = 255;
+            int pPos = (lx + lz * 16 + ly * 256) & 0xFFFF;
+
             for (int v = 0; v < 4; v++) {
                 float py = fp[v*3+1];
                 float weight = 0.0f;
@@ -388,13 +402,6 @@ public class ChunkMeshGenerator {
                 int l0 = ((int)light[0]) & 0xF;
                 int l1 = ((int)light[1]) & 0xF;
                 int aoi = ao > 0.8f ? 3 : (ao > 0.6f ? 2 : (ao > 0.4f ? 1 : 0));
-                
-                int lx = ((int)Math.floor(fp[v*3])) & 15;
-                int lz = ((int)Math.floor(fp[v*3+2])) & 15;
-                int ly = (int)Math.floor(py);
-                if (ly < 0) ly = 0;
-                if (ly > 255) ly = 255;
-                int pPos = (lx + lz * 16 + ly * 256) & 0xFFFF;
                 
                 int packedLight = l0 | (l1 << 4) | (aoi << 8) | (pPos << 10);
 
