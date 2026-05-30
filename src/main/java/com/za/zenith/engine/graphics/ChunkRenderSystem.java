@@ -47,6 +47,7 @@ public class ChunkRenderSystem {
     // Performance optimization: Avoid re-sorting if camera hasn't moved much
     private final org.joml.Vector3f lastSortPos = new org.joml.Vector3f(Float.MAX_VALUE);
 
+    private final org.joml.Matrix4f lastFrustumMatrix = new org.joml.Matrix4f();
     private int lastCamSecX = Integer.MAX_VALUE;
     private int lastCamSecY = Integer.MAX_VALUE;
     private int lastCamSecZ = Integer.MAX_VALUE;
@@ -106,7 +107,11 @@ public class ChunkRenderSystem {
         }
 
         boolean movedSection = camChunkX != lastCamSecX || camSecY != lastCamSecY || camChunkZ != lastCamSecZ;
-        if (movedSection || state.getFrameCounter() % 5 == 0) {
+        org.joml.Matrix4f currentFrustum = state.getFrustumMatrix();
+        boolean frustumChanged = !currentFrustum.equals(lastFrustumMatrix);
+
+        if (movedSection || frustumChanged) {
+            lastFrustumMatrix.set(currentFrustum);
             visibleSectionsCount = 0;
             int poolVer = meshPool.getVersion();
 
@@ -123,18 +128,21 @@ public class ChunkRenderSystem {
                             float cx = (camChunkX + x) * 16;
                             float cz = (camChunkZ + z) * 16;
                             
-                            for (int secIdx = 0; secIdx < Chunk.NUM_SECTIONS; secIdx++) {
-                                ChunkSection section = chunk.getSections()[secIdx];
-                                if (section == null || section.isEmpty()) continue;
-                                
-                                float sy = secIdx * 16;
-                                // Frustum culling per section on CPU
-                                if (state.getFrustum().testAab(cx, sy, cz, cx + 16, sy + 16, cz + 16)) {
-                                    if (isSectionMeshValid(result, secIdx, poolVer)) {
-                                        ensureVisibleSectionsCapacity();
-                                        visibleChunks[visibleSectionsCount] = chunk;
-                                        visibleSectionIndices[visibleSectionsCount] = secIdx;
-                                        visibleSectionsCount++;
+                            // 1. Hierarchical Frustum Culling: Test the entire chunk column (16x512x16) first to skip all its sections at once!
+                            if (state.getFrustum().testAab(cx, 0.0f, cz, cx + 16.0f, 512.0f, cz + 16.0f)) {
+                                for (int secIdx = 0; secIdx < Chunk.NUM_SECTIONS; secIdx++) {
+                                    ChunkSection section = chunk.getSections()[secIdx];
+                                    if (section == null || section.isEmpty()) continue;
+                                    
+                                    float sy = secIdx * 16;
+                                    // 2. Frustum culling per individual section
+                                    if (state.getFrustum().testAab(cx, sy, cz, cx + 16, sy + 16, cz + 16)) {
+                                        if (isSectionMeshValid(result, secIdx, poolVer)) {
+                                            ensureVisibleSectionsCapacity();
+                                            visibleChunks[visibleSectionsCount] = chunk;
+                                            visibleSectionIndices[visibleSectionsCount] = secIdx;
+                                            visibleSectionsCount++;
+                                        }
                                     }
                                 }
                             }

@@ -21,7 +21,27 @@ public class LightEngine {
     private final ConcurrentLinkedQueue<BlockPos> updateQueue = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean isProcessing = new AtomicBoolean(false);
 
+    private long lastSyncUpdateWindowStart = 0;
+    private int syncUpdatesInWindow = 0;
+    private static final int MAX_SYNC_UPDATES_PER_WINDOW = 5;
+    private static final long WINDOW_DURATION_MS = 20; // 1 tick (approx. 20ms)
+
     public void enqueueLightUpdate(BlockPos pos) {
+        long now = System.currentTimeMillis();
+        if (now - lastSyncUpdateWindowStart > WINDOW_DURATION_MS) {
+            lastSyncUpdateWindowStart = now;
+            syncUpdatesInWindow = 0;
+        }
+
+        // Fast-path: calculate synchronously if no pending updates, no active background task,
+        // and we haven't exceeded the safe budget of synchronous updates in this tick window.
+        // This completely eliminates visual lag when mining blocks with extremely fast tools like the Admin Hammer.
+        if (updateQueue.isEmpty() && !isProcessing.get() && syncUpdatesInWindow < MAX_SYNC_UPDATES_PER_WINDOW) {
+            syncUpdatesInWindow++;
+            onBlockChanged(pos);
+            return;
+        }
+
         // Queue Guard: prevent RAM explosion during ultra-fast terrain generation
         if (updateQueue.size() > 16384) {
             updateQueue.clear();
