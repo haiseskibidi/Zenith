@@ -34,10 +34,12 @@ public class RenderPipeline {
     // Core Rendering
     private final Framebuffer msaaFramebuffer;
     private final Framebuffer resolveFramebuffer;
+    private final Framebuffer sunShaftsFramebuffer;
     private final PostProcessor postProcessor;
     private final UIRenderer uiRenderer;
     private final SkyRenderer skyRenderer = new SkyRenderer();
     private final ParticleRenderer particleRenderer = new ParticleRenderer();
+    private final com.za.zenith.world.particles.AmbientParticleManager ambientParticleManager;
     
     private boolean fxaaEnabled = false;
     private long frameCounter = 0;
@@ -59,8 +61,10 @@ public class RenderPipeline {
         
         this.msaaFramebuffer = new Framebuffer(width, height, 4);
         this.resolveFramebuffer = new Framebuffer(width, height, 1);
+        this.sunShaftsFramebuffer = new Framebuffer(width, height, 1);
         this.postProcessor = new PostProcessor();
         this.uiRenderer = new UIRenderer();
+        this.ambientParticleManager = new com.za.zenith.world.particles.AmbientParticleManager();
         
         sunSource.data.type = com.za.zenith.world.lighting.LightData.Type.DIRECTIONAL;
         sunSource.data.intensity = 1.0f;
@@ -105,6 +109,7 @@ public class RenderPipeline {
         uiRenderer.init();
         skyRenderer.init();
         particleRenderer.init();
+        ambientParticleManager.init();
 
         blockShader.use();
         blockShader.setInt("textureSampler", 0);
@@ -127,6 +132,10 @@ public class RenderPipeline {
 
         // Update global lighting/environment
         updateEnvironment(sceneState);
+        
+        // 1.5. Update Ambient Particles (Dust Motes) - Disabled for realism
+        com.za.zenith.world.generation.BiomeDefinition biome = world.getBiomeManager().getBiome((int)camera.getPosition().x, (int)camera.getPosition().z);
+        // ambientParticleManager.update(deltaTime, camera, world, biome);
         
         // Update UBO and Context
         RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getAmbientLight());
@@ -152,6 +161,9 @@ public class RenderPipeline {
         // Particles
         particleRenderer.render(camera, com.za.zenith.world.particles.ParticleManager.getInstance().getActiveParticles(), atlas, alpha, sceneState.getAmbientLight());
         
+        // Ambient Particles (Dust Motes) - Disabled for realism
+        // ambientParticleManager.render(camera, biome);
+        
         // Viewmodel
         entitySystem.renderViewmodel(sceneState, atlas);
 
@@ -162,8 +174,90 @@ public class RenderPipeline {
         // 3. Post-Processing & UI
         msaaFramebuffer.resolveTo(resolveFramebuffer);
         
-        if (fxaaEnabled) postProcessor.processFXAA(resolveFramebuffer.getColorTextureId(), resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight());
-        else postProcessor.processPassthrough(resolveFramebuffer.getColorTextureId(), resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight());
+        boolean sunShaftsEnabled = false;
+        com.za.zenith.world.generation.AtmosphereSettings.SunShaftsSettings sunShaftsSettings = null;
+        
+        if (biome != null) {
+            sunShaftsSettings = biome.getAtmosphere().getSunShafts();
+            sunShaftsEnabled = sunShaftsSettings.isEnabled();
+        }
+        
+        int finalInputColorTexture = resolveFramebuffer.getColorTextureId();
+        
+        if (sunShaftsEnabled && sunShaftsSettings != null) {
+            sunShaftsFramebuffer.resize(window.getWidth(), window.getHeight());
+            
+            // NEGATE lightDirection to point from camera to sun in world space
+            Vector3f sunDir = new Vector3f(sceneState.getLightDirection()).negate().normalize();
+            org.joml.Matrix4f viewMatrix = camera.getViewMatrix(alpha);
+            Vector3f viewDir = new Vector3f();
+            viewMatrix.transformDirection(sunDir, viewDir);
+            viewDir.normalize();
+            
+            org.joml.Vector4f sunViewPos = new org.joml.Vector4f(viewDir.x * 100.0f, viewDir.y * 100.0f, viewDir.z * 100.0f, 1.0f);
+            org.joml.Vector4f sunClipPos = new org.joml.Vector4f();
+            camera.getProjectionMatrix().transform(sunViewPos, sunClipPos);
+            
+            boolean sunVisible = sunClipPos.w > 0.0f && sunClipPos.z > 0.0f;
+            org.joml.Vector2f sunScreenPos = new org.joml.Vector2f(0.5f, 0.5f);
+            
+            if (sunVisible) {
+                float ndcX = sunClipPos.x / sunClipPos.w;
+                float ndcY = sunClipPos.y / sunClipPos.w;
+                sunScreenPos.set(ndcX * 0.5f + 0.5f, ndcY * 0.5f + 0.5f);
+                // Expand bounds to [-0.6, 1.6] for smooth screen-space and sunset crepuscular transitions
+                if (sunScreenPos.x < -0.6f || sunScreenPos.x > 1.6f || sunScreenPos.y < -0.6f || sunScreenPos.y > 1.6f) {
+                    sunVisible = false;
+                }
+            }
+            
+            // Calculate Height Attenuation (piecewise function for day/sunset crepuscular rays)
+            float heightFactor = 0.0f;
+            float sunHeight = sunDir.y;
+            if (sunHeight >= 0.0f) {
+                heightFactor = (float) Math.pow(1.0f - sunHeight, 1.3f);
+            } else {
+                // Crepuscular twilight rays after sunset, fading smoothly until sun is -0.25 height
+                heightFactor = Math.max(0.0f, 1.0f + sunHeight / 0.25f);
+            }
+
+            if (heightFactor <= 0.0f) {
+                sunVisible = false;
+            }
+            
+            if (sunVisible) {
+                // Calculate Dynamic Blinding (Eye Adaptation / Glare)
+                Vector3f cameraDir = camera.getDirection();
+                float cosAngle = cameraDir.dot(sunDir);
+                float glareFactor = (float) Math.pow(Math.max(0.0f, cosAngle), 12.0f);
+                float glareMultiplier = 1.0f + glareFactor * 4.0f;
+
+                // Combine for realistic exposure and weight
+                float customExposure = sunShaftsSettings.getExposure() * (0.15f + 0.85f * heightFactor) * glareMultiplier;
+                float customWeight = sunShaftsSettings.getWeight() * (0.25f + 0.75f * heightFactor) * (1.0f + glareFactor * 1.5f);
+
+                sunShaftsFramebuffer.bind();
+                org.joml.Matrix4f invProjection = new org.joml.Matrix4f(camera.getProjectionMatrix()).invert();
+                postProcessor.processSunShafts(
+                    resolveFramebuffer.getColorTextureId(), 
+                    resolveFramebuffer.getDepthTextureId(), 
+                    window.getWidth(), 
+                    window.getHeight(), 
+                    sunScreenPos, 
+                    sunVisible, 
+                    invProjection, 
+                    viewDir, 
+                    sunShaftsSettings,
+                    customExposure,
+                    customWeight
+                );
+                sunShaftsFramebuffer.unbind();
+                finalInputColorTexture = sunShaftsFramebuffer.getColorTextureId();
+            }
+        }
+        
+        if (fxaaEnabled) postProcessor.processFXAA(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight());
+        else postProcessor.processPassthrough(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight());
 
         uiRenderer.renderCrosshair(window.getWidth(), window.getHeight());
         uiRenderer.renderHotbar(window.getWidth(), window.getHeight(), atlas);
@@ -303,6 +397,8 @@ public class RenderPipeline {
         overlaySystem.cleanup();
         msaaFramebuffer.cleanup();
         resolveFramebuffer.cleanup();
+        sunShaftsFramebuffer.cleanup();
+        ambientParticleManager.cleanup();
         blockShader.cleanup();
         RenderContext.cleanup();
     }

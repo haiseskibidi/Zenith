@@ -58,9 +58,16 @@ public class BiomeDefinition implements com.za.zenith.utils.LiveReloadable {
     private List<com.za.zenith.world.generation.rules.SurfaceRule> surfaceRules = new ArrayList<>();
     
     private List<FeatureEntry> features = new ArrayList<>();
+    
+    private AtmosphereSettings atmosphere = new AtmosphereSettings();
 
     public Identifier getId() { return id; }
     public void setId(Identifier id) { this.id = id; }
+    
+    public AtmosphereSettings getAtmosphere() {
+        if (atmosphere == null) atmosphere = new AtmosphereSettings();
+        return atmosphere;
+    }
     
     public TerrainType getTerrainType() { return terrainType; }
     
