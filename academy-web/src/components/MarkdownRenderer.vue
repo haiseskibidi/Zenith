@@ -346,9 +346,18 @@ export default {
       const lines = text.split('\n');
       const htmlLines = [];
       let inList = false;
+      let inTable = false;
 
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim();
+
+        // Проверяем, является ли строка табличной
+        const isTableLine = line.startsWith('|') && line.endsWith('|');
+
+        if (!isTableLine && inTable) {
+          htmlLines.push('</tbody></table></div>');
+          inTable = false;
+        }
 
         if (!line) {
           if (inList) {
@@ -401,6 +410,32 @@ export default {
           continue;
         }
 
+        // Таблицы Markdown
+        if (isTableLine) {
+          if (inList) { htmlLines.push('</ul>'); inList = false; }
+          
+          const cells = line.split('|').map(c => c.trim()).filter((c, idx, arr) => idx > 0 && idx < arr.length - 1);
+          
+          if (!inTable) {
+            inTable = true;
+            htmlLines.push('<div class="table-container"><table class="md-table"><thead><tr>');
+            cells.forEach(cell => {
+              htmlLines.push(`<th class="md-th">${this.renderInlineMarkdown(cell)}</th>`);
+            });
+            htmlLines.push('</tr></thead><tbody>');
+          } else {
+            const isSeparator = cells.every(cell => /^:?-+:?$/.test(cell));
+            if (isSeparator) continue;
+            
+            htmlLines.push('<tr>');
+            cells.forEach(cell => {
+              htmlLines.push(`<td class="md-td">${this.renderInlineMarkdown(cell)}</td>`);
+            });
+            htmlLines.push('</tr>');
+          }
+          continue;
+        }
+
         // Обычные абзацы
         if (inList) {
           htmlLines.push('</ul>');
@@ -412,6 +447,9 @@ export default {
 
       if (inList) {
         htmlLines.push('</ul>');
+      }
+      if (inTable) {
+        htmlLines.push('</tbody></table></div>');
       }
 
       return htmlLines.join('\n');
@@ -609,5 +647,44 @@ code[class*="language-"] {
 .mermaid-chart svg {
   max-width: 100%;
   height: auto;
+}
+
+/* ─── ТАБЛИЦЫ В МАРКДАУНЕ ─── */
+.table-container {
+  overflow-x: auto;
+  margin: 24px 0;
+  border: 1px solid #22252e;
+  border-radius: 8px;
+  background-color: #16171d;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  text-align: left;
+}
+
+.md-th {
+  background-color: #1b1c24;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-bottom: 2px solid #22252e;
+}
+
+.md-td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #22252e;
+  color: #a0a6b5;
+}
+
+.md-table tbody tr:last-child .md-td {
+  border-bottom: none;
+}
+
+.md-table tbody tr:hover {
+  background-color: #1e202a;
 }
 </style>
