@@ -421,7 +421,7 @@ def frustum_culling(aabb_entities, frustum_planes):
     category: 'hardware',
     definition: 'Технология выполнения процессорных инструкций, разбитая на последовательные независимые стадии (Fetch, Decode, Execute, Memory, Writeback). Подобно заводскому конвейеру, стадии одновременно обрабатывают разные команды на каждом такте, увеличивая общую скорость выполнения программ.',
     analogy: 'Сборочная линия автомобилей Генри Форда. Вместо того чтобы один рабочий собирал машину от начала до конца, сборка разбивается на посты. Как только первая машина сдвигается на стадию окраски, второй рабочий начинает собирать на освободившемся первом посту следующую машину.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симулятор 5-стадийного конвейера CPU (Fetch, Decode, Execute, Memory, Writeback)
 class CPUPipeline:
     def __init__(self):
@@ -450,14 +450,7 @@ class CPUPipeline:
         self.stages["Fetch"] = next_instruction
         
         # Выводим текущее состояние конвейера на этом такте
-        return {stage: (instr or "---") for stage, instr in self.stages.items()}
-
-pipeline = CPUPipeline()
-# Симулируем 6 тактов процессора
-for cycle in range(1, 7):
-    new_inst = f"Instr_{cycle}" if cycle <= 4 else None
-    state = pipeline.clock_tick(new_inst)
-    print(f"Cycle {cycle}: {state}")`
+        return {stage: (instr or "---") for stage, instr in self.stages.items()}`
   },
   {
     id: 'BRANCH_PRED',
@@ -466,7 +459,7 @@ for cycle in range(1, 7):
     category: 'hardware',
     definition: 'Аппаратная функция процессора, предсказывающая направление условных переходов (if-else) до их фактического вычисления в АЛУ. Это позволяет конвейеру продолжать спекулятивную загрузку и расчет команд по предсказанной ветви без остановок.',
     analogy: 'Вы бежите наперерез уходящему поезду в метро. Вы не ждете, пока двери откроются, а спекулятивно бежите к тому месту, где по вашему опыту они должны остановиться. Если угадали — запрыгнули сразу. Ошиблись — стоите на перроне, пока поезд уезжает, и ждете следующий.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция 2-битного насыщающего счетчика предсказания переходов (Bimodal Predictor)
 class BimodalPredictor:
     def __init__(self):
@@ -483,17 +476,7 @@ class BimodalPredictor:
         if actually_taken:
             self.state = min(3, self.state + 1)  # Сдвиг в сторону Strong Taken
         else:
-            self.state = max(0, self.state - 1)  # Сдвиг в сторону Strong Not Taken
-
-# Симулируем обход массива: [Taken, Taken, Not Taken, Taken]
-predictor = BimodalPredictor()
-history = [True, True, False, True]
-
-for cycle, actual in enumerate(history):
-    prediction = predictor.predict()
-    is_correct = (prediction == "TAKEN") == actual
-    predictor.update_after_execution(actual)
-    print(f"Cycle {cycle+1}: Prediction={prediction}, Actual={actual}, Correct={is_correct}")`
+            self.state = max(0, self.state - 1)  # Сдвиг в сторону Strong Not Taken`
   },
   {
     id: 'OOO',
@@ -502,37 +485,14 @@ for cycle, actual in enumerate(history):
     category: 'hardware',
     definition: 'Архитектурный принцип современных процессоров, позволяющий выполнять независимые инструкции не в порядке их следования в исходном коде, а по мере готовности операндов. Это предотвращает простои вычислительных блоков процессора при ожидании медленных данных из RAM.',
     analogy: 'У вас есть список дел: 1. Дождаться доставки пиццы (займет 30 минут). 2. Помыть посуду (5 минут). 3. Вынести мусор (2 минуты). Вы не стоите у двери полчаса, ожидая курьера (in-order), а сразу моете посуду и выносите мусор вне очереди (out-of-order).',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Упрощенный симулятор внеочередного выполнения команд (Out-of-Order Scheduler)
 class Instruction:
     def __init__(self, name, dependency=None, execution_time=1):
         self.name = name
         self.dependency = dependency  # Название инструкции, которую надо подождать
         self.execution_time = execution_time
-        self.status = "PENDING"  # PENDING, RUNNING, COMPLETED
-
-# Имитируем зависание LOAD RAX на чтении RAM и независимые ADD/MULT
-instructions = [
-    Instruction("LOAD_RAX_FROM_RAM", dependency=None, execution_time=10), # Очень долгий доступ в RAM!
-    Instruction("ADD_RBX_RAX", dependency="LOAD_RAX_FROM_RAM"),           # Зависим от LOAD
-    Instruction("MULT_RCX_RDX", dependency=None, execution_time=2)        # Независим!
-]
-
-completed = []
-# Внеочередной планировщик (Scheduler) ищет независимые задачи:
-# MULT_RCX_RDX завершится раньше остальных, так как ему не нужно ждать RAX из RAM!
-for t in range(1, 15):
-    for instr in instructions:
-        if instr.status == "PENDING":
-            if not instr.dependency or any(i.name == instr.dependency and i.status == "COMPLETED" for i in instructions):
-                instr.status = "RUNNING"
-        
-        if instr.status == "RUNNING":
-            instr.execution_time -= 1
-            if instr.execution_time == 0:
-                instr.status = "COMPLETED"
-                completed.append(instr.name)
-                print(f"Cycle {t}: Instruction {instr.name} completed Out-of-Order!")`
+        self.status = "PENDING"  # PENDING, RUNNING, COMPLETED`
   },
   {
     id: 'CACHE_LINE',
@@ -541,7 +501,7 @@ for t in range(1, 15):
     category: 'hardware',
     definition: 'Минимальная единица обмена данными между оперативной памятью (RAM) и кэш-памятью процессора (L1-L3). Вместо загрузки отдельных байт, процессор всегда считывает память последовательными блоками фиксированного размера (обычно 64 байта), обеспечивая высокую скорость пространственной локальности.',
     analogy: 'Вместо того чтобы каждый раз ходить в библиотеку за одной конкретной страницей книги, вы берете всю книгу целиком домой. Все нужные страницы уже лежат у вас на столе (в кэш-линии), и вы читаете их мгновенно.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция L1-кэша и Cache Hits / Cache Misses при чтении памяти
 class RAMCacheSimulator:
     def __init__(self):
@@ -560,15 +520,7 @@ class RAMCacheSimulator:
         else:
             self.misses += 1  # Cache Miss - тащим 64 байта из медленной RAM!
             self.active_cache_line_start = line_start
-            return "CACHE_MISS"
-
-sim = RAMCacheSimulator()
-# Симулируем последовательный обход (хорошая локальность)
-for i in range(0, 32):
-    sim.read_address(i)
-
-hit_rate = sim.hits / (sim.hits + sim.misses) * 100
-print(f"Sequential read - Cache Hits: {sim.hits}, Misses: {sim.misses} (Hit Rate: {hit_rate:.1f}%)")`
+            return "CACHE_MISS"`
   },
   {
     id: 'PAGE_PINNING',
@@ -577,7 +529,7 @@ print(f"Sequential read - Cache Hits: {sim.hits}, Misses: {sim.misses} (Hit Rate
     category: 'hardware',
     definition: 'Механизм блокировки виртуальных страниц оперативной памяти в физических кадрах RAM. Операционная система временно запрещает выгружать эти страницы в файл подкачки (Swap) или перемещать их в физической памяти, что позволяет контроллерам DMA (например, видеокарте) безопасно считывать данные напрямую по физическим адресам.',
     analogy: 'Вы вызвали доставщика прямо к себе домой. Чтобы он не заблудился, вы обещаете не переезжать на другую квартиру и не менять адрес, пока доставка не завершится. Вы буквально «припираете» адрес гвоздями к карте.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция виртуальной памяти, файла подкачки (Swap) и DMA Page Pinning
 class VirtualOSMemory:
     def __init__(self):
@@ -588,18 +540,7 @@ class VirtualOSMemory:
 
     def pin_page(self, page_id):
         self.page_table[page_id]["pinned"] = True
-        print(f"OS: Page {page_id} pinned in Physical RAM. Swap lock activated!")
-
-    def unpin_page(self, page_id):
-        self.page_table[page_id]["pinned"] = False
-        print(f"OS: Page {page_id} unpinned. Can be swapped freely.")
-
-    def swap_out(self, page_id):
-        # Операционная система пытается сбросить страницу на HDD/SSD при нехватке памяти
-        page = self.page_table[page_id]
-        if page["pinned"]:
-            raise RuntimeError(f"CRITICAL FAULT: OS tried to swap page {page_id} which is PINNED for DMA!")
-        print(f"OS: Swapped page {page_id} out of RAM to swapfile.")`
+        print(f"OS: Page {page_id} pinned in Physical RAM. Swap lock activated!")`
   },
   {
     id: 'RESIZABLE_BAR',
@@ -608,7 +549,7 @@ class VirtualOSMemory:
     category: 'hardware',
     definition: 'Аппаратная функция интерфейса PCI Express, позволяющая центральному процессору (CPU) обращаться ко всему объему видеопамяти графической карты (VRAM) целиком как к единому непрерывному пространству адресов, минуя классическое ограничение в 256 МБ.',
     analogy: 'Вместо того чтобы передавать посылки через маленькое почтовое окошко размером 25 см (где вам приходится делить посылку на части), почта открывает для вас огромные ворота склада, и вы можете завезти весь груз на грузовике за один раз.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симулятор передачи текстур в VRAM через шину PCIe (с/без Resizable BAR)
 import time
 
@@ -621,15 +562,7 @@ def transfer_texture_to_gpu(texture_size_mb, bar_size_mb=256):
         # 1 быстрая транзакция
         elapsed = time.perf_counter() - t_start
         print("PCIe: Resizable BAR enabled. Data transfer in ONE single block!")
-        return 1  # 1 транзакция
-    else:
-        # Старая схема: Режем данные на куски по 256MB, набиваем оверхед PCIe
-        chunks = (texture_size_mb + bar_size_mb - 1) // bar_size_mb
-        for chunk in range(chunks):
-            # Прокачиваем через маленькое окошко 256MB
-            pass
-        print(f"PCIe: Legacy BAR. Data cut and sent in {chunks} separate transactions (high overhead)!")
-        return chunks  # Многократные транзакции`
+        return 1  # 1 транзакция`
   },
   {
     id: 'DIRECT_STORAGE',
@@ -638,7 +571,7 @@ def transfer_texture_to_gpu(texture_size_mb, bar_size_mb=256):
     category: 'hardware',
     definition: 'Низкоуровневый API ввода-вывода, позволяющий графическому процессору (GPU) запрашивать и считывать сжатые ресурсы (текстуры, меши) напрямую с NVMe SSD-накопителя через шину PCIe в видеопамять (VRAM), минуя процессор (CPU) и исключая дорогостоящую декомпрессию на стороне CPU.',
     analogy: 'Доставка стройматериалов прямо на стройку. Вместо того чтобы везти кирпичи сначала в офис директора (CPU) для проверки и сортировки, грузовики едут сразу на стройплощадку (GPU), где рабочие мгновенно пускают их в дело.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция загрузки воксельных чанков (DirectStorage vs Традиционный метод)
 def load_voxels_traditional():
     # CPU выступает бутылочным горлышком:
@@ -646,14 +579,7 @@ def load_voxels_traditional():
     step2 = "CPU (распаковывает LZ4 / ZSTD мегабайты вокселей)" # Ядро CPU забито на 100%
     step3 = "System RAM -> PCIe -> GPU VRAM"
     print("Traditional IO:", " -> ".join([step1, step2, step3]))
-    return "High CPU Load, slow loading"
-
-def load_voxels_direct_storage():
-    # DirectStorage: GPU тащит чанки прямо с NVMe SSD и распаковывает аппаратно!
-    step1 = "NVMe SSD -> PCIe -> GPU VRAM"
-    step2 = "GPU (распаковка тысячами ядер GPU параллельно за микросекунды)"
-    print("DirectStorage IO:", " -> ".join([step1, step2]))
-    return "0% CPU Load, instant loading"`
+    return "High CPU Load, slow loading"`
   },
   {
     id: 'EVENT_BUS',
@@ -662,7 +588,7 @@ def load_voxels_direct_storage():
     category: 'engine',
     definition: 'Паттерн проектирования архитектуры, реализующий слабую связанность (loose coupling) между модулями системы. Компоненты взаимодействуют друг с другом, публикуя события в общую шину или подписываясь на них, не зная о существовании друг друга.',
     analogy: 'Доска объявлений в университете. Староста вешает объявление о субботнике. Ей не нужно обходить всех 500 студентов лично и сообщать новость. Студенты сами подходят к доске, читают и реагируют.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Реализация паттерна EventBus (Шина событий) для Zenith Engine
 class ZenithEventBus:
     def __init__(self):
@@ -671,27 +597,7 @@ class ZenithEventBus:
     def subscribe(self, event_class_name, callback):
         if event_class_name not in self._subscribers:
             self._subscribers[event_class_name] = []
-        self._subscribers[event_class_name].append(callback)
-
-    def publish(self, event_instance):
-        event_name = type(event_instance).__name__
-        if event_name in self._subscribers:
-            # Рассылаем событие всем независимым подписчикам
-            for callback in self._subscribers[event_name]:
-                callback(event_instance)
-
-# События
-class ChunkLoadEvent:
-    def __init__(self, cx, cz):
-        self.cx, self.cz = cx, cz
-
-# Подписка
-bus = ZenithEventBus()
-bus.subscribe("ChunkLoadEvent", lambda ev: print(f"Renderer: Draw chunk {ev.cx},{ev.cz}"))
-bus.subscribe("ChunkLoadEvent", lambda ev: print(f"LightEngine: Recalculate lighting in {ev.cx},{ev.cz}"))
-
-# Публикация
-bus.publish(ChunkLoadEvent(12, 5))`
+        self._subscribers[event_class_name].append(callback)`
   },
   {
     id: 'WEAK_SPOTS',
@@ -700,28 +606,14 @@ bus.publish(ChunkLoadEvent(12, 5))`
     category: 'engine',
     definition: 'Геймплейный алгоритм динамической генерации критических зон на гранях вокселей при их разрушении. Включает в себя трассировку луча (Raycast), проекцию 3D точки попадания в UV-координаты грани (u, v) и расчёт евклидова расстояния до центра мишени для начисления тройного критического урона.',
     analogy: 'Вы рубите дерево. Вместо того чтобы хаотично бить по коре, вы замечаете на стволе небольшую трещину (слабое место). Удар точно по трещине раскалывает бревно в три раза быстрее и выбивает кучу щепок.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Алгоритм расчета попадания клика в Слабую Точку (Weak Spot)
 import math
 
 class WeakSpotController:
     def __init__(self, u_center=0.5, v_center=0.5, radius=0.15):
         self.spot_center = (u_center, v_center)
-        self.crit_radius = radius
-
-    def calculate_hit_damage(self, hit_u, hit_v, base_damage=10):
-        # hit_u и hit_v - координаты клика на плоской грани куба (от 0.0 до 1.0)
-        # 1. Считаем евклидово расстояние до центра круга мишени
-        distance = math.sqrt((hit_u - self.spot_center[0])**2 + (hit_v - self.spot_center[1])**2)
-        
-        # 2. Если расстояние меньше радиуса - это критическое попадание!
-        if distance <= self.crit_radius:
-            return {
-                "damage": base_damage * 3,
-                "is_crit": True,
-                "particle_effect": "SpawnOrangeGoldenSparkles"
-            }
-        return {"damage": base_damage, "is_crit": False, "particle_effect": "SpawnGrayDust"}`
+        self.crit_radius = radius`
   },
   {
     id: 'GL_SCISSOR',
@@ -730,27 +622,12 @@ class WeakSpotController:
     category: 'engine',
     definition: 'Аппаратный тест отсечения пикселей (Scissor Test) в OpenGL. Ограничивает область рисования прямоугольным окном в физических пикселях буфера кадра. Любые пиксели, попадающие за пределы рамки glScissor, аппаратно отбрасываются видеокартой на стадии растеризации, что позволяет обрезать вылезающие элементы UI в прокручиваемых списках.',
     analogy: 'Картонный трафарет с вырезанным посередине окошком. Вы кладете его на холст и смело красите широкой кистью: краска ляжет только внутри окошка, а всё остальное останется чистым за пределами картона.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция GPU-теста glScissor при растеризации пикселей интерфейса
 class GPURasterizer:
     def __init__(self):
         self.scissor_enabled = False
-        self.scissor_box = (0, 0, 1920, 1080) # min_x, min_y, max_x, max_y
-
-    def enable_scissor(self, x, y, width, height):
-        self.scissor_enabled = True
-        self.scissor_box = (x, y, x + width, y + height)
-
-    def draw_pixel(self, px, py, color):
-        # Аппаратный тест glScissor на стадии растеризации
-        if self.scissor_enabled:
-            min_x, min_y, max_x, max_y = self.scissor_box
-            if not (min_x <= px < max_x and min_y <= py < max_y):
-                # Пиксель лежит за пределами scissor_box - моментально отбрасывается GPU
-                return "PIXEL_DISCARDED"
-        
-        # Пиксель прошел тест, пишем в Framebuffer
-        return f"PIXEL_WRITTEN_WITH_COLOR_{color}"`
+        self.scissor_box = (0, 0, 1920, 1080) # min_x, min_y, max_x, max_y`
   },
   {
     id: 'SDF',
@@ -758,33 +635,15 @@ class GPURasterizer:
     full: 'Signed Distance Fields',
     category: 'math',
     definition: 'Знакопеременные поля расстояний. Математический метод представления геометрии, где для каждой точки пространства хранится кратчайшее расстояние до границы фигуры (знак указывает, внутри точки или снаружи). Позволяет шейдеру отрисовывать векторные шрифты и фигуры с идеальной субпиксельной четкостью и сглаживанием при любом масштабе.',
-    analogy: 'Карта высот острова. Океан — это отрицательная высота, суша — положительная. Береговая линия — это ровно нулевая высота. Шейдер просто ищет "берег" и рисует идеальный четкий контур, даже если мы приблизили карту в миллион раз.',
-    visualType: 'code',
+    analogy: 'Карта высот острова. Океан — это отрицательная высота, суша — положительная. Береговая линия — это ровно нулевая высота. Шейдер просто ищет "берег" и рисует идеальный честный контур, даже если мы приблизили карту в миллион раз.',
+    visualType: 'image',
     visualContent: `# Математический расчет знаковых расстояний (Signed Distance Fields - SDF)
 import math
 
 def sd_circle(px, py, radius):
     # Вычисляем кратчайшее расстояние от точки p до окружности с центром (0,0)
     dist_to_center = math.sqrt(px**2 + py**2)
-    # Знак указывает:
-    # < 0 -> точка внутри круга
-    # = 0 -> точка ровно на береговой линии круга
-    # > 0 -> точка снаружи круга
-    return dist_to_center - radius
-
-# Шейдерная имитация сглаживания (Anti-Aliasing) на основе SDF расстояния
-def render_sdf_circle_pixel(px, py, radius, antialias_width=0.02):
-    d = sd_circle(px, py, radius)
-    
-    # Плавное сглаживание границы круга (аналог smoothstep в GLSL)
-    if d < -antialias_width:
-        alpha = 1.0  # 100% внутри
-    elif d > antialias_width:
-        alpha = 0.0  # 100% снаружи
-    else:
-        # Векторный переход, дающий сглаженный пиксель без лесенок!
-        alpha = 1.0 - (d + antialias_width) / (2 * antialias_width)
-    return alpha`
+    return dist_to_center - radius`
   },
   {
     id: 'LF_PALETTE',
@@ -793,7 +652,7 @@ def render_sdf_circle_pixel(px, py, radius, antialias_width=0.02):
     category: 'engine',
     definition: 'Высокопроизводительный механизм хранения соответствия воксельных индексов типам блоков в чанке, разработанный по принципу Lock-Free Read / Synchronized Write. Гарантирует стабильную работу асинхронного мешера без блокировок FPS и предотвращает вылеты JVM с помощью предохранителя Palette Corruption Guard.',
     analogy: 'Вы читаете книгу в библиотеке. В этот момент автор дописывает новую главу в конец книги. Вы не мешаете друг другу: вы спокойно читаете то, что уже написано (Lock-Free Read), а автор аккуратно добавляет информацию (Synchronized Write).',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция Lock-Free чтения из палитры (Lock-Free Read / Synchronized Write)
 import threading
 
@@ -801,24 +660,7 @@ class LockFreePalette:
     def __init__(self):
         # Палитра блоков в чанке
         self._palette = ["AIR", "STONE", "DIRT"]
-        self._write_lock = threading.Lock()
-
-    def get_block_type_safe(self, index):
-        # Lock-Free Read: Читаем снимок палитры напрямую без блокировки потоков!
-        local_palette = self._palette
-        
-        # Palette Corruption Guard: Защищаем от рассинхрона индексов
-        if index < 0 or index >= len(local_palette):
-            return "AIR"  # Безопасный откат к воздуху при гонке записи
-        return local_palette[index]
-
-    def add_new_block_type(self, new_block_name):
-        # Synchronized Write: Добавление нового типа блокирует только писателей
-        with self._write_lock:
-            # Создаем копию, пишем туда и подменяем ссылку одной атомарной операцией
-            new_copy = list(self._palette)
-            new_copy.append(new_block_name)
-            self._palette = new_copy`
+        self._write_lock = threading.Lock()`
   },
   {
     id: 'RAY_OBB',
@@ -827,24 +669,13 @@ class LockFreePalette:
     category: 'math',
     definition: 'Алгоритм определения пересечения луча с ориентированной в пространстве коробкой (Oriented Bounding Box). Для обхода сложной тригонометрии алгоритм инвертирует глобальную матрицу трансформации объекта, перенося луч в локальное пространство, где OBB превращается в простой AABB, выровненный по осям.',
     analogy: 'Вместо того чтобы крутить и резать наклонный торт под сложным углом, вы поворачиваете собственную голову и руки так, чтобы торт оказался прямо перед вами, и режете его простым движением вперед-назад.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Математический перенос луча клика в локальное пространство Oriented Bounding Box
 import numpy as np
 
 def intersect_ray_obb(ray_origin, ray_direction, obb_center, obb_rotation_matrix, aabb_min, aabb_max):
     # obb_rotation_matrix: 3x3 матрица поворота ориентированной коробки в 3D
-    # 1. Получаем инвертированную матрицу вращения для переноса в локальные координаты
-    inv_rotation = np.linalg.inv(obb_rotation_matrix)
-    
-    # 2. Трансформируем луч из глобального мира в локальную систему координат коробки
-    # (в локальном пространстве коробка выровнена по осям - превращается в простой AABB!)
-    local_ray_origin = np.dot(inv_rotation, ray_origin - obb_center)
-    local_ray_direction = np.dot(inv_rotation, ray_direction)
-    
-    # 3. Делаем сверхбыстрое пересечение луча с выровненным AABB
-    # Исключает сложную тригонометрию и расчеты под углами!
-    hit, dist = intersect_ray_aabb(local_ray_origin, local_ray_direction, aabb_min, aabb_max)
-    return hit, dist`
+    inv_rotation = np.linalg.inv(obb_rotation_matrix)`
   },
   {
     id: 'LEAD_PURSUIT',
@@ -853,68 +684,25 @@ def intersect_ray_obb(ray_origin, ray_direction, obb_center, obb_rotation_matrix
     category: 'math',
     definition: 'Математический алгоритм наведения снарядов или притяжения предметов, учитывающий текущий вектор скорости цели. Вместо движения в текущую точку нахождения объекта, система вычисляет точку упреждения, куда цель прибудет через время T, предотвращая отставание и бесконечные круги вокруг цели.',
     analogy: 'Вы бежите наперерез уходящему автобусу. Вы не бежите за его бампером сзади (так вы никогда не догоните его), а рассчитываете траекторию наперед и бежите к следующей остановке, встречаясь с автобусом в будущей точке.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Алгоритм движения магнитного лута с физическим упреждением (Lead Pursuit)
 class Vector2D:
     def __init__(self, x, y):
-        self.x, self.y = x, y
-
-def calculate_lead_pursuit_velocity(item_pos, player_pos, player_vel, projectile_speed=15.0):
-    # Вычисляем вектор расстояния до игрока
-    dx = player_pos.x - item_pos.x
-    dy = player_pos.y - item_pos.y
-    distance = math.sqrt(dx**2 + dy**2)
-    
-    # 1. Оцениваем время полета (T) предмета до игрока
-    t_flight = distance / projectile_speed
-    
-    # 2. Вычисляем точку упреждения (прогнозируем положение игрока через время T)
-    predicted_x = player_pos.x + player_vel.x * t_flight
-    predicted_y = player_pos.y + player_vel.y * t_flight
-    
-    # 3. Направляем вектор скорости лута в точку упреждения
-    target_dx = predicted_x - item_pos.x
-    target_dy = predicted_y - item_pos.y
-    target_dist = math.sqrt(target_dx**2 + target_dy**2)
-    
-    # Возвращаем идеальный вектор движения с упреждением
-    return Vector2D(
-        (target_dx / target_dist) * projectile_speed,
-        (target_dy / target_dist) * projectile_speed
-    )`
+        self.x, self.y = x, y`
   },
   {
     id: 'MINING_HEAT',
     abbr: 'Mining Heat',
     full: 'Тепловой нагрев инструментов',
     category: 'engine',
-    definition: 'Визуальный эффект плавного раскаления активного инструмента или рук игрока в процессе разрушения блоков. Алгоритм отслеживает уникальный хэш-код предмета identityHashCode, плавно наращивает накал при добыче, остужает его при простое и сбрасывает при смене предмета, проецируя локализованное свечение через маску в шейдере.',
+    definition: 'Визуальный эффект плавного раскаления active-инструмента или рук игрока в процессе разрушения блоков. Алгоритм отслеживает уникальный хэш-код предмета identityHashCode, плавно наращивает накал при добыче, остужает его при простое и сбрасывает при смене предмета, проецируя локализованное свечение через маску в шейдере.',
     analogy: 'Световая нить в лампе накаливания. Чем дольше через нее идет ток (игрок бьет блок), тем сильнее она раскаляется и светится оранжево-красным. Стоит выключить выключатель — она плавно остывает.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Алгоритм расчета теплового эффекта раскаления рук/инструментов (Mining Heat)
 class ToolHeatController:
     def __init__(self):
         self.item_heat = 0.0
-        self.last_item_hash = None
-
-    def update_tool_heat(self, delta_time, current_item_hash, is_mining, breaking_progress):
-        # 1. Если игрок сменил предмет - сбрасываем тепло моментально
-        if current_item_hash != self.last_item_hash:
-            self.item_heat = 0.0
-            self.last_item_hash = current_item_hash
-
-        # 2. Вычисляем целевой нагрев (равен прогрессу ломания блока 0.0 - 1.0)
-        target_heat = breaking_progress if is_mining else 0.0
-        
-        # 3. Плавно интерполируем тепло (нагрев быстрее остывания)
-        if target_heat > self.item_heat:
-            # Быстрый нагрев (+2.5 в секунду)
-            self.item_heat = min(target_heat, self.item_heat + 2.5 * delta_time)
-        else:
-            # Медленное остывание (-0.8 в секунду)
-            self.item_heat = max(target_heat, self.item_heat - 0.8 * delta_time)
-            
-        return self.item_heat  # Выходное значение для передачи во фрагментный шейдер`
+        self.last_item_hash = None`
   },
   {
     id: 'DEPTH_BUFFER',
@@ -923,35 +711,11 @@ class ToolHeatController:
     category: 'hardware',
     definition: 'Двумерный системный буфер видеопамяти (VRAM), хранящий расстояние (глубину) от виртуальной камеры до ближайшего отрисованного пикселя для каждой экранной координаты. Используется видеокартой для выполнения теста глубины (Depth Test), предотвращающего рисование дальних объектов поверх ближних.',
     analogy: 'Слой защитной краски. Вы красите забор. Каждый новый слой ложится поверх старого. Но буфер глубины — это умный маркер: он проверяет линейку и разрешает нанести краску только если новая дощечка находится ближе к вам, чем та, что уже покрашена.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция GPU-теста глубины (Depth Buffer / Z-Buffer Test)
 class GPUFrameBuffer:
     def __init__(self, width=800, height=600):
-        # Инициализируем Z-Buffer дальним значением глубины 1.0
-        self.z_buffer = [[1.0 for _ in range(width)] for _ in range(height)]
-        self.color_buffer = [["BLACK" for _ in range(width)] for _ in range(height)]
-
-    def draw_pixel_with_depth_test(self, x, y, z_depth, color):
-        # z_depth: расстояние до камеры от 0.0 (близко) до 1.0 (далеко)
-        # 1. Проверяем, находится ли новый пиксель ближе к камере, чем ранее отрисованный
-        if z_depth < self.z_buffer[y][x]:
-            # Пиксель прошел тест глубины! Записываем его цвет и обновляем буфер глубины
-            self.z_buffer[y][x] = z_depth
-            self.color_buffer[y][x] = color
-            return "RENDER_PIXEL_SUCCESS"
-        else:
-            # Пиксель перекрыт ближним объектом - GPU моментально отбрасывает его
-            return "PIXEL_OCCLUDED_AND_DISCARDED"
-
-gpu = GPUFrameBuffer()
-# Отрисовка дальнего треугольника (Z=0.8, RED)
-gpu.draw_pixel_with_depth_test(100, 100, 0.8, "RED")
-# Отрисовка ближнего треугольника поверх него (Z=0.4, GREEN)
-res1 = gpu.draw_pixel_with_depth_test(100, 100, 0.4, "GREEN")
-# Попытка нарисовать замок сзади них (Z=0.9, BLUE)
-res2 = gpu.draw_pixel_with_depth_test(100, 100, 0.9, "BLUE")
-
-print(f"Green draw: {res1}, Blue draw: {res2}, Final color: {gpu.color_buffer[100][100]}")`
+        self.z_buffer = [[1.0 for _ in range(width)] for _ in range(height)]`
   },
   {
     id: 'GC',
@@ -960,29 +724,11 @@ print(f"Green draw: {res1}, Blue draw: {res2}, Final color: {gpu.color_buffer[10
     category: 'hardware',
     definition: 'Автоматическая подсистема управления динамической памятью в управляемых средах выполнения (таких как JVM). Сканирует кучу (Heap), находит неиспользуемые объекты, на которые нет активных ссылок в программе, и освобождает память, приостанавливая выполнение приложения во время тяжелых фаз (паузы Stop-the-World).',
     analogy: 'Уборщица в детской игровой комнате. Пока дети играют и раскидывают игрушки (создают объекты через new), всё в порядке. Но когда свободный пол заканчивается, уборщица кричит: «Всем замереть на месте!» (Stop-the-World), собирает сломанные и брошенные игрушки, а дети (потоки игры) ждут окончания уборки, ловя лаг (микрофриз).',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция GC-паузы Stop-the-World при утечке памяти (аллокация в цикле)
 class JVMHeapSimulator:
     def __init__(self, max_capacity=5000):
-        self.heap = []
-        self.max_capacity = max_capacity
-        self.gc_pauses_count = 0
-
-    def allocate(self, size_bytes):
-        # Создаем новый объект в куче
-        self.heap.append(size_bytes)
-        
-        # Если куча переполнилась, вызывается GC!
-        if sum(self.heap) >= self.max_capacity:
-            self.run_garbage_collector()
-
-    def run_garbage_collector(self):
-        print("JVM: HEAP FULL! Triggering Stop-the-World pause...")
-        # Останавливаем все потоки игры и собираем объекты без ссылок
-        self.gc_pauses_count += 1
-        time_paused_ms = len(self.heap) * 0.1  # Фаза очистки
-        self.heap = []  # Очищаем память
-        print(f"JVM: GC Complete. Paused game threads for {time_paused_ms:.1f}ms.")`
+        self.heap = []`
   },
   {
     id: 'VIRTUAL_MEM',
@@ -991,36 +737,11 @@ class JVMHeapSimulator:
     category: 'hardware',
     definition: 'Технология системного управления памятью операционной системой, изолирующая адресные пространства процессов. Дает каждой программе монопольную иллюзию работы с непрерывным массивом адресов. Физически трансляция виртуальных адресов в физическую RAM выполняется аппаратно через MMU и кэш TLB на базе многоуровневых таблиц страниц (PML4).',
     analogy: 'Номера комнат в отелях. В каждом отели мира есть «Комната 101». Вы можете жить в комнате 101 в Москве, а ваш друг — в комнате 101 в Париже. Ваши «виртуальные номера» совпадают, но физически вы находитесь на совершенно разных улицах Земли.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Моделирование аппаратной трансляции виртуальных адресов в физические через MMU
 class MMUTranslationSimulator:
     def __init__(self):
-        # PML4 многоуровневая таблица страниц (эмуляция):
-        # Виртуальная страница (12 бит маска) -> Физический кадр в RAM (Frame)
-        self.page_directory_table = {
-            0x00FF8: 0x1F4A0,  # page_id -> physical_frame_id
-            0x00FF9: 0x2E6B1
-        }
-
-    def translate_virtual_to_physical(self, virtual_address):
-        # Виртуальный адрес 48-бит разбивается на:
-        # Номер виртуальной страницы (биты 12-47) и Смещение (offset, биты 0-11)
-        page_number = virtual_address >> 12
-        offset = virtual_address & 0xFFF  # Смещение внутри страницы (4КБ размер)
-        
-        if page_number in self.page_directory_table:
-            physical_frame = self.page_directory_table[page_number]
-            # Склеиваем физический кадр со смещением
-            physical_address = (physical_frame << 12) | offset
-            return hex(physical_address)
-        else:
-            # Перехватываем исключение отсутствия страницы в ОЗУ
-            raise MemoryError("PAGE_FAULT: Page is in swapfile or not allocated!")
-
-mmu = MMUTranslationSimulator()
-# Транслируем виртуальный адрес 0x00FF8123 в физический в ОЗУ
-phys_addr = mmu.translate_virtual_to_physical(0x00FF8123)
-print(f"Virtual 0x00FF8123 translated to Physical RAM: {phys_addr}")`
+        self.page_directory_table = {}`
   },
   {
     id: 'FALSE_SHARING',
@@ -1029,32 +750,11 @@ print(f"Virtual 0x00FF8123 translated to Physical RAM: {phys_addr}")`
     category: 'hardware',
     definition: 'Аппаратная проблема производительности в многопоточных системах, когда несколько ядер процессора одновременно модифицируют независимые переменные, расположенные на одной физической кэш-линии (64 байта). Это заставляет MESI-протокол бесконечно инвалидировать кэши ядер и пересылать кэш-линию по межъядерной шине туда-сюда, парализуя работу CPU.',
     analogy: 'Два писателя сидят за одним столом и пишут каждый в свой блокнот. Но они используют один и тот же ластик, который лежит посередине. Каждый раз, когда одному нужно стереть слово, он выхватывает ластик у другого, мешая писать и бесконечно отвлекая коллегу.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Симуляция инвалидации кэшей при False Sharing (Ложном разделении кэш-линий)
 class CPUCoreCache:
     def __init__(self, core_id):
-        self.core_id = core_id
-        self.cache_lines = {}  # line_addr -> {"data": val, "state": MESI}
-
-    def write_variable_on_line(self, line_addr, var_name, value, other_cores):
-        # 1. Проверяем, если ли линия в кэше и не является ли она Invalid
-        if line_addr in self.cache_lines and self.cache_lines[line_addr]["state"] == "MODIFIED":
-            # Быстрая запись без транзакций по межъядерной шине
-            self.cache_lines[line_addr][var_name] = value
-            return "FAST_L1_WRITE"
-        
-        # 2. Если линия SHARED или INVALID - вызывается MESI пинг-понг!
-        # Мы обязаны отправить инвалидирующий сигнал на все остальные ядра
-        invalidations_triggered = 0
-        for core in other_cores:
-            if core.core_id != self.core_id and line_addr in core.cache_lines:
-                if core.cache_lines[line_addr]["state"] != "INVALID":
-                    core.cache_lines[line_addr]["state"] = "INVALID"
-                    invalidations_triggered += 1
-                    
-        # Загружаем линию себе в состоянии MODIFIED
-        self.cache_lines[line_addr] = {var_name: value, "state": "MODIFIED"}
-        return f"SLOW_BUS_WRITE_WITH_{invalidations_triggered}_INVALIDATIONS"`
+        self.core_id = core_id`
   },
   {
     id: 'INPUT_HANDLED',
@@ -1063,32 +763,10 @@ class CPUCoreCache:
     category: 'engine',
     definition: 'Архитектурный паттерн диспетчеризации устройств ввода в игровых движках. Клик мыши сначала передается активному экрану интерфейса (UI). Если элемент UI реагирует на событие, он возвращает флаг handled = true, поглощая клик и блокируя его прохождение в низкоуровневые системы взаимодействия с 3D-миром, предотвращая сквозные клики.',
     analogy: 'Двойная шлюзовая дверь. Пока вы не закроете внешнюю дверь (UI-интерфейс), внутренняя дверь (игровой мир) физически заблокирована для любых манипуляций. Клик «поглощается» активным экраном и не летит дальше в глубины игрового пространства.',
-    visualType: 'code',
+    visualType: 'image',
     visualContent: `# Паттерн диспетчеризации устройств ввода (Input Handled-State) на Python
 class MouseClickEvent:
     def __init__(self, x, y, button):
-        self.x, self.y = x, y
-        self.button = button
-        self.handled = False  # Поглощено ли событие интерфейсом
-
-class GameUIContainer:
-    def __init__(self, button_bounds=(10, 10, 100, 50)):
-        self.bounds = button_bounds # x, y, w, h кнопки в интерфейсе
-
-    def dispatch_input(self, event):
-        bx, by, bw, bh = self.bounds
-        # Проверяем, попал ли клик мыши в кнопку UI
-        if bx <= event.x <= (bx + bw) and by <= event.y <= (by + bh):
-            event.handled = True  # Клик ПОГЛОЩЕН интерфейсом!
-            print("UI: Mouse clicked on UI Button. Event HANDLED = True.")
-            return True
-        return False
-
-# Игровой мир
-def process_world_click(event):
-    if event.handled:
-        print("World: Click ignored. Already handled by UI!")
-        return
-    print(f"World: Block at click position successfully mined with button {event.button}!")`
+        self.handled = False`
   }
 ];
