@@ -88,56 +88,44 @@ public class ChunkRenderSystem {
         }
 
         boolean movedSection = camChunkX != lastCamSecX || camSecY != lastCamSecY || camChunkZ != lastCamSecZ;
-        if (movedSection || state.getFrameCounter() % 10 == 0) {
-            visibleSections.clear(); visitedSections.clear(); bfsQueue.clear();
-            
-            int startSecIdx = Math.min(Math.max(camSecY, 0), Chunk.NUM_SECTIONS - 1);
-            bfsQueue.add(new BFSNode(camChunkX, camChunkZ, startSecIdx, null));
-            visitedSections.add(packSectionPos(camChunkX, camChunkZ, startSecIdx));
-
+        if (movedSection || state.getFrameCounter() % 5 == 0) {
+            visibleSections.clear();
             int poolVer = meshPool.getVersion();
-            while (!bfsQueue.isEmpty()) {
-                BFSNode node = bfsQueue.poll();
-                
-                float sx = node.cx * 16, sy = node.secIdx * 16, sz = node.cz * 16;
-                if (!state.getFrustum().testAab(sx, sy, sz, sx + 16, sy + 16, sz + 16)) continue;
 
-                Chunk chunk = world.getChunk(node.cx, node.cz);
-                if (chunk == null) {
-                    processEmptyNeighbor(node, camChunkX, camChunkZ, renderDist);
-                    continue;
-                }
-
-                ChunkSection section = chunk.getSections()[node.secIdx];
-                if (section == null || section.isEmpty()) {
-                    processEmptyNeighbor(node, camChunkX, camChunkZ, renderDist);
-                    continue;
-                }
-
-                ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
-                if (result != null) {
-                    if (isSectionMeshValid(result, node.secIdx, poolVer)) {
-                        visibleSections.add(new SectionRenderNode(chunk, node.secIdx));
+            // Zero-Allocation monolithic spiral chunk scan
+            int x = 0, z = 0, dx = 0, dz = -1;
+            int maxChunks = (renderDist * 2 + 1) * (renderDist * 2 + 1);
+            
+            for (int i = 0; i < maxChunks; i++) {
+                if (-renderDist <= x && x <= renderDist && -renderDist <= z && z <= renderDist) {
+                    Chunk chunk = world.getChunk(camChunkX + x, camChunkZ + z);
+                    if (chunk != null && chunk.isReady()) {
+                        ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
+                        if (result != null) {
+                            float cx = (camChunkX + x) * 16;
+                            float cz = (camChunkZ + z) * 16;
+                            
+                            for (int secIdx = 0; secIdx < Chunk.NUM_SECTIONS; secIdx++) {
+                                ChunkSection section = chunk.getSections()[secIdx];
+                                if (section == null || section.isEmpty()) continue;
+                                
+                                float sy = secIdx * 16;
+                                // Frustum culling per section on CPU
+                                if (state.getFrustum().testAab(cx, sy, cz, cx + 16, sy + 16, cz + 16)) {
+                                    if (isSectionMeshValid(result, secIdx, poolVer)) {
+                                        visibleSections.add(new SectionRenderNode(chunk, secIdx));
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                
-                for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
-                    if (node.entryFace != null && !section.canSeeThrough(node.entryFace, dir)) continue;
-                    int ncx = node.cx+dir.getDx(), ncz = node.cz+dir.getDz(), nsec = node.secIdx+dir.getDy();
-                    if (nsec < 0 || nsec >= Chunk.NUM_SECTIONS) continue;
-                    if (Math.abs(ncx-camChunkX) > renderDist || Math.abs(ncz-camChunkZ) > renderDist) continue;
-                    if (visitedSections.add(packSectionPos(ncx, ncz, nsec))) bfsQueue.add(new BFSNode(ncx, ncz, nsec, dir.getOpposite()));
+                if (x == z || (x < 0 && x == -z) || (x > 0 && x == 1 - z)) {
+                    int temp = dx; dx = -dz; dz = temp;
                 }
+                x += dx; z += dz;
             }
             
-            if (camPos.distanceSquared(lastSortPos) > 1.0f || movedSection) {
-                visibleSections.sort((s1, s2) -> {
-                    float d1 = camPos.distanceSquared(s1.chunk.getPosition().x()*16+8, s1.sectionIdx*16+8, s1.chunk.getPosition().z()*16+8);
-                    float d2 = camPos.distanceSquared(s2.chunk.getPosition().x()*16+8, s2.sectionIdx*16+8, s2.chunk.getPosition().z()*16+8);
-                    return Float.compare(d1, d2);
-                });
-                lastSortPos.set(camPos);
-            }
             lastCamSecX = camChunkX; lastCamSecY = camSecY; lastCamSecZ = camChunkZ;
         }
     }
@@ -194,7 +182,11 @@ public class ChunkRenderSystem {
         }
 
         // 2. Schedule new meshes using SPIRAL search for better prioritization
-        int scheduled = 0, maxSchedule = 2;
+        int activeTasks = pendingUpdates.size();
+        int poolSize = meshExecutor.getCorePoolSize();
+        // Dynamically scale maxSchedule to fully utilize idle executor threads (up to poolSize * 2)
+        int maxSchedule = Math.max(4, poolSize * 2 - activeTasks); 
+        int scheduled = 0;
         int x = 0, z = 0, dx = 0, dz = -1, checkRadius = renderDist + 1;
         int iterations = (checkRadius * 2 + 1) * (checkRadius * 2 + 1);
         

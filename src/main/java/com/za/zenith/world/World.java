@@ -271,6 +271,7 @@ public class World {
     }
 
     private final org.joml.Vector3f lastSortPos = new org.joml.Vector3f(Float.MAX_VALUE);
+    private long lastSpiralCheckTime = 0;
 
     private void updateChunks() {
         if (player == null) return;
@@ -281,9 +282,13 @@ public class World {
         int renderDistance = com.za.zenith.world.generation.GenerationSettings.getInstance().activeRenderDistance;
         int unloadDistance = com.za.zenith.world.generation.GenerationSettings.getInstance().unloadDistance;
 
-        if (currentChunkX != lastPlayerChunkX || currentChunkZ != lastPlayerChunkZ) {
+        long now = System.currentTimeMillis();
+        boolean forceCheck = now - lastSpiralCheckTime > 1500; // Check every 1.5 seconds
+
+        if (currentChunkX != lastPlayerChunkX || currentChunkZ != lastPlayerChunkZ || (forceCheck && pendingChunkQueue.isEmpty())) {
             lastPlayerChunkX = currentChunkX;
             lastPlayerChunkZ = currentChunkZ;
+            lastSpiralCheckTime = now;
 
             // SPIRAL LOADING: Build a list of chunks in a radial spiral from player
             int x = 0, z = 0, dx = 0, dz = -1;
@@ -397,8 +402,10 @@ public class World {
                     return Integer.compare(d1, d2);
                 });
                 pendingChunkQueue.clear();
-                // Limit queue size to prevent RAM explosion during ultra-fast flight
-                for (int i = 0; i < Math.min(sortedPending.size(), 512); i++) {
+                // Limit queue size dynamically based on render distance to prevent gaps on the horizon
+                int rDist = com.za.zenith.world.generation.GenerationSettings.getInstance().activeRenderDistance;
+                int maxChunks = (rDist * 2 + 1) * (rDist * 2 + 1);
+                for (int i = 0; i < Math.min(sortedPending.size(), maxChunks); i++) {
                     pendingChunkQueue.add(sortedPending.get(i));
                 }
                 lastSortPos.set(player.getPosition());
