@@ -130,7 +130,7 @@
             <div class="glossary-stats" style="background: #16171d; padding: 12px; border-radius: 6px; border: 1px solid #22252e;">
               <div style="display: flex; justify-content: space-between; font-size: 12px; color: #798299; margin-bottom: 6px;">
                 <span>Всего терминов:</span>
-                <span style="color: #3b82f6; font-weight: bold; font-family: monospace;">13</span>
+                <span style="color: #3b82f6; font-weight: bold; font-family: monospace;">{{ glossaryTerms.length }}</span>
               </div>
               <div style="display: flex; justify-content: space-between; font-size: 12px; color: #798299;">
                 <span>Категории:</span>
@@ -230,6 +230,7 @@ import TextEffects from './components/TextEffects.vue';
 import LootGenerator from './components/LootGenerator.vue';
 import MagneticPickup from './components/MagneticPickup.vue';
 import GlossaryComponent from './components/GlossaryComponent.vue';
+import { glossaryTerms } from './chapters/glossary_terms.js';
 
 export default {
   name: 'App',
@@ -244,8 +245,9 @@ export default {
   },
   data() {
     return {
+      glossaryTerms: glossaryTerms,
       courses: courses,
-      currentCourseId: 'engine', // 'engine' или 'hardware'
+      currentCourseId: 'hardware', // 'engine' или 'hardware'
       activeChapterIndex: 0,
       currentTab: 'learn', // 'learn' или 'lab'
       activeLabWidget: 'spring' // 'spring', 'compressor', 'text'

@@ -116,6 +116,8 @@
 </template>
 
 <script>
+import { glossaryTerms } from '../chapters/glossary_terms.js';
+
 export default {
   name: 'GlossaryComponent',
   data() {
@@ -377,6 +379,14 @@ public class SimpleThreadPool {
         }
       ]
     };
+  },
+  created() {
+    this.terms = glossaryTerms;
+    glossaryTerms.forEach(t => {
+      if (this.expandedCards[t.id] === undefined) {
+        this.expandedCards[t.id] = ['PIPELINE', 'BRANCH_PRED'].includes(t.id);
+      }
+    });
   },
   computed: {
     filteredTerms() {
