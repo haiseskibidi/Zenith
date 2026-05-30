@@ -170,20 +170,26 @@ public class ChunkSection {
         return (lightData[getIndex(x, y, z)] >> 4) & 0xF;
     }
 
-    public void setSunlight(int x, int y, int z, int level) {
+    public boolean setSunlight(int x, int y, int z, int level) {
         int idx = getIndex(x, y, z);
+        int oldVal = (lightData[idx] >> 4) & 0xF;
+        if (oldVal == level) return false;
         lightData[idx] = (byte) ((lightData[idx] & 0x0F) | ((level & 0xF) << 4));
         markDirty();
+        return true;
     }
 
     public int getBlockLight(int x, int y, int z) {
         return lightData[getIndex(x, y, z)] & 0xF;
     }
 
-    public void setBlockLight(int x, int y, int z, int level) {
+    public boolean setBlockLight(int x, int y, int z, int level) {
         int idx = getIndex(x, y, z);
+        int oldVal = lightData[idx] & 0xF;
+        if (oldVal == level) return false;
         lightData[idx] = (byte) ((lightData[idx] & 0xF0) | (level & 0xF));
         markDirty();
+        return true;
     }
     
     public boolean isEmpty() {

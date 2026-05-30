@@ -544,7 +544,7 @@ public class LightEngine {
 
         java.util.Set<Chunk> affected = new java.util.HashSet<>(sunByChunk.keySet());
         affected.addAll(blockByChunk.keySet());
-        java.util.Set<Chunk> chunksToUpdate = new java.util.HashSet<>(affected);
+        java.util.Set<Chunk> chunksToUpdate = new java.util.HashSet<>();
 
         for (Chunk chunk : affected) {
             synchronized (chunk) {
@@ -554,12 +554,13 @@ public class LightEngine {
                         long p = e.key;
                         int lx = unpackX(p) & 15;
                         int lz = unpackZ(p) & 15;
-                        chunk.setSunlight(lx, unpackY(p), lz, e.value);
-                        
-                        if (lx == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() - 1, chunk.getPosition().z());
-                        if (lx == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() + 1, chunk.getPosition().z());
-                        if (lz == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() - 1);
-                        if (lz == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() + 1);
+                        if (chunk.setSunlight(lx, unpackY(p), lz, e.value)) {
+                            chunksToUpdate.add(chunk);
+                            if (lx == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() - 1, chunk.getPosition().z());
+                            if (lx == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() + 1, chunk.getPosition().z());
+                            if (lz == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() - 1);
+                            if (lz == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() + 1);
+                        }
                     }
                 }
                 java.util.List<LightEntry> blocks = blockByChunk.get(chunk);
@@ -568,12 +569,13 @@ public class LightEngine {
                         long p = e.key;
                         int lx = unpackX(p) & 15;
                         int lz = unpackZ(p) & 15;
-                        chunk.setBlockLight(lx, unpackY(p), lz, e.value);
-
-                        if (lx == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() - 1, chunk.getPosition().z());
-                        if (lx == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() + 1, chunk.getPosition().z());
-                        if (lz == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() - 1);
-                        if (lz == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() + 1);
+                        if (chunk.setBlockLight(lx, unpackY(p), lz, e.value)) {
+                            chunksToUpdate.add(chunk);
+                            if (lx == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() - 1, chunk.getPosition().z());
+                            if (lx == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x() + 1, chunk.getPosition().z());
+                            if (lz == 0) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() - 1);
+                            if (lz == 15) addChunkToUpdate(chunksToUpdate, chunk.getPosition().x(), chunk.getPosition().z() + 1);
+                        }
                     }
                 }
             }

@@ -19,13 +19,28 @@ import static org.lwjgl.opengl.GL11.*;
  */
 public class ChunkRenderSystem {
     private final MeshPool meshPool;
-    private final MultiDrawBatch opaqueBatch;
-    private final MultiDrawBatch translucentBatch;
+    private final MultiDrawBatch[] opaqueBatches = new MultiDrawBatch[2];
+    private final MultiDrawBatch[] translucentBatches = new MultiDrawBatch[2];
     
     private final Map<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>> pendingUpdates = new ConcurrentHashMap<>();
     private final com.za.zenith.utils.PriorityExecutorService meshExecutor;
     
-    private final List<SectionRenderNode> visibleSections = new ArrayList<>();
+    private Chunk[] visibleChunks = new Chunk[1024];
+    private int[] visibleSectionIndices = new int[1024];
+    private int visibleSectionsCount = 0;
+
+    private void ensureVisibleSectionsCapacity() {
+        if (visibleSectionsCount >= visibleChunks.length) {
+            int newLength = visibleChunks.length * 2;
+            Chunk[] newChunks = new Chunk[newLength];
+            System.arraycopy(visibleChunks, 0, newChunks, 0, visibleChunks.length);
+            visibleChunks = newChunks;
+
+            int[] newIndices = new int[newLength];
+            System.arraycopy(visibleSectionIndices, 0, newIndices, 0, visibleSectionIndices.length);
+            visibleSectionIndices = newIndices;
+        }
+    }
     private final Deque<BFSNode> bfsQueue = new ArrayDeque<>();
     private final Set<Long> visitedSections = new HashSet<>();
     
@@ -37,13 +52,15 @@ public class ChunkRenderSystem {
     private int lastCamSecZ = Integer.MAX_VALUE;
     private int lastPoolVersion = 0;
 
-    private record SectionRenderNode(Chunk chunk, int sectionIdx) {}
+
     private record BFSNode(int cx, int cz, int secIdx, com.za.zenith.utils.Direction entryFace) {}
 
     public ChunkRenderSystem(MeshPool meshPool) {
         this.meshPool = meshPool;
-        this.opaqueBatch = new MultiDrawBatch(meshPool);
-        this.translucentBatch = new MultiDrawBatch(meshPool);
+        this.opaqueBatches[0] = new MultiDrawBatch(meshPool, 0);
+        this.opaqueBatches[1] = new MultiDrawBatch(meshPool, 1);
+        this.translucentBatches[0] = new MultiDrawBatch(meshPool, 0);
+        this.translucentBatches[1] = new MultiDrawBatch(meshPool, 1);
         
         this.meshExecutor = new com.za.zenith.utils.PriorityExecutorService(
             Math.min(2, Math.max(1, Runtime.getRuntime().availableProcessors() / 2)),
@@ -77,11 +94,12 @@ public class ChunkRenderSystem {
 
         // Check for pool wrap-around
         if (meshPool.getVersion() != lastPoolVersion) {
+            int oldVersion = lastPoolVersion;
             lastPoolVersion = meshPool.getVersion();
-            Logger.warn("ChunkRenderSystem: MeshPool wrapped! Purging meshes.");
+            Logger.warn("ChunkRenderSystem: MeshPool wrapped! Initiating seamless transition from version " + oldVersion + " to " + lastPoolVersion);
             for (Chunk c : world.getLoadedChunks()) {
-                ChunkMeshGenerator.ChunkMeshResult result = c.getCurrentMeshResult();
-                if (result != null) { result.cleanup(); c.setCurrentMeshResult(null); }
+                // НЕ удаляем меш! Просто сбрасываем meshUpdated, чтобы needsMeshUpdate() вернул true,
+                // и чанк перестроился в новый активный буфер.
                 c.setMeshUpdated(-1);
             }
             lastCamSecX = Integer.MAX_VALUE;
@@ -89,7 +107,7 @@ public class ChunkRenderSystem {
 
         boolean movedSection = camChunkX != lastCamSecX || camSecY != lastCamSecY || camChunkZ != lastCamSecZ;
         if (movedSection || state.getFrameCounter() % 5 == 0) {
-            visibleSections.clear();
+            visibleSectionsCount = 0;
             int poolVer = meshPool.getVersion();
 
             // Zero-Allocation monolithic spiral chunk scan
@@ -113,7 +131,10 @@ public class ChunkRenderSystem {
                                 // Frustum culling per section on CPU
                                 if (state.getFrustum().testAab(cx, sy, cz, cx + 16, sy + 16, cz + 16)) {
                                     if (isSectionMeshValid(result, secIdx, poolVer)) {
-                                        visibleSections.add(new SectionRenderNode(chunk, secIdx));
+                                        ensureVisibleSectionsCapacity();
+                                        visibleChunks[visibleSectionsCount] = chunk;
+                                        visibleSectionIndices[visibleSectionsCount] = secIdx;
+                                        visibleSectionsCount++;
                                     }
                                 }
                             }
@@ -135,7 +156,9 @@ public class ChunkRenderSystem {
         Mesh mT = result.translucentSections()[secIdx];
         if (mO != null || mT != null) {
             Mesh valid = (mO != null) ? mO : mT;
-            return valid.getPool() == null || valid.getPoolVersion() == poolVer;
+            if (valid.getPool() == null) return true;
+            int meshVer = valid.getPoolVersion();
+            return meshVer == poolVer || meshVer == poolVer - 1;
         }
         return false;
     }
@@ -187,6 +210,7 @@ public class ChunkRenderSystem {
         // Dynamically scale maxSchedule to fully utilize idle executor threads (up to poolSize * 2)
         int maxSchedule = Math.max(4, poolSize * 2 - activeTasks); 
         int scheduled = 0;
+        int scheduledLowPriority = 0;
         int x = 0, z = 0, dx = 0, dz = -1, checkRadius = renderDist + 1;
         int iterations = (checkRadius * 2 + 1) * (checkRadius * 2 + 1);
         
@@ -196,6 +220,29 @@ public class ChunkRenderSystem {
                 Chunk chunk = world.getChunk(camChunkX + x, camChunkZ + z);
                 if (chunk != null && chunk.isReady() && !pendingUpdates.containsKey(chunk)) {
                     if (chunk.needsMeshUpdate() || chunk.getCurrentMeshResult() == null) {
+                        boolean isLowPriority = chunk.getCurrentMeshResult() != null && chunk.getLastMeshCounter() == -1;
+                        if (isLowPriority && scheduledLowPriority >= 1) {
+                            // Skip this low-priority transition mesh in this frame to avoid CPU spikes on the main thread
+                            if (x == z || (x < 0 && x == -z) || (x > 0 && x == 1 - z)) {
+                                int t = dx; dx = -dz; dz = t;
+                            }
+                            x += dx; z += dz;
+                            continue;
+                        }
+
+                        if (isLowPriority) {
+                            scheduledLowPriority++;
+                        }
+
+                        try (java.io.FileWriter fw = new java.io.FileWriter("mesh_triggers.txt", true);
+                             java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
+                            pw.println("Scheduling Chunk " + chunk.getPosition() + 
+                                       ". needsUpdate=" + chunk.needsMeshUpdate() + 
+                                       " (dirty=" + chunk.getDirtyCounter() + 
+                                       ", lastMesh=" + chunk.getLastMeshCounter() + ")" +
+                                       " currentMeshNull=" + (chunk.getCurrentMeshResult() == null) +
+                                       " isLowPriority=" + isLowPriority);
+                        } catch (Exception e) {}
                         scheduleChunkMesh(chunk, world, atlas, camPos);
                         scheduled++;
                     }
@@ -233,41 +280,53 @@ public class ChunkRenderSystem {
     }
 
     public void render(SceneState state, Shader shader, boolean opaque) {
-        MultiDrawBatch batch = opaque ? opaqueBatch : translucentBatch;
-        batch.reset();
+        MultiDrawBatch[] batches = opaque ? opaqueBatches : translucentBatches;
+        batches[0].reset();
+        batches[1].reset();
         
         // Sorting for transparency (already done in updateVisibility for distance)
-        List<SectionRenderNode> list = visibleSections;
+        int count = visibleSectionsCount;
         if (!opaque) {
             // Reverse order for translucent
-            for (int i = list.size() - 1; i >= 0; i--) {
-                addSectionToBatch(list.get(i), batch, shader);
+            for (int i = count - 1; i >= 0; i--) {
+                Chunk chunk = visibleChunks[i];
+                int secIdx = visibleSectionIndices[i];
+                ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
+                if (res == null) continue;
+                Mesh m = res.translucentSections()[secIdx];
+                if (m == null) continue;
+                
+                int bIdx = m.getPoolVersion() % 2;
+                addSectionToSpecificBatch(chunk, secIdx, m, batches[bIdx], shader, res.spawnTime());
             }
         } else {
-            for (SectionRenderNode node : list) {
-                addSectionToBatch(node, batch, shader);
+            for (int i = 0; i < count; i++) {
+                Chunk chunk = visibleChunks[i];
+                int secIdx = visibleSectionIndices[i];
+                ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
+                if (res == null) continue;
+                Mesh m = res.opaqueSections()[secIdx];
+                if (m == null) continue;
+                
+                int bIdx = m.getPoolVersion() % 2;
+                addSectionToSpecificBatch(chunk, secIdx, m, batches[bIdx], shader, res.spawnTime());
             }
         }
         
-        batch.render();
+        batches[0].render();
+        batches[1].render();
     }
 
-    private void addSectionToBatch(SectionRenderNode node, MultiDrawBatch batch, Shader shader) {
-        ChunkMeshGenerator.ChunkMeshResult res = node.chunk.getCurrentMeshResult();
-        if (res == null) return;
-        
-        Mesh m = (batch == opaqueBatch) ? res.opaqueSections()[node.sectionIdx] : res.translucentSections()[node.sectionIdx];
-        if (m == null) return;
-
+    private void addSectionToSpecificBatch(Chunk chunk, int secIdx, Mesh m, MultiDrawBatch batch, Shader shader, float spawnTime) {
         if (m.getPool() != null) {
-            batch.addMesh(m, node.chunk.getPosition().x() * 16, 0, node.chunk.getPosition().z() * 16, res.spawnTime());
+            batch.addMesh(m, chunk.getPosition().x() * 16, 0, chunk.getPosition().z() * 16, spawnTime);
         } else {
             // Fallback for non-pooled meshes (legacy support)
             shader.setBoolean("uIsBatch", false);
             org.joml.Matrix4f model = RenderContext.getMatrix();
-            model.translate(node.chunk.getPosition().x() * 16, 0, node.chunk.getPosition().z() * 16);
+            model.translate(chunk.getPosition().x() * 16, 0, chunk.getPosition().z() * 16);
             shader.setMatrix4f("model", model);
-            shader.setFloat("uChunkSpawnTime", res.spawnTime());
+            shader.setFloat("uChunkSpawnTime", spawnTime);
             m.render(shader);
             shader.setBoolean("uIsBatch", true);
         }
@@ -287,8 +346,10 @@ public class ChunkRenderSystem {
             meshExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        opaqueBatch.cleanup();
-        translucentBatch.cleanup();
+        opaqueBatches[0].cleanup();
+        opaqueBatches[1].cleanup();
+        translucentBatches[0].cleanup();
+        translucentBatches[1].cleanup();
         com.za.zenith.utils.NioBufferPool.clearPools();
     }
 }

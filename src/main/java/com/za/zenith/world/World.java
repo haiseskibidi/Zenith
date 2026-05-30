@@ -272,6 +272,7 @@ public class World {
 
     private final org.joml.Vector3f lastSortPos = new org.joml.Vector3f(Float.MAX_VALUE);
     private long lastSpiralCheckTime = 0;
+    private long lastUnloadCheckTime = 0;
 
     private void updateChunks() {
         if (player == null) return;
@@ -284,16 +285,20 @@ public class World {
 
         long now = System.currentTimeMillis();
         boolean forceCheck = now - lastSpiralCheckTime > 1500; // Check every 1.5 seconds
+        boolean shouldUnload = now - lastUnloadCheckTime > 1000; // Unload every 1.0 second (highly responsive!)
 
+        // 1. SPIRAL DISCOVERY: If player moved or timer fired, rebuild queue in strict spiral order from center
         if (currentChunkX != lastPlayerChunkX || currentChunkZ != lastPlayerChunkZ || (forceCheck && pendingChunkQueue.isEmpty())) {
             lastPlayerChunkX = currentChunkX;
             lastPlayerChunkZ = currentChunkZ;
             lastSpiralCheckTime = now;
 
+            // Clear old non-relevant queue entries. Closest chunks will always be added first!
+            pendingChunkQueue.clear();
+
             // SPIRAL LOADING: Build a list of chunks in a radial spiral from player
             int x = 0, z = 0, dx = 0, dz = -1;
             int maxChunks = (renderDistance * 2 + 1) * (renderDistance * 2 + 1);
-            int addedThisTick = 0;
             for (int i = 0; i < maxChunks; i++) {
                 if (-renderDistance <= x && x <= renderDistance && -renderDistance <= z && z <= renderDistance) {
                     long packed = ChunkPos.pack(currentChunkX + x, currentChunkZ + z);
@@ -309,6 +314,11 @@ public class World {
                 x += dx;
                 z += dz;
             }
+        }
+
+        // 2. LAZY UNLOAD: Clean up far chunks once every 5 seconds to eliminate CPU lock contention and garbage sweeps
+        if (shouldUnload) {
+            lastUnloadCheckTime = now;
 
             // Unload chunks outside unloadDistance and cancel their generation tasks
             chunks.entrySet().removeIf(entry -> {
@@ -341,7 +351,6 @@ public class World {
                     });
 
                     // CRITICAL FIX: Properly remove the entire chunk from groundEntityMap
-                    // This prevents thousands of "zombie" entity references from staying in memory
                     groundEntityMap.remove(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
 
                     for (java.util.function.Consumer<Chunk> listener : unloadListeners) {
@@ -391,26 +400,6 @@ public class World {
         }
 
         if (!pendingChunkQueue.isEmpty()) {
-            // Lazy sorting: only if player moved > 2.0 units
-            if (player.getPosition().distanceSquared(lastSortPos) > 4.0f) {
-                List<Long> sortedPending = new ArrayList<>(pendingChunkQueue);
-                sortedPending.sort((p1, p2) -> {
-                    int x1 = ChunkPos.unpackX(p1), z1 = ChunkPos.unpackZ(p1);
-                    int x2 = ChunkPos.unpackX(p2), z2 = ChunkPos.unpackZ(p2);
-                    int d1 = (x1 - currentChunkX) * (x1 - currentChunkX) + (z1 - currentChunkZ) * (z1 - currentChunkZ);
-                    int d2 = (x2 - currentChunkX) * (x2 - currentChunkX) + (z2 - currentChunkZ) * (z2 - currentChunkZ);
-                    return Integer.compare(d1, d2);
-                });
-                pendingChunkQueue.clear();
-                // Limit queue size dynamically based on render distance to prevent gaps on the horizon
-                int rDist = com.za.zenith.world.generation.GenerationSettings.getInstance().activeRenderDistance;
-                int maxChunks = (rDist * 2 + 1) * (rDist * 2 + 1);
-                for (int i = 0; i < Math.min(sortedPending.size(), maxChunks); i++) {
-                    pendingChunkQueue.add(sortedPending.get(i));
-                }
-                lastSortPos.set(player.getPosition());
-            }
-
             int submittedThisTick = 0;
             // Backpressure for generation (limit discovery to 4 per tick to avoid boundary spikes)
             int canSubmitGen = Math.min(4, Math.max(0, (chunkGenExecutor.getCorePoolSize() * 2) - generatingChunks.size()));
@@ -475,7 +464,13 @@ public class World {
                     com.za.zenith.world.lighting.LightManager.onChunkLoad(chunk);
                     chunks.put(packedPos, chunk);
                 } catch (Exception e) {
-                    com.za.zenith.utils.Logger.error("Lighting error: " + e.getMessage());
+                    String errorMsg = "Lighting error in chunk " + chunk.getPosition() + ": " + e.getMessage();
+                    com.za.zenith.utils.Logger.error(errorMsg, e);
+                    try (java.io.FileWriter fw = new java.io.FileWriter("chunk_errors.txt", true);
+                         java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
+                        pw.println(new java.util.Date() + " - " + errorMsg);
+                        e.printStackTrace(pw);
+                    } catch (Exception ex) {}
                 } finally {
                     stagingChunks.remove(packedPos);
                     generatingChunks.remove(packedPos);

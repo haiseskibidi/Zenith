@@ -29,14 +29,20 @@ public class MultiDrawBatch {
     
     private int commandCount = 0;
     private final MeshPool pool;
+    private final int bufferIndex;
 
     public MultiDrawBatch(MeshPool pool) {
+        this(pool, 0);
+    }
+
+    public MultiDrawBatch(MeshPool pool, int bufferIndex) {
         this.pool = pool;
+        this.bufferIndex = bufferIndex;
         
         this.vaoId = glGenVertexArrays();
         glBindVertexArray(this.vaoId);
         
-        glBindBuffer(GL_ARRAY_BUFFER, pool.getVboId());
+        glBindBuffer(GL_ARRAY_BUFFER, pool.getVboId(bufferIndex));
         int stride = MeshPool.STRIDE;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
         glEnableVertexAttribArray(0);
@@ -49,7 +55,7 @@ public class MultiDrawBatch {
         glVertexAttribPointer(4, 1, GL_FLOAT, false, stride, 6 * Float.BYTES);
         glEnableVertexAttribArray(4);
         
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.getEboId());
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.getEboId(bufferIndex));
         
         this.indirectBufferId = glGenBuffers();
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirectBufferId);
@@ -78,6 +84,7 @@ public class MultiDrawBatch {
     
     public void addMesh(Mesh mesh, float x, float y, float z, float spawnTime) {
         if (commandCount >= MAX_COMMANDS || mesh == null || mesh.getPool() != pool) return;
+        if ((mesh.getPoolVersion() % 2) != bufferIndex) return;
         
         // count, instanceCount, firstIndex, baseVertex, baseInstance
         commandData.putInt(mesh.getVertexCount());

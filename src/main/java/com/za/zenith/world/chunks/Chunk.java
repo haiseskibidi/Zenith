@@ -142,11 +142,14 @@ public class Chunk {
         return section.getSunlight(x, y & 15, z);
     }
 
-    public void setSunlight(int x, int y, int z, int level) {
+    public boolean setSunlight(int x, int y, int z, int level) {
         ChunkSection section = getSection(y);
-        if (section == null || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return;
-        section.setSunlight(x, y & 15, z, level);
-        dirtyCounter.incrementAndGet();
+        if (section == null || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return false;
+        if (section.setSunlight(x, y & 15, z, level)) {
+            dirtyCounter.incrementAndGet();
+            return true;
+        }
+        return false;
     }
 
     public int getBlockLight(int x, int y, int z) {
@@ -155,11 +158,14 @@ public class Chunk {
         return section.getBlockLight(x, y & 15, z);
     }
 
-    public void setBlockLight(int x, int y, int z, int level) {
+    public boolean setBlockLight(int x, int y, int z, int level) {
         ChunkSection section = getSection(y);
-        if (section == null || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return;
-        section.setBlockLight(x, y & 15, z, level);
-        dirtyCounter.incrementAndGet();
+        if (section == null || x < 0 || x >= CHUNK_SIZE || z < 0 || z >= CHUNK_SIZE) return false;
+        if (section.setBlockLight(x, y & 15, z, level)) {
+            dirtyCounter.incrementAndGet();
+            return true;
+        }
+        return false;
     }
     
     private static final ThreadLocal<Block> FLYWEIGHT_BLOCK = ThreadLocal.withInitial(() -> new Block(0));
@@ -201,7 +207,9 @@ public class Chunk {
 
     public synchronized void setBlock(int x, int y, int z, int type, int metadata) {
         if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE) return;
+        int oldPacked = getRawBlockData(x, y, z);
         int packed = (type << 8) | (metadata & 0xFF);
+        if (oldPacked == packed) return;
         setBlockByIndex(x, y, z, packed);
         heightMap[z * CHUNK_SIZE + x] = -1;
         dirtyCounter.incrementAndGet();
@@ -222,11 +230,17 @@ public class Chunk {
     }
     
     public void setNeedsMeshUpdate(boolean needsUpdate) {
-        if (needsUpdate) dirtyCounter.incrementAndGet();
+        if (needsUpdate) {
+            dirtyCounter.incrementAndGet();
+        }
     }
     
     public void setMeshUpdated(long version) {
         this.lastMeshCounter = version;
+    }
+
+    public long getLastMeshCounter() {
+        return lastMeshCounter;
     }
 
     public long getDirtyCounter() {
