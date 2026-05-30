@@ -26,6 +26,9 @@ uniform vec3 uOverrideLight; // x=sun, y=block, z=ao. If x >= 0.0, use this inst
 
 uniform float uChunkSpawnTime;
 
+uniform vec3 uHiddenPositions[16];
+uniform int uHiddenCount;
+
 // Include external modules
 #include "include/foliage_animation.glsl"
 
@@ -112,11 +115,23 @@ void main() {
         vAO = finalAO;
     }
    
-    int localX = packedPos % 16;
-    int localZ = (packedPos / 16) % 16;
-    int localY = packedPos / 256;
+    int localX = packedPos & 15;
+    int localZ = (packedPos >> 4) & 15;
+    int localY = packedPos >> 8;
     
     vBlockPos = ivec3(floor(actualChunkPos + vec3(float(localX), float(localY), float(localZ)) + 0.1));
+
+    // Zero-Alloc GPU-Driven Hiding in Vertex Shader
+    // Collapses the vertices of active breaking blocks to (0,0,0) so the GPU clips them out.
+    // This fully bypasses fragment shading and keeps Early-Z activated!
+    if (!uIsProxy) {
+        for (int i = 0; i < uHiddenCount; i++) {
+            if (vBlockPos == ivec3(uHiddenPositions[i])) {
+                gl_Position = vec4(0.0);
+                return;
+            }
+        }
+    }
     
     if (uIsBatch) {
         fragNormal = finalNormal; // Simplified: chunks usually have identity rotation

@@ -66,9 +66,8 @@ vec4 applyGlassConnections(vec4 texColor, vec2 uv, float neighborData, float gla
     }
 
     if (shouldHide) {
-        vec4 sampledCenter = texture(texSampler, vec3(0.5, 0.5, glassLayer));
-        // Мы возвращаем цвет центрального пикселя (прозрачный)
-        return sampledCenter;
+        // Return fully transparent voxel pixel directly to avoid expensive texture sampling inside dynamic branch
+        return vec4(0.0);
     }
     return texColor;
 }

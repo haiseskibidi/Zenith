@@ -11,7 +11,7 @@ struct ZenithLight {
 };
 
 vec3 calculateLighting(vec3 normal, vec3 lightDir, vec3 lightCol, vec3 ambient) {
-    if (length(normal) < 0.01) return ambient + lightCol;
+    if (dot(normal, normal) < 0.0001) return ambient + lightCol;
     float diffuse = max(dot(normal, -lightDir), 0.0);
     
     // AAA Stylized toon-stepping

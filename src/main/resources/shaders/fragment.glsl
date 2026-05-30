@@ -28,8 +28,6 @@ uniform int faceMask = 0; // 16-bit mask for 4x4 grid
 uniform bool useMask = false;
 uniform float overlayLayer;
 uniform float uWobbleTime;
-uniform vec3 uHiddenPositions[16];
-uniform int uHiddenCount;
 uniform bool uIsProxy;
 
 uniform vec3 uCondition; // x=dirt, y=blood, z=wetness
@@ -47,14 +45,6 @@ uniform ZenithLight uLights[8];
 uniform int uLightCount;
 
 void main() {
-    if (!uIsProxy) {
-        for (int i = 0; i < uHiddenCount; i++) {
-            if (vBlockPos == ivec3(uHiddenPositions[i])) {
-                discard;
-            }
-        }
-    }
-
     vec3 baseColor;    float alpha = 1.0;
 
     if (highlightPass != 0) {
