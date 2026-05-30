@@ -63,6 +63,13 @@ public abstract class Entity {
         return removed;
     }
 
+    /**
+     * @return true if this entity should be tracked in the ground spatial map (items, rocks, etc.)
+     */
+    public boolean isGroundEntity() {
+        return this instanceof ItemEntity || this instanceof ResourceEntity;
+    }
+
     public final void update(float deltaTime, World world) {
         // Гарантированно сохраняем состояние начала тика для интерполяции
         prevPosition.set(position);

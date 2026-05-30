@@ -32,9 +32,9 @@ public class EntityRenderSystem {
     private float handHeat;
     private float itemHeat;
 
-    // L1 Entity Light Cache
+    // L1 Entity Light Cache (Zero Alloc)
     private com.za.zenith.world.chunks.Chunk lastEntityChunk;
-    private com.za.zenith.world.chunks.ChunkPos lastEntityChunkPos;
+    private long lastEntityChunkPacked = Long.MIN_VALUE;
 
     // Zero Alloc Viewmodel Lights
     private final List<com.za.zenith.world.lighting.LightSource> viewLights = new ArrayList<>();
@@ -55,51 +55,101 @@ public class EntityRenderSystem {
 
     private void setEntityLight(World world, Vector3f pos, Shader shader) {
         int x = (int) Math.floor(pos.x), y = (int) Math.floor(pos.y), z = (int) Math.floor(pos.z);
-        var cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos(x, z);
-        if (lastEntityChunk == null || !cp.equals(lastEntityChunkPos)) {
-            lastEntityChunk = world.getChunkInternal(cp.x(), cp.z());
-            lastEntityChunkPos = cp;
+        long packed = com.za.zenith.world.chunks.ChunkPos.pack(x >> 4, z >> 4);
+
+        if (packed != lastEntityChunkPacked) {
+            // Use getChunkInternal to see chunks in STAGING phase (pre-lighting/pre-mesh)
+            lastEntityChunk = world.getChunkInternal(x >> 4, z >> 4);
+            lastEntityChunkPacked = packed;
         }
+
         if (lastEntityChunk != null) {
+            int lx = x & 15;
+            int lz = z & 15;
+            // Clamp Y for safety during generation spikes
+            int clampY = Math.max(0, Math.min(com.za.zenith.world.chunks.Chunk.CHUNK_HEIGHT - 1, y));
+
             Vector3f light = RenderContext.getVector().set(
-                lastEntityChunk.getSunlight(x & 15, y, z & 15),
-                lastEntityChunk.getBlockLight(x & 15, y, z & 15),
-                1.0f 
+                lastEntityChunk.getSunlight(lx, clampY, lz),
+                lastEntityChunk.getBlockLight(lx, clampY, lz),
+                1.0f
             );
             shader.setVector3f("uOverrideLight", light);
             shader.setFloat("uChunkSpawnTime", lastEntityChunk.getFirstSpawnTime());
         } else {
-            shader.setVector3f("uOverrideLight", 15, 0, 1);
-            shader.setFloat("uChunkSpawnTime", -100.0f);
+            // Fallback for totally unloaded areas
+            shader.setVector3f("uOverrideLight", 15, 15, 1);
+            shader.setFloat("uChunkSpawnTime", (float)world.getWorldTime());
         }
     }
-
     public void render(SceneState state, Shader blockShader, DynamicTextureAtlas atlas, GameClient networkClient) {
         World world = state.getWorld();
         RenderContext.resetBlockShader(blockShader);
         
-        // 1. Render World Entities
-        for (var entity : world.getEntities()) {
-            Vector3f p = entity.getInterpolatedPosition(state.getAlpha());
-            if (!state.getFrustum().testAab(entity.getBoundingBox().getMin(), entity.getBoundingBox().getMax())) continue;
-            
-            setEntityLight(world, p, blockShader);
-            blockShader.setInt("highlightPass", 0);
-            
-            if (entity instanceof com.za.zenith.entities.ScoutEntity scout) {
-                renderScoutEntity(scout, p, entity.getRotation().y, blockShader);
-            } else if (entity instanceof ItemEntity itemEntity) {
-                renderItemEntity(itemEntity, p, state.getAlpha(), blockShader, atlas, world);
-            } else if (entity instanceof com.za.zenith.entities.ResourceEntity resource) {
-                renderResourceEntity(resource, p, state.getAlpha(), blockShader, atlas);
-            } else if (entity instanceof com.za.zenith.entities.DecorationEntity decoration) {
-                renderDecorationEntity(decoration, p, entity.getRotation().y, blockShader, atlas);
-            } else {
-                renderGeneralEntity(p, entity.getRotation().y, blockShader);
+        // 1. Render World Entities (Dynamic: Players, Scouts, etc.)
+        List<com.za.zenith.entities.Entity> entities = world.getEntities();
+        synchronized(entities) {
+            for (int i = 0; i < entities.size(); i++) {
+                com.za.zenith.entities.Entity entity = entities.get(i);
+                // Only process non-ground entities here (Ground entities handled via spatial map below)
+                if (entity.isGroundEntity()) continue;
+
+                Vector3f p = entity.getInterpolatedPosition(state.getAlpha());
+                if (!state.getFrustum().testAab(entity.getBoundingBox().getMin(), entity.getBoundingBox().getMax())) continue;
+                
+                setEntityLight(world, p, blockShader);
+                blockShader.setInt("highlightPass", 0);
+                
+                if (entity instanceof com.za.zenith.entities.ScoutEntity scout) {
+                    renderScoutEntity(scout, p, entity.getRotation().y, blockShader);
+                } else if (entity instanceof com.za.zenith.entities.DecorationEntity decoration) {
+                    renderDecorationEntity(decoration, p, entity.getRotation().y, blockShader, atlas);
+                } else {
+                    renderGeneralEntity(p, entity.getRotation().y, blockShader);
+                }
             }
         }
 
-        // 2. Render Remote Players
+        // 2. Render Ground Entities (Spatial Partitioning: Items, Resources)
+        // We only iterate loaded chunks within render distance for massive performance gain
+        Player localPlayer = world.getPlayer();
+        if (localPlayer != null) {
+            int px = (int)Math.floor(localPlayer.getPosition().x / 16.0);
+            int pz = (int)Math.floor(localPlayer.getPosition().z / 16.0);
+            // Render entities within 4 chunks (64m) - much more than enough for small items
+            int r = 4; 
+            for (int cx = px - r; cx <= px + r; cx++) {
+                for (int cz = pz - r; cz <= pz + r; cz++) {
+                    com.za.zenith.world.chunks.ChunkPos cp = new com.za.zenith.world.chunks.ChunkPos(cx, cz);
+                    List<com.za.zenith.entities.Entity> groundEntities = world.getGroundEntitiesInChunk(cp);
+                    if (groundEntities.isEmpty()) continue;
+
+                    synchronized(groundEntities) {
+                        for (int i = 0; i < groundEntities.size(); i++) {
+                            com.za.zenith.entities.Entity entity = groundEntities.get(i);
+                            Vector3f p = entity.getInterpolatedPosition(state.getAlpha());
+                            
+                            // Frustum Culling
+                            if (!state.getFrustum().testAab(entity.getBoundingBox().getMin(), entity.getBoundingBox().getMax())) continue;
+                            
+                            // Extra Distance Culling: small items don't need to render far
+                            if (p.distanceSquared(localPlayer.getPosition()) > 2304.0f) continue; // 48m radius
+
+                            setEntityLight(world, p, blockShader);
+                            blockShader.setInt("highlightPass", 0);
+
+                            if (entity instanceof ItemEntity itemEntity) {
+                                renderItemEntity(itemEntity, p, state.getAlpha(), blockShader, atlas, world);
+                            } else if (entity instanceof com.za.zenith.entities.ResourceEntity resource) {
+                                renderResourceEntity(resource, p, state.getAlpha(), blockShader, atlas);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Render Remote Players
         renderRemotePlayers(world, networkClient, blockShader);
     }
 
@@ -122,7 +172,8 @@ public class EntityRenderSystem {
 
     private void renderItemEntity(ItemEntity entity, Vector3f interpPos, float alpha, Shader shader, DynamicTextureAtlas atlas, World world) {
         var player = world.getPlayer();
-        if (player != null && interpPos.distanceSquared(player.getPosition()) > 576.0f) return;
+        // Balanced distance: 64 blocks (4096.0f) to avoid rendering too many items
+        if (player != null && interpPos.distanceSquared(player.getPosition()) > 4096.0f) return;
 
         var item = entity.getStack().getItem();
         Mesh mesh = MeshRegistry.getItemMesh(item, atlas);

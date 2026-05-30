@@ -1,5 +1,23 @@
 [
-  { "block": "zenith:stick", "chance": 0.015 },
-  { "block": "zenith:rock", "chance": 0.01 },
-  { "block": "zenith:flint", "chance": 0.003 }
+  {
+    "id": "zenith:sticks",
+    "item": "zenith:stick",
+    "chance": 0.4,
+    "group_size": { "min": 1, "max": 3 },
+    "ground_blocks": ["zenith:grass_block", "zenith:dirt"]
+  },
+  {
+    "id": "zenith:rocks",
+    "item": "zenith:rock",
+    "chance": 0.3,
+    "group_size": { "min": 1, "max": 2 },
+    "ground_blocks": ["zenith:grass_block", "zenith:dirt", "zenith:stone"]
+  },
+  {
+    "id": "zenith:flint_clusters",
+    "item": "zenith:flint",
+    "chance": 0.1,
+    "group_size": { "min": 1, "max": 1 },
+    "ground_blocks": ["zenith:stone", "zenith:gravel", "zenith:andesite", "zenith:diorite"]
+  }
 ]

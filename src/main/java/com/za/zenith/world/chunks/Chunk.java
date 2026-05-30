@@ -9,7 +9,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class Chunk {
     public static final int CHUNK_SIZE = 16;
-    public static final int CHUNK_HEIGHT = 384;
+    public static final int MIN_Y = 0;
+    public static final int MAX_Y = 512;
+    public static final int CHUNK_HEIGHT = MAX_Y - MIN_Y;
+    public static final int LOGICAL_OFFSET_Y = 128; // Logical Y 0 is at Internal Y 128
     public static final int NUM_SECTIONS = CHUNK_HEIGHT / ChunkSection.SECTION_SIZE;
     
     private final ChunkPos position;

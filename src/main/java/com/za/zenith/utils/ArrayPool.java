@@ -7,9 +7,9 @@ public class ArrayPool {
     private static final ConcurrentLinkedQueue<byte[]> lightDataPool = new ConcurrentLinkedQueue<>();
     private static final ConcurrentLinkedQueue<double[]> densityGridPool = new ConcurrentLinkedQueue<>();
     
-    private static final int BLOCK_DATA_SIZE = 16 * 384 * 16;
-    private static final int LIGHT_DATA_SIZE = 16 * 384 * 16;
-    private static final int DENSITY_GRID_SIZE = 5 * 5 * 97;
+    private static final int BLOCK_DATA_SIZE = 16 * 512 * 16;
+    private static final int LIGHT_DATA_SIZE = 16 * 512 * 16;
+    private static final int DENSITY_GRID_SIZE = 5 * 5 * 129;
 
     private static final int MAX_POOL_SIZE = 32;
 

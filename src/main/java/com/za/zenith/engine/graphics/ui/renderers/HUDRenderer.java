@@ -179,7 +179,7 @@ public class HUDRenderer {
             String text = el.text
                 .replace("{fps}", String.valueOf((int)game.getCurrentFps()))
                 .replace("{x}", String.format(java.util.Locale.US, "%.2f", pos.x))
-                .replace("{y}", String.format(java.util.Locale.US, "%.2f", pos.y))
+                .replace("{y}", String.format(java.util.Locale.US, "%.2f", pos.y - com.za.zenith.world.chunks.Chunk.LOGICAL_OFFSET_Y))
                 .replace("{z}", String.format(java.util.Locale.US, "%.2f", pos.z))
                 .replace("{cx}", String.valueOf((int)pos.x >> 4))
                 .replace("{cz}", String.valueOf((int)pos.z >> 4))

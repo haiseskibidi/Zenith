@@ -82,7 +82,7 @@ public class GameLoop {
         window = new Window("Protocol: Grounding", 1280, 720, SettingsManager.getInstance().isVsync());
         window.init();
         timer = new Timer();
-        camera = new Camera(new Vector3f(8, 65, 8));
+        camera = new Camera(new Vector3f(8, 200, 8));
         camera.updateAspectRatio(window.getAspectRatio());
         inputManager = new InputManager();
         renderer = new Renderer();
@@ -96,7 +96,7 @@ public class GameLoop {
         }
         world = new World(seed);
         world.addUnloadListener(renderer::onChunkUnload);
-        player = new Player(new Vector3f(8, 150, 8));
+        player = new Player(new Vector3f(8, 200, 8));
         world.setPlayer(player);
         player.getInventory().setStackInSlot(0, new com.za.zenith.world.items.ItemStack(com.za.zenith.world.items.Items.ADMIN_HAMMER));
         hotbar = new Hotbar(player);

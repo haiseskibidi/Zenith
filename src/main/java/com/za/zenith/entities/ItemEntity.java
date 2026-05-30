@@ -207,10 +207,10 @@ public class ItemEntity extends Entity {
         float radius = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemMergeRadius;
         float radiusSq = radius * radius;
 
-        // SPATIAL MERGING: Only check items in the same chunk
-        List<ItemEntity> items = world.getItemsInChunk(lastChunkPos);
-        for (ItemEntity other : items) {
-            if (other != this && !other.isRemoved()) {
+        // SPATIAL MERGING: Only check ground entities in the same chunk
+        List<com.za.zenith.entities.Entity> entities = world.getGroundEntitiesInChunk(lastChunkPos);
+        for (com.za.zenith.entities.Entity e : entities) {
+            if (e instanceof ItemEntity other && other != this && !other.isRemoved()) {
                 if (other.stack.getItem().equals(this.stack.getItem())) {
                     float distSq = position.distanceSquared(other.position);
                     if (distSq < radiusSq) {

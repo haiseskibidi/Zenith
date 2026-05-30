@@ -29,8 +29,8 @@ import java.util.Map;
 public class World {
     private final Map<Long, Chunk> chunks;
     private final Map<Long, Chunk> stagingChunks = new ConcurrentHashMap<>();
-    private final List<Entity> entities;
-    private final Map<com.za.zenith.world.chunks.ChunkPos, List<com.za.zenith.entities.ItemEntity>> itemSpatialMap = new ConcurrentHashMap<>();
+    private final List<Entity> entities = java.util.Collections.synchronizedList(new ArrayList<>());
+    private final Map<com.za.zenith.world.chunks.ChunkPos, List<Entity>> groundEntityMap = new ConcurrentHashMap<>();
     private final Vector3f vPool1 = new Vector3f();
     private final Vector3f vPool2 = new Vector3f();
     private final Map<BlockPos, BlockEntity> blockEntities;
@@ -172,9 +172,8 @@ public class World {
 
     public World() {
         this.chunks = new ConcurrentHashMap<>();
-        this.entities = new CopyOnWriteArrayList<>();
         this.blockEntities = new ConcurrentHashMap<>();
-        this.tickableBlockEntities = new CopyOnWriteArrayList<>();
+        this.tickableBlockEntities = java.util.Collections.synchronizedList(new ArrayList<>());
         this.seed = System.currentTimeMillis(); // Random seed each time
         com.za.zenith.utils.Logger.info("Generating new world with seed: %d", seed);
         this.biomeGenerator = new com.za.zenith.world.generation.BiomeGenerator(seed);
@@ -189,9 +188,8 @@ public class World {
 
     public World(long seed) {
         this.chunks = new ConcurrentHashMap<>();
-        this.entities = new CopyOnWriteArrayList<>();
         this.blockEntities = new ConcurrentHashMap<>();
-        this.tickableBlockEntities = new CopyOnWriteArrayList<>();
+        this.tickableBlockEntities = java.util.Collections.synchronizedList(new ArrayList<>());
         this.seed = seed;
         com.za.zenith.utils.Logger.info("Generating new world with seed: %d", seed);
         this.biomeGenerator = new com.za.zenith.world.generation.BiomeGenerator(seed);
@@ -337,6 +335,10 @@ public class World {
                         return false;
                     });
 
+                    // CRITICAL FIX: Properly remove the entire chunk from groundEntityMap
+                    // This prevents thousands of "zombie" entity references from staying in memory
+                    groundEntityMap.remove(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
+
                     for (java.util.function.Consumer<Chunk> listener : unloadListeners) {
                         listener.accept(chunk);
                     }
@@ -372,7 +374,7 @@ public class World {
                 return Math.abs(cx - currentChunkX) > unloadDistance || Math.abs(cz - currentChunkZ) > unloadDistance;
             });
 
-            itemSpatialMap.keySet().removeIf(pos -> {
+            groundEntityMap.keySet().removeIf(pos -> {
                 return Math.abs(pos.x() - currentChunkX) > unloadDistance || Math.abs(pos.z() - currentChunkZ) > unloadDistance;
             });
 
@@ -539,21 +541,33 @@ public class World {
             Entity entity = entities.get(i);
 
             if (entity.isRemoved()) {
-                if (entity instanceof com.za.zenith.entities.ItemEntity item) {
-                    List<com.za.zenith.entities.ItemEntity> list = itemSpatialMap.get(item.getLastChunkPos());
-                    if (list != null) list.remove(item);
+                if (entity instanceof com.za.zenith.entities.ItemEntity || entity instanceof com.za.zenith.entities.ResourceEntity) {
+                    com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)entity.getPosition().x, (int)entity.getPosition().z);
+                    List<Entity> list = groundEntityMap.get(cp);
+                    if (list != null) list.remove(entity);
                 }
                 entities.remove(i);
                 continue;
             }
 
-            // SIMULATION DISTANCE GUARD: Remove distant entities (except player)
+            // SIMULATION DISTANCE GUARD: Remove distant entities
             if (player != null && entity != player) {
                 float edx = px - entity.getPosition().x;
                 float edz = pz - entity.getPosition().z;
-                if (edx * edx + edz * edz > 320 * 320) { // 20 chunks radius
-                    entity.setRemoved();
-                    continue;
+                float distSq = edx * edx + edz * edz;
+                
+                // Aggressive culling for static resources: 128m radius (8 chunks)
+                if (entity instanceof com.za.zenith.entities.ResourceEntity) {
+                    if (distSq > 128 * 128) {
+                        entity.setRemoved();
+                        continue;
+                    }
+                } else {
+                    // Standard culling for dynamic entities: 320m radius
+                    if (distSq > 320 * 320) {
+                        entity.setRemoved();
+                        continue;
+                    }
                 }
             }
 
@@ -583,7 +597,8 @@ public class World {
                             inventoryFull = player.getInventory().isFull();
                             
                             // Remove from spatial map
-                            List<com.za.zenith.entities.ItemEntity> list = itemSpatialMap.get(itemEntity.getLastChunkPos());
+                            com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)itemEntity.getPosition().x, (int)itemEntity.getPosition().z);
+                            List<Entity> list = groundEntityMap.get(cp);
                             if (list != null) list.remove(itemEntity);
                             
                             continue;
@@ -732,25 +747,26 @@ public class World {
     }
 
     public void spawnEntity(Entity entity) {
+        if (entity == null) return;
         entities.add(entity);
-        if (entity instanceof com.za.zenith.entities.ItemEntity item) {
-            com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)item.getPosition().x, (int)item.getPosition().z);
-            itemSpatialMap.computeIfAbsent(cp, k -> new ArrayList<>()).add(item);
+        if (entity.isGroundEntity()) {
+            com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)entity.getPosition().x, (int)entity.getPosition().z);
+            groundEntityMap.computeIfAbsent(cp, k -> java.util.Collections.synchronizedList(new ArrayList<>())).add(entity);
         }
     }
 
     public void updateItemSpatial(com.za.zenith.entities.ItemEntity item, com.za.zenith.world.chunks.ChunkPos oldPos, com.za.zenith.world.chunks.ChunkPos newPos) {
         if (oldPos != null) {
-            List<com.za.zenith.entities.ItemEntity> list = itemSpatialMap.get(oldPos);
+            List<Entity> list = groundEntityMap.get(oldPos);
             if (list != null) list.remove(item);
         }
         if (newPos != null) {
-            itemSpatialMap.computeIfAbsent(newPos, k -> new ArrayList<>()).add(item);
+            groundEntityMap.computeIfAbsent(newPos, k -> java.util.Collections.synchronizedList(new ArrayList<>())).add(item);
         }
     }
 
-    public List<com.za.zenith.entities.ItemEntity> getItemsInChunk(com.za.zenith.world.chunks.ChunkPos pos) {
-        return itemSpatialMap.getOrDefault(pos, java.util.Collections.emptyList());
+    public List<Entity> getGroundEntitiesInChunk(com.za.zenith.world.chunks.ChunkPos pos) {
+        return groundEntityMap.getOrDefault(pos, java.util.Collections.emptyList());
     }
 
     public List<Entity> getEntities() {

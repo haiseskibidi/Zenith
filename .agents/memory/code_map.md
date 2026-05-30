@@ -72,7 +72,7 @@
 - **SkySettings.java**: Конфигурация параметров неба.
 
 ### com.za.zenith.world.chunks
-- **Chunk.java (Zenith v1.0)**: Контейнер данных. Поддерживает **консолидированные меши** (один на чанк), синхронизированную палитру и Lock-free чтение.
+- **Chunk.java (Zenith v1.1 UPDATED)**: Контейнер данных (16x512x16). Поддерживает **консолидированные меши**, синхронизированную палитру и `LOGICAL_OFFSET_Y = 128` для трансляции в логические координаты.
 - **ChunkSection.java**: Подраздел чанка (16x16x16) для пространственной фильтрации.
 - **ChunkMeshGenerator.java (Zenith v1.0)**: Реализует **Greedy Mesh Merging** (объединение всех секций в один VBO).
 
@@ -141,7 +141,7 @@
     - `InventoryScreen.java`: Базовый класс экранов инвентаря.
     - `GUIConfig.java`: Модель конфигурации GUI. Добавлена поддержка `HUDElementConfig` для гибкой настройки HUD.
 - `com.za.zenith.engine.graphics.ui.renderers`
-    - `HUDRenderer.java`: Отрисовка HUD. Реализована полная поддержка `hud.json` и динамическое масштабирование имен предметов.
+    - `HUDRenderer.java (v2.0 UPDATED)`: Отрисовка HUD. Реализована полная поддержка `hud.json`, динамическое масштабирование имен предметов и коррекция Y-координаты по формуле `pos.y - LOGICAL_OFFSET_Y` для дебаг-панели.
     - `InventoryScreenRenderer.java`: Отрисовка инвентарей. Исправлено цветовое кодирование отрицательных статов в тултипах.
 
 ## World Generation (v4.0 UPDATED)

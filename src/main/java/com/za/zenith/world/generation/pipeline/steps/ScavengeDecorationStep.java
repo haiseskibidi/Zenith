@@ -1,5 +1,7 @@
 package com.za.zenith.world.generation.pipeline.steps;
 
+import com.za.zenith.entities.Entity;
+import com.za.zenith.entities.ResourceEntity;
 import com.za.zenith.world.World;
 import com.za.zenith.world.blocks.Block;
 import com.za.zenith.world.blocks.BlockDefinition;
@@ -7,7 +9,6 @@ import com.za.zenith.world.blocks.BlockRegistry;
 import com.za.zenith.world.chunks.Chunk;
 import com.za.zenith.world.generation.ScavengeSettings;
 import com.za.zenith.world.generation.pipeline.GenerationStep;
-import com.za.zenith.entities.ResourceEntity;
 import com.za.zenith.world.items.ItemStack;
 import com.za.zenith.world.items.ItemRegistry;
 import org.joml.Vector3f;
@@ -16,12 +17,11 @@ import java.util.Random;
 
 /**
  * Шаг генерации, рассыпающий 3D ресурсы (сущности) по поверхности мира.
+ * Версия 2.0: Кластерный спавн, Data-Driven фильтры и оптимизированный цикл.
  */
 public class ScavengeDecorationStep implements GenerationStep {
-    private final Random random;
 
     public ScavengeDecorationStep(long seed) {
-        this.random = new Random(seed + 500);
     }
 
     @Override
@@ -30,62 +30,128 @@ public class ScavengeDecorationStep implements GenerationStep {
 
     @Override
     public void generateStructures(World world, Chunk chunk) {
-        int chunkX = chunk.getPosition().x();
-        int chunkZ = chunk.getPosition().z();
+        int chunkX = chunk.getPosition().x() * Chunk.CHUNK_SIZE;
+        int chunkZ = chunk.getPosition().z() * Chunk.CHUNK_SIZE;
 
-        for (int x = 0; x < Chunk.CHUNK_SIZE; x++) {
-            for (int z = 0; z < Chunk.CHUNK_SIZE; z++) {
-                int worldX = chunkX * Chunk.CHUNK_SIZE + x;
-                int worldZ = chunkZ * Chunk.CHUNK_SIZE + z;
+        Random random = new Random(world.getSeed() + chunk.getPosition().hashCode() * 31L);
 
-                float surfaceY = findSurfaceY(chunk, x, z);
-                if (surfaceY > 0) {
-                    Block ground = chunk.getBlock(x, (int)Math.floor(surfaceY - 0.01f), z);
-                    BlockDefinition groundDef = BlockRegistry.getBlock(ground.getType());
+        for (ScavengeSettings.ScavengeDefinition def : ScavengeSettings.getDefinitions()) {
+            // Aggressive optimization: only 2 attempts per chunk
+            int attempts = 2;
+            for (int attempt = 0; attempt < attempts; attempt++) {                if (random.nextFloat() < def.chance) {
+                    int lx = random.nextInt(Chunk.CHUNK_SIZE);
+                    int lz = random.nextInt(Chunk.CHUNK_SIZE);
+                    int centerX = chunkX + lx;
+                    int centerZ = chunkZ + lz;
+
+                    int surfaceY = findSurfaceY(chunk, lx, lz);
+                    if (surfaceY <= 0) continue;
+
+                    // 1. Biome Check
+                    if (!def.biomes.isEmpty()) {
+                        var biome = world.getBiomeManager().getBiome(centerX, centerZ);
+                        if (biome == null || !def.biomes.contains(biome.getId())) continue;
+                    }
+
+                    // 2. Ground Block Check
+                    Block groundBlock = chunk.getBlock(lx, surfaceY, lz);
+                    BlockDefinition groundDef = BlockRegistry.getBlock(groundBlock.getType());
+                    if (!def.groundBlocks.isEmpty()) {
+                        if (!def.groundBlocks.contains(groundDef.getIdentifier())) continue;
+                    }
+
+                    // 3. Cluster Spawn
+                    int count = def.minGroup + (def.maxGroup > def.minGroup ? random.nextInt(def.maxGroup - def.minGroup + 1) : 0);
+                    java.util.List<Vector3f> clusterPositions = new java.util.ArrayList<>();
                     
-                    if (groundDef.canSupportScavenge()) {
-                        float roll = random.nextFloat();
-                        
-                        for (ScavengeSettings.Entry entry : ScavengeSettings.getEntries()) {
-                            if (roll < entry.chance()) {
-                                // Создаем 3D сущность предмета вместо блока
-                                var item = ItemRegistry.getItem(entry.blockId()); 
-                                if (item != null) {
-                                    Vector3f pos = new Vector3f(worldX + 0.5f, surfaceY, worldZ + 0.5f);
-                                    float rot = random.nextFloat() * (float)Math.PI * 2;
-                                    world.spawnEntity(new ResourceEntity(pos, new ItemStack(item), rot));
+                    for (int i = 0; i < count; i++) {
+                        boolean posValid = false;
+                        float finalX = 0, finalZ = 0;
+                        int worldX = 0, worldZ = 0;
+                        Chunk targetChunk = null;
+                        int itemY = 0;
+
+                        // Rejection sampling: try to find a spot that doesn't overlap
+                        for (int tries = 0; tries < 5; tries++) {
+                            float dx = (random.nextFloat() * 2.4f) - 1.2f;
+                            float dz = (random.nextFloat() * 2.4f) - 1.2f;
+
+                            finalX = centerX + dx;
+                            finalZ = centerZ + dz;
+
+                            worldX = (int)Math.floor(finalX);
+                            worldZ = (int)Math.floor(finalZ);
+
+                            targetChunk = world.getChunkInternal(worldX >> 4, worldZ >> 4);
+                            if (targetChunk == null) continue;
+
+                            itemY = findSurfaceY(targetChunk, worldX & 15, worldZ & 15);
+                            if (itemY <= 0) continue;
+
+                            // Distance check (Min 0.7m squared = 0.49f)
+                            float minDistanceSq = 0.49f;
+                            posValid = true;
+
+                            // Check against items already in this cluster
+                            for (Vector3f other : clusterPositions) {
+                                float tdx = finalX - other.x;
+                                float tdz = finalZ - other.z;
+                                if (tdx * tdx + tdz * tdz < minDistanceSq) {
+                                    posValid = false;
+                                    break;
                                 }
-                                break;
                             }
-                            roll -= entry.chance();
+                            if (!posValid) continue;
+
+                            // Check against items already in the chunk (from previous clusters)
+                            java.util.List<Entity> existing = world.getGroundEntitiesInChunk(targetChunk.getPosition());
+                            if (!existing.isEmpty()) {
+                                for (Entity e : existing) {
+                                    float tdx = finalX - e.getPosition().x;
+                                    float tdz = finalZ - e.getPosition().z;
+                                    // Only check XZ overlap at similar height
+                                    if (Math.abs(e.getPosition().y - (itemY + 1.0f)) < 0.5f) {
+                                        if (tdx * tdx + tdz * tdz < minDistanceSq) {
+                                            posValid = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (posValid) break;
                         }
+
+                        if (!posValid) continue;
+
+                        var itemDef = ItemRegistry.getItem(def.itemId);
+                        if (itemDef == null) continue;
+
+                        // Position: top of the block (itemY + 1)
+                        Vector3f pos = new Vector3f(finalX, itemY + 1.0f, finalZ);
+                        clusterPositions.add(pos);
+
+                        float rotation = random.nextFloat() * (float)Math.PI * 2;
+                        
+                        // Use ResourceEntity for scavenge items (3D Foraging)
+                        ResourceEntity resource = new ResourceEntity(pos, new ItemStack(itemDef, 1), rotation);
+                        world.spawnEntity(resource);
                     }
                 }
             }
         }
     }
 
-    private float findSurfaceY(Chunk chunk, int localX, int localZ) {
+    private int findSurfaceY(Chunk chunk, int lx, int lz) {
         for (int y = Chunk.CHUNK_HEIGHT - 1; y > 0; y--) {
-            Block b = chunk.getBlock(localX, y, localZ);
+            Block b = chunk.getBlock(lx, y, lz);
             if (!b.isAir()) {
                 BlockDefinition def = BlockRegistry.getBlock(b.getType());
-                if (def.isSolid()) {
-                    float topY = (float)y;
-                    com.za.zenith.world.physics.VoxelShape shape = def.getShape(b.getMetadata());
-                    if (shape != null && !shape.getBoxes().isEmpty()) {
-                        for (com.za.zenith.world.physics.AABB box : shape.getBoxes()) {
-                            topY = Math.max(topY, y + box.maxY());
-                        }
-                    } else {
-                        topY += 1.0f;
-                    }
-                    return topY;
+                // We need solid, non-transparent ground (not grass/flowers)
+                if (def.isSolid() && !def.isTransparent()) {
+                    return y;
                 }
             }
         }
         return -1;
-    }
-}
-
-
+    }}

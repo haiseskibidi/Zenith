@@ -43,8 +43,10 @@ public class TerrainStep implements GenerationStep {
                 int baseIdx = (i * GRID_Z + j) * GRID_Y;
 
                 for (int k = 0; k < GRID_Y; k++) {
-                    // Создаем контекст один раз на точку сетки
-                    DensityContextImpl ctx = new DensityContextImpl(worldX, k * VERT_STEP, worldZ, climate[2], climate[3], climate[4], climate[0], climate[1]);
+                    int internalY = k * VERT_STEP;
+                    // Pass logical Y (with 128 offset) to density function
+                    int logicalY = internalY - Chunk.LOGICAL_OFFSET_Y;
+                    DensityContextImpl ctx = new DensityContextImpl(worldX, logicalY, worldZ, climate[2], climate[3], climate[4], climate[0], climate[1]);
                     densityGrid[baseIdx + k] = noiseRouter.getDensity(ctx);
                 }
             }
@@ -81,7 +83,7 @@ public class TerrainStep implements GenerationStep {
                             boolean ruleMatched = false;
                             if (biome.getSurfaceRules() != null && !biome.getSurfaceRules().isEmpty()) {
                                 for (com.za.zenith.world.generation.rules.SurfaceRule rule : biome.getSurfaceRules()) {
-                                    if (rule.evaluate(worldX, y, worldZ, noiseVal, depth)) {
+                                    if (rule.evaluate(worldX, y - Chunk.LOGICAL_OFFSET_Y, worldZ, noiseVal, depth)) {
                                         var blockDef = rule.getBlock();
                                         if (blockDef != null) {
                                             chunk.setBlock(x, y, z, blockDef.getId(), 0);
@@ -104,7 +106,8 @@ public class TerrainStep implements GenerationStep {
                         }
                     } else {
                         currentSurfaceY = -1;
-                        if (y < 62) {
+                        // Logical Sea Level 62 = Internal 128 + 62 = 190
+                        if (y < 190 && y >= 128) {
                             chunk.setBlock(x, y, z, waterId, 0);
                         }
                     }

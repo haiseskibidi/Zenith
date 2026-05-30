@@ -109,16 +109,50 @@ public class Raycast {
         com.za.zenith.entities.Entity closest = null;
         float minDistance = MAX_REACH_DISTANCE;
 
-        for (com.za.zenith.entities.Entity entity : world.getEntities()) {
-            AABB bounds = entity.getBoundingBox();
-            if (bounds == null) continue;
+        int startCx = (int)Math.floor(origin.x / 16.0);
+        int startCz = (int)Math.floor(origin.z / 16.0);
+        
+        // Ray reach is only 5m, so checking 1 chunk radius is more than enough
+        for (int cx = startCx - 1; cx <= startCx + 1; cx++) {
+            for (int cz = startCz - 1; cz <= startCz + 1; cz++) {
+                com.za.zenith.world.chunks.ChunkPos cp = new com.za.zenith.world.chunks.ChunkPos(cx, cz);
+                java.util.List<com.za.zenith.entities.Entity> groundEntities = world.getGroundEntitiesInChunk(cp);
+                if (groundEntities.isEmpty()) continue;
 
-            float dist = bounds.intersectDist(origin, direction);
-            if (dist > 0 && dist < minDistance) {
-                minDistance = dist;
-                closest = entity;
+                synchronized(groundEntities) {
+                    for (int i = 0; i < groundEntities.size(); i++) {
+                        com.za.zenith.entities.Entity entity = groundEntities.get(i);
+                        AABB bounds = entity.getBoundingBox();
+                        if (bounds == null) continue;
+
+                        float dist = bounds.intersectDist(origin, direction);
+                        if (dist > 0 && dist < minDistance) {
+                            minDistance = dist;
+                            closest = entity;
+                        }
+                    }
+                }
             }
         }
+
+        // Also check global entities (Players, Scouts) - there are very few of them
+        java.util.List<com.za.zenith.entities.Entity> globalEntities = world.getEntities();
+        synchronized(globalEntities) {
+            for (int i = 0; i < globalEntities.size(); i++) {
+                com.za.zenith.entities.Entity entity = globalEntities.get(i);
+                if (entity.isGroundEntity()) continue; // Already checked via spatial map
+
+                AABB bounds = entity.getBoundingBox();
+                if (bounds == null) continue;
+
+                float dist = bounds.intersectDist(origin, direction);
+                if (dist > 0 && dist < minDistance) {
+                    minDistance = dist;
+                    closest = entity;
+                }
+            }
+        }
+
         return closest;
     }
 }

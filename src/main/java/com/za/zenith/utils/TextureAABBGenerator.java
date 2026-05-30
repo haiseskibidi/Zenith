@@ -15,8 +15,9 @@ import static org.lwjgl.stb.STBImage.*;
  * Позволяет создавать точные хитбоксы для предметов и декоративных блоков.
  */
 public class TextureAABBGenerator {
-    private static final Map<String, AABB> CACHE = new HashMap<>();
+    private static final Map<String, AABB> CACHE = new java.util.concurrent.ConcurrentHashMap<>();
     private static final int ALPHA_THRESHOLD = 30; // Порог прозрачности (0-255)
+    private static final AABB EMPTY_AABB = new AABB(0, 0, 0, 0, 0, 0);
 
     /**
      * Генерирует AABB на основе непрозрачных пикселей текстуры.
@@ -25,7 +26,8 @@ public class TextureAABBGenerator {
      */
     public static AABB generateAABB(String texturePath) {
         if (texturePath == null || texturePath.isEmpty()) return null;
-        if (CACHE.containsKey(texturePath)) return CACHE.get(texturePath);
+        AABB cached = CACHE.get(texturePath);
+        if (cached != null) return cached == EMPTY_AABB ? null : cached;
 
         // Путь должен быть относительным к ресурсам (без префикса src/main/resources/)
         String resourcePath = texturePath.replace("src/main/resources/", "");
@@ -33,6 +35,7 @@ public class TextureAABBGenerator {
         try (var is = TextureAABBGenerator.class.getClassLoader().getResourceAsStream(resourcePath)) {
             if (is == null) {
                 Logger.warn("Texture not found for AABB generation: " + resourcePath);
+                CACHE.put(texturePath, EMPTY_AABB);
                 return null;
             }
 
@@ -51,6 +54,7 @@ public class TextureAABBGenerator {
 
             if (image == null) {
                 Logger.error("Failed to load image for AABB generation: " + resourcePath);
+                CACHE.put(texturePath, EMPTY_AABB);
                 return null;
             }
 
@@ -78,7 +82,7 @@ public class TextureAABBGenerator {
             stbi_image_free(image);
 
             if (!found) {
-                CACHE.put(texturePath, null);
+                CACHE.put(texturePath, EMPTY_AABB);
                 return null;
             }
 
