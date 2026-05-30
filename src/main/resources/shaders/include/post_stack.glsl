@@ -1,5 +1,7 @@
 // --- STYLIZED AAA POST-STACK (Toon & Atmosphere) ---
 
+uniform vec3 uSkyColor;
+
 float near = 0.01; 
 float far  = 1000.0; 
 
@@ -31,9 +33,8 @@ vec3 applyPostProcessing(vec3 color, vec2 fragTexCoord, vec2 texelSize, sampler2
         }
         
         // 2. Atmospheric Fog
-        vec3 skyColor = vec3(0.55, 0.65, 0.75); 
         float fogFactor = smoothstep(40.0, 200.0, d);
-        color = mix(color, skyColor, fogFactor);
+        color = mix(color, uSkyColor, fogFactor);
     }
     
     // 3. Filmic Contrast
