@@ -11,6 +11,11 @@
         <MagneticPickup v-if="block.name === 'MAGNETIC_PICKUP'" />
       </div>
 
+      <!-- 1.5. Интерактивные задачи -->
+      <div v-else-if="block.type === 'task'" class="task-wrapper">
+        <CodingTaskComponent :taskId="block.taskId" />
+      </div>
+
       <!-- 2. Специфические GitHub-алерты -->
       <div v-else-if="block.type === 'alert'" :class="['alert-box', `alert-${block.alertType}`]">
         <div class="alert-title">
@@ -47,6 +52,7 @@ import TextEffects from './TextEffects.vue';
 import QuizComponent from './QuizComponent.vue';
 import LootGenerator from './LootGenerator.vue';
 import MagneticPickup from './MagneticPickup.vue';
+import CodingTaskComponent from './CodingTaskComponent.vue';
 
 export default {
   name: 'MarkdownRenderer',
