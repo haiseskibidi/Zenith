@@ -27,8 +27,8 @@ public class VoxelShape {
     public boolean isFullCube() {
         if (boxes.size() != 1) return false;
         AABB box = boxes.get(0);
-        return box.getMin().x == 0 && box.getMin().y == 0 && box.getMin().z == 0 &&
-               box.getMax().x == 1 && box.getMax().y == 1 && box.getMax().z == 1;
+        return box.minX() == 0 && box.minY() == 0 && box.minZ() == 0 &&
+               box.maxX() == 1 && box.maxY() == 1 && box.maxZ() == 1;
     }
     
     public VoxelShape offset(float x, float y, float z) {

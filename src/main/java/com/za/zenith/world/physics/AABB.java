@@ -33,6 +33,12 @@ public class AABB {
                max.z > other.min.z && min.z < other.max.z;
     }
     
+    public static boolean intersects(AABB boxA, float ax, float ay, float az, AABB boxB, float bx, float by, float bz) {
+        return (boxA.max.x + ax > boxB.min.x + bx) && (boxA.min.x + ax < boxB.max.x + bx) &&
+               (boxA.max.y + ay > boxB.min.y + by) && (boxA.min.y + ay < boxB.max.y + by) &&
+               (boxA.max.z + az > boxB.min.z + bz) && (boxA.min.z + az < boxB.max.z + bz);
+    }
+    
     public boolean contains(Vector3f point) {
         return point.x >= min.x && point.x <= max.x &&
                point.y >= min.y && point.y <= max.y &&

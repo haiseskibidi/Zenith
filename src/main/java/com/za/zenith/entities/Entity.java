@@ -123,13 +123,28 @@ public abstract class Entity {
         float originalDy = dy;
         float originalDz = dz;
         
-        // 1. UNSTUCK: Если сущность уже внутри блока (например, при спавне), 
-        // пытаемся мягко вытолкнуть её вверх
+        // 1. Initialize local ChunkCache covering the entire motion Broadphase bounding box
         AABB currentBox = boundingBox.offset(position);
-        if (isCollidingAt(world, currentBox)) {
-            for (int i = 0; i < 10; i++) { // Проверяем 10 ступеней по 0.1 блока
+        float minXF = Math.min(currentBox.minX(), currentBox.minX() + dx);
+        float maxXF = Math.max(currentBox.maxX(), currentBox.maxX() + dx);
+        float minYF = Math.min(currentBox.minY(), currentBox.minY() + dy) - 1.0f; // buffer for unstuck
+        float maxYF = Math.max(currentBox.maxY(), currentBox.maxY() + dy) + 1.0f;
+        float minZF = Math.min(currentBox.minZ(), currentBox.minZ() + dz);
+        float maxZF = Math.max(currentBox.maxZ(), currentBox.maxZ() + dz);
+
+        com.za.zenith.world.chunks.ChunkCache cache = new com.za.zenith.world.chunks.ChunkCache(
+            world,
+            (int) Math.floor(minXF),
+            (int) Math.floor(minZF),
+            (int) Math.floor(maxXF),
+            (int) Math.floor(maxZF)
+        );
+
+        // 2. UNSTUCK: Softly push the entity up if already stuck inside a solid block
+        if (isCollidingAt(cache, currentBox)) {
+            for (int i = 0; i < 10; i++) {
                 float lift = 0.1f * (i + 1);
-                if (!isCollidingAt(world, boundingBox.offset(position.x, position.y + lift, position.z))) {
+                if (!isCollidingAt(cache, boundingBox.offset(position.x, position.y + lift, position.z))) {
                     position.y += lift;
                     currentBox = boundingBox.offset(position);
                     break;
@@ -137,7 +152,7 @@ public abstract class Entity {
             }
         }
 
-        // 2. VERTICAL COLLISION
+        // 3. VERTICAL COLLISION
         if (dy != 0) {
             if (dy > 0) onGround = false;
 
@@ -151,16 +166,15 @@ public abstract class Entity {
             for (int x = minX; x <= maxX; x++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     for (int y = minY; y <= maxY; y++) {
-                        Block block = world.getBlock(x, y, z);
+                        Block block = cache.getBlock(x, y, z);
                         if (!block.isAir() && block.isSolid()) {
                             VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                             if (shape != null) {
                                 for (AABB box : shape.getBoxes()) {
-                                    AABB blockBox = box.offset(x, y, z);
-                                    if (currentBox.offset(0, dy, 0).intersects(blockBox)) {
-                                        if (dy > 0) dy = blockBox.minY() - currentBox.maxY() - 0.001f;
+                                    if (AABB.intersects(boundingBox, position.x, position.y + dy, position.z, box, x, y, z)) {
+                                        if (dy > 0) dy = (box.minY() + y) - (boundingBox.maxY() + position.y) - 0.001f;
                                         else {
-                                            dy = blockBox.maxY() - currentBox.minY() + 0.001f;
+                                            dy = (box.maxY() + y) - (boundingBox.minY() + position.y) + 0.001f;
                                             onGround = true;
                                         }
                                         velocity.y = 0;
@@ -175,12 +189,12 @@ public abstract class Entity {
             currentBox = boundingBox.offset(position);
         }
 
-        // Если мы падали, но не коснулись земли (dy остался равен originalDy), значит мы в воздухе
+        // Reset onGround if falling through air without hitting anything
         if (originalDy < -0.001f && onGround && Math.abs(dy - originalDy) < 0.0001f) {
             onGround = false;
         }
 
-        // 3. HORIZONTAL COLLISION (X)
+        // 4. HORIZONTAL COLLISION (X)
         if (dx != 0) {
             int minX = (int) Math.floor(currentBox.minX() + Math.min(0, dx));
             int maxX = (int) Math.floor(currentBox.maxX() + Math.max(0, dx));
@@ -192,15 +206,14 @@ public abstract class Entity {
             for (int x = minX; x <= maxX; x++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     for (int y = minY; y <= maxY; y++) {
-                        Block block = world.getBlock(x, y, z);
+                        Block block = cache.getBlock(x, y, z);
                         if (!block.isAir() && block.isSolid()) {
                             VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                             if (shape != null) {
                                 for (AABB box : shape.getBoxes()) {
-                                    AABB blockBox = box.offset(x, y, z);
-                                    if (currentBox.offset(dx, 0, 0).intersects(blockBox)) {
-                                        if (dx > 0) dx = blockBox.minX() - currentBox.maxX() - 0.001f;
-                                        else dx = blockBox.maxX() - currentBox.minX() + 0.001f;
+                                    if (AABB.intersects(boundingBox, position.x + dx, position.y, position.z, box, x, y, z)) {
+                                        if (dx > 0) dx = (box.minX() + x) - (boundingBox.maxX() + position.x) - 0.001f;
+                                        else dx = (box.maxX() + x) - (boundingBox.minX() + position.x) + 0.001f;
                                         velocity.x = 0;
                                     }
                                 }
@@ -213,7 +226,7 @@ public abstract class Entity {
             currentBox = boundingBox.offset(position);
         }
 
-        // 4. HORIZONTAL COLLISION (Z)
+        // 5. HORIZONTAL COLLISION (Z)
         if (dz != 0) {
             int minX = (int) Math.floor(currentBox.minX());
             int maxX = (int) Math.floor(currentBox.maxX());
@@ -225,15 +238,14 @@ public abstract class Entity {
             for (int x = minX; x <= maxX; x++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     for (int y = minY; y <= maxY; y++) {
-                        Block block = world.getBlock(x, y, z);
+                        Block block = cache.getBlock(x, y, z);
                         if (!block.isAir() && block.isSolid()) {
                             VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                             if (shape != null) {
                                 for (AABB box : shape.getBoxes()) {
-                                    AABB blockBox = box.offset(x, y, z);
-                                    if (currentBox.offset(0, 0, dz).intersects(blockBox)) {
-                                        if (dz > 0) dz = blockBox.minZ() - currentBox.maxZ() - 0.001f;
-                                        else dz = blockBox.maxZ() - currentBox.minZ() + 0.001f;
+                                    if (AABB.intersects(boundingBox, position.x, position.y, position.z + dz, box, x, y, z)) {
+                                        if (dz > 0) dz = (box.minZ() + z) - (boundingBox.maxZ() + position.z) - 0.001f;
+                                        else dz = (box.maxZ() + z) - (boundingBox.minZ() + position.z) + 0.001f;
                                         velocity.z = 0;
                                     }
                                 }
@@ -246,7 +258,7 @@ public abstract class Entity {
         }
     }
 
-    private boolean isCollidingAt(World world, AABB box) {
+    private boolean isCollidingAt(com.za.zenith.world.chunks.ChunkCache cache, AABB box) {
         int minX = (int) Math.floor(box.minX());
         int maxX = (int) Math.floor(box.maxX());
         int minY = (int) Math.floor(box.minY());
@@ -257,12 +269,12 @@ public abstract class Entity {
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
-                    Block block = world.getBlock(x, y, z);
+                    Block block = cache.getBlock(x, y, z);
                     if (!block.isAir() && block.isSolid()) {
                         VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                         if (shape != null) {
                             for (AABB bBox : shape.getBoxes()) {
-                                if (box.intersects(bBox.offset(x, y, z))) return true;
+                                if (AABB.intersects(box, 0, 0, 0, bBox, x, y, z)) return true;
                             }
                         }
                     }
