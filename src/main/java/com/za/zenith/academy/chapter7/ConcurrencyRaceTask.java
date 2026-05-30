@@ -125,8 +125,11 @@ public class ConcurrencyRaceTask {
 
         @Override
         public int getOrCreateId(String blockName) {
-            // Используем атомарный метод computeIfAbsent, который работает без блокировок потоков
-            return registry.computeIfAbsent(blockName, k -> nextId.getAndIncrement());
+            Integer id = registry.get(blockName);
+            if (id == null) {
+                id = registry.computeIfAbsent(blockName, k -> nextId.getAndIncrement());
+            }
+            return id;
         }
 
         @Override

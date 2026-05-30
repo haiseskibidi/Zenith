@@ -341,6 +341,12 @@ public int countVoxelsBranchless(int[] strengths, int threshold) {
       return this.tasks[this.taskId] || null;
     }
   },
+  watch: {
+    taskId() {
+      this.activeTab = 'problem';
+      this.showSolution = false;
+    }
+  },
   methods: {
     setActiveTab(tabId) {
       this.activeTab = tabId;

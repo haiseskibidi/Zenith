@@ -24,15 +24,7 @@ public class LootWeightTask {
     private static final int LOOT_ITEMS_COUNT = 1000;
     private static final int GENERATION_COUNT = 2_000_000;
 
-    public static class LootItem {
-        public final String name;
-        public final double weight;
-
-        public LootItem(String name, double weight) {
-            this.name = name;
-            this.weight = weight;
-        }
-    }
+    public record LootItem(String name, double weight) {}
 
     public static void main(String[] args) {
         System.out.println("=========================================================");
@@ -56,7 +48,7 @@ public class LootWeightTask {
         double[] prefixSums = new double[LOOT_ITEMS_COUNT];
         double currentSum = 0.0;
         for (int i = 0; i < LOOT_ITEMS_COUNT; i++) {
-            currentSum += lootTable[i].weight;
+            currentSum += lootTable[i].weight();
             prefixSums[i] = currentSum;
         }
 
@@ -118,7 +110,7 @@ public class LootWeightTask {
     private static int selectLootNaive(LootItem[] table, double targetWeight) {
         double accumulated = 0.0;
         for (int i = 0; i < table.length; i++) {
-            accumulated += table[i].weight;
+            accumulated += table[i].weight();
             if (targetWeight <= accumulated) {
                 return i;
             }

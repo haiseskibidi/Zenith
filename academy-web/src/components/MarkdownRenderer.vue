@@ -62,7 +62,8 @@ export default {
     TextEffects,
     QuizComponent,
     LootGenerator,
-    MagneticPickup
+    MagneticPickup,
+    CodingTaskComponent
   },
   props: {
     content: {
@@ -170,6 +171,17 @@ export default {
           blocks.push({
             type: 'widget',
             name: widgetMatch[1]
+          });
+          continue;
+        }
+
+        // 3.5. Обработка маркеров задач
+        const taskMatch = line.trim().match(/^\[TASK:([a-zA-Z0-9_-]+)\]$/);
+        if (taskMatch) {
+          flushText();
+          blocks.push({
+            type: 'task',
+            taskId: taskMatch[1]
           });
           continue;
         }

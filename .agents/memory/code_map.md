@@ -167,6 +167,25 @@
 ### com.za.zenith.utils
 - **SplineInterpolator.java**: Утилита для линейной интерполяции по набору произвольных точек. Используется в `SplineFunction`.
 
+## Zenith Academy (v2.7 NEW)
+### com.za.zenith.academy.chapter1
+- **FalseSharingTask.java**: (NEW) Практическая задача на оптимизацию False Sharing. Два параллельных потока пишут в соседние `volatile long` поля объекта, вызывая MESI пинг-понг кэш-линий. Студент должен устранить проблему с помощью выравнивания кэш-линий (padding).
+
+### com.za.zenith.academy.chapter2
+- **DrawCallOverheadTask.java**: (NEW) Практическая задача на оверхед Draw Calls. Моделирует накладные расходы JNI-переходов на CPU при отправке множества мелких вызовов отрисовки против группировки (батчинга) в один вызов.
+
+### com.za.zenith.academy.chapter7
+- **ConcurrencyRaceTask.java**: (NEW) Практическая задача на конкурентный Data Race. Демонстрирует повреждение данных в общей палитре чанка без синхронизации и сравнивает производительность Lock-based (RW Lock) и Lock-Free (CAS на ConcurrentHashMap + AtomicInteger) подходов.
+
+### com.za.zenith.academy.chapter9
+- **LootWeightTask.java**: (NEW) Практическая задача на выборку лута по весам. Сравнивает производительность наивного линейного алгоритма за $O(N)$ и быстрого бинарного поиска по кумулятивным суммам за $O(\log N)$ на миллионах итераций.
+
+### com.za.zenith.academy.hw1
+- **BranchPredictionTask.java**: (NEW) Практическая задача на предсказание переходов. Сравнивает скорость выполнения условного ветвления на отсортированном (100% точное предсказание) и неотсортированном (постоянные Branch Mispredictions) массивах.
+
+### com.za.zenith.academy.hw2
+- **CacheLocalityTask.java**: (NEW) Практическая задача на Cache Misses и Cache Locality. Сравнивает Row-Major и Column-Major обход большой 2D-матрицы в Java, иллюстрируя работу 64-байтовых кэш-линий.
+
 ## Entity System (v5.6 NEW)
 ### com.za.zenith.entities.Entity (UPDATED)
 Назначение: Базовый класс для всех сущностей (игрок, мобы, предметы).
