@@ -17,6 +17,7 @@ uniform float uDecay;
 uniform float uExposure;
 uniform vec3 uShaftColor;
 uniform mat4 uInvProjection; // Inverse projection to reconstruct View Space
+uniform float uAspectRatio;  // Screen aspect ratio (width / height)
 
 vec3 getViewPos(vec2 uv) {
     float depth = texture(depthTexture, uv).r;
@@ -53,8 +54,9 @@ void main() {
     int NUM_SAMPLES = 64;
     vec2 textCoords = fragTexCoord;
     
-    // Dynamic soft-halo radial blur calculation (prevent step collapse to zero near screen center)
-    vec2 dir = textCoords - uSunScreenPos;
+    // Aspect ratio correction to maintain perfectly circular shafts and sun halo
+    vec2 aspectCorrection = vec2(1.0 / uAspectRatio, 1.0);
+    vec2 dir = (textCoords - uSunScreenPos) * aspectCorrection;
     float dist = length(dir);
     vec2 ndir = dist > 0.0001 ? dir / dist : vec2(0.0);
     
@@ -68,10 +70,11 @@ void main() {
     // Force a minimum scattering bloom radius of 0.12 screen-width when looking directly at the sun
     float finalDist = mix(clampedDist, max(clampedDist, 0.12), glareShift);
     
-    vec2 deltaTexCoord = ndir * finalDist * (uDensity * 0.45) / float(NUM_SAMPLES);
+    // Convert back from corrected circular space to texture space
+    vec2 deltaTexCoord = (ndir * finalDist * (uDensity * 0.45) / float(NUM_SAMPLES)) / aspectCorrection;
     
     // Dithering: randomize start offset using Interleaved Gradient Noise to dissolve banding
-    float noise = getNoise(fragTexCoord * 100.0);
+    float noise = getNoise(textCoords * 100.0);
     textCoords += deltaTexCoord * (noise - 0.5); // Apply jitter
     
     float illuminationDecay = 1.0;
@@ -102,8 +105,19 @@ void main() {
         illuminationDecay *= uDecay;
     }
     
-    // Apply Henyey-Greenstein phase, exposure, and biome tint
-    vec3 finalRays = raysColor * uExposure * phase * uShaftColor;
+    // 5-Point Depth Probe around uSunScreenPos on GPU to dynamically check sun occlusion.
+    // Fades glare when behind walls/caves, but shimmers realistically when behind tree foliage.
+    float visibility = 0.0;
+    float offsetVal = 0.012; // Radius around the sun disk to probe
+    
+    visibility += texture(depthTexture, uSunScreenPos).r > 0.98 ? 0.3 : 0.0;
+    visibility += texture(depthTexture, uSunScreenPos + vec2(offsetVal, 0.0)).r > 0.98 ? 0.175 : 0.0;
+    visibility += texture(depthTexture, uSunScreenPos - vec2(offsetVal, 0.0)).r > 0.98 ? 0.175 : 0.0;
+    visibility += texture(depthTexture, uSunScreenPos + vec2(0.0, offsetVal)).r > 0.98 ? 0.175 : 0.0;
+    visibility += texture(depthTexture, uSunScreenPos - vec2(0.0, offsetVal)).r > 0.98 ? 0.175 : 0.0;
+    
+    // Apply Henyey-Greenstein phase, exposure, biome tint, and dynamic occlusion visibility
+    vec3 finalRays = raysColor * uExposure * phase * uShaftColor * visibility;
     
     // Volumetric Blend
     vec3 blended = baseColor.rgb + finalRays;

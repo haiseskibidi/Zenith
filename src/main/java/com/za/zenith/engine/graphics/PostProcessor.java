@@ -156,6 +156,7 @@ public class PostProcessor {
         sunShaftsShader.setFloat("uWeight", customWeight);
         sunShaftsShader.setFloat("uDecay", settings.getDecay());
         sunShaftsShader.setFloat("uExposure", customExposure);
+        sunShaftsShader.setFloat("uAspectRatio", (float)screenWidth / (float)screenHeight);
         sunShaftsShader.setInt("uToonSteps", settings.getToonSteps());
         float[] col = settings.getShaftColor();
         sunShaftsShader.setVector3f("uShaftColor", new org.joml.Vector3f(col[0], col[1], col[2]));
