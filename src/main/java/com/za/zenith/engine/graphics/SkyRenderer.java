@@ -68,25 +68,26 @@ public class SkyRenderer {
         glDisable(GL_DEPTH_TEST);
         glDepthMask(false);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending for glow effect
 
         glBindVertexArray(vaoId);
 
-        // 1. Render Sun
-        renderBody(settings.sun, lightDirection, shader);
+        // 1. Render Sun (additive glow blend) - Sun is at negate(lightDirection) pointing up during the day
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        renderBody(settings.sun, new Vector3f(lightDirection).negate(), shader, true);
 
-        // 2. Render Moon
-        renderBody(settings.moon, new Vector3f(lightDirection).negate(), shader);
+        // 2. Render Moon (normal alpha blend, no glow) - Moon is at lightDirection pointing up during the night
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        renderBody(settings.moon, lightDirection, shader, false);
 
         glBindVertexArray(0);
         glDepthMask(true);
         glEnable(GL_DEPTH_TEST);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
-    private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader) {
+    private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader, boolean isSun) {
         int type = "procedural".equals(body.type) ? 1 : 0;
         shader.setInt("uType", type);
+        shader.setBoolean("uIsSun", isSun);
         shader.setVector3f("uOffset", direction);
         shader.setFloat("uScale", body.scale);
         float[] c = body.color;

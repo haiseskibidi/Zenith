@@ -33,6 +33,23 @@ float getNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// Depth-adaptive visibility function to let shafts shine through tree foliage but block in caves
+float getSampleVisibility(float depth) {
+    // If depth is in the viewmodel range (0.0 to 0.05), it is the player's hand/tool.
+    // The hand should NOT occlude the sun rays or atmospheric blinding glow.
+    if (depth <= 0.05) {
+        return 1.0;
+    }
+    if (depth > 0.99) {
+        return 1.0; // Clear sky (full visibility)
+    }
+    if (depth < 0.95) {
+        return 0.0; // Close solid wall / cave (complete occlusion)
+    }
+    // Foliage or far objects: partial visibility (smooth fading between 0.95 and 0.99)
+    return smoothstep(0.95, 0.99, depth) * 0.8 + 0.2;
+}
+
 void main() {
     vec4 baseColor = texture(screenTexture, fragTexCoord);
     
@@ -43,35 +60,38 @@ void main() {
     
     vec3 viewPos = getViewPos(fragTexCoord);
     
-    // Calculate Henyey-Greenstein Scattering Phase Function
-    // g = 0.78 (high forward scattering for realistic sun glare)
+    // Calculate Henyey-Greenstein Scattering Phase Function blended with isotropic term.
+    // This ensures beautiful light shafts are visible from the sides/back (backscattering)
+    // while keeping strong forward scattering (0.78) for the main sun glare.
     float g = 0.78;
     float g2 = g * g;
     float cosTheta = dot(normalize(viewPos), normalize(uSunDirView));
-    float phase = (1.0 - g2) / (4.0 * 3.14159265 * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+    float hgPhase = (1.0 - g2) / (4.0 * 3.14159265 * pow(1.0 + g2 - 2.0 * g * cosTheta, 1.5));
+    float isoPhase = 1.0 / (4.0 * 3.14159265);
+    float phase = mix(isoPhase, hgPhase, 0.55); // 55% directional, 45% ambient volumetric glow
     
     // Smooth Volumetric Raymarching
     int NUM_SAMPLES = 64;
     vec2 textCoords = fragTexCoord;
     
-    // Aspect ratio correction to maintain perfectly circular shafts and sun halo
-    vec2 aspectCorrection = vec2(1.0 / uAspectRatio, 1.0);
-    vec2 dir = (textCoords - uSunScreenPos) * aspectCorrection;
+    // Perfectly accurate aspect ratio conversion to maintain symmetrical circular shafts and sun halo.
+    // Convert texture space vector to physical screen-space vector (width is scaled by uAspectRatio).
+    vec2 dir = (textCoords - uSunScreenPos) * vec2(uAspectRatio, 1.0);
     float dist = length(dir);
     vec2 ndir = dist > 0.0001 ? dir / dist : vec2(0.0);
     
     // Clamp the max radial blur step length to prevent banding lines near screen borders
     float clampedDist = clamp(dist, 0.001, 0.35);
     
-    // Smooth glare shift look-at factor: expand sampling step when looking straight at the sun
+    // For realistic eye-glare, we sample densely and smoothly near the sun center,
+    // which completely eliminates the "black hole" center void and ensures high detail.
+    // When looking directly at the sun, we softly expand the radial blur to simulate eye lens glow.
     float lookAtSun = max(0.0, cosTheta);
-    float glareShift = pow(lookAtSun, 12.0); // 1.0 exactly at the center of the sun
+    float glareShift = pow(lookAtSun, 16.0); // sharp activation peak
+    float finalDist = mix(clampedDist, max(clampedDist, 0.05), glareShift * 0.5);
     
-    // Force a minimum scattering bloom radius of 0.12 screen-width when looking directly at the sun
-    float finalDist = mix(clampedDist, max(clampedDist, 0.12), glareShift);
-    
-    // Convert back from corrected circular space to texture space
-    vec2 deltaTexCoord = (ndir * finalDist * (uDensity * 0.45) / float(NUM_SAMPLES)) / aspectCorrection;
+    // Convert the physical screen-space step vector back to texture space (width is divided by uAspectRatio).
+    vec2 deltaTexCoord = (ndir * finalDist * (uDensity * 0.45) / float(NUM_SAMPLES)) * vec2(1.0 / uAspectRatio, 1.0);
     
     // Dithering: randomize start offset using Interleaved Gradient Noise to dissolve banding
     float noise = getNoise(textCoords * 100.0);
@@ -94,9 +114,12 @@ void main() {
         if (depth > 0.98) {
             float brightness = dot(sampleColor, vec3(0.299, 0.587, 0.114));
             
-            // 100% Realistic smooth scattering without toon/anime quantization steps
-            float intensity = smoothstep(0.35, 0.75, brightness);
+            // Highly sensitive, super prominent crepuscular rays propped by smoothstep
+            float intensity = smoothstep(0.35, 0.8, brightness);
             raysColor += sampleColor * intensity * uWeight * illuminationDecay;
+        } else if (depth <= 0.05) {
+            // Viewmodel hand/tool: does NOT block the sun ray propagation.
+            // We just let the light pass through it cleanly without any decay!
         } else {
             // Occlusion: foreground geometry (foliage, blocks) blocks the sun ray propagation
             illuminationDecay *= 0.88;
@@ -110,14 +133,19 @@ void main() {
     float visibility = 0.0;
     float offsetVal = 0.012; // Radius around the sun disk to probe
     
-    visibility += texture(depthTexture, uSunScreenPos).r > 0.98 ? 0.3 : 0.0;
-    visibility += texture(depthTexture, uSunScreenPos + vec2(offsetVal, 0.0)).r > 0.98 ? 0.175 : 0.0;
-    visibility += texture(depthTexture, uSunScreenPos - vec2(offsetVal, 0.0)).r > 0.98 ? 0.175 : 0.0;
-    visibility += texture(depthTexture, uSunScreenPos + vec2(0.0, offsetVal)).r > 0.98 ? 0.175 : 0.0;
-    visibility += texture(depthTexture, uSunScreenPos - vec2(0.0, offsetVal)).r > 0.98 ? 0.175 : 0.0;
+    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos).r) * 0.3;
+    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos + vec2(offsetVal, 0.0)).r) * 0.175;
+    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos - vec2(offsetVal, 0.0)).r) * 0.175;
+    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos + vec2(0.0, offsetVal)).r) * 0.175;
+    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos - vec2(0.0, offsetVal)).r) * 0.175;
     
     // Apply Henyey-Greenstein phase, exposure, biome tint, and dynamic occlusion visibility
     vec3 finalRays = raysColor * uExposure * phase * uShaftColor * visibility;
+    
+    // Apply non-linear contrast enhancement to final shafts.
+    // This sharpens light beams and deepens ambient crepuscular shadows (dark rays),
+    // preventing details from washing out even when looking directly at the sun.
+    finalRays = pow(finalRays, vec3(1.45)) * 1.65;
     
     // Volumetric Blend
     vec3 blended = baseColor.rgb + finalRays;

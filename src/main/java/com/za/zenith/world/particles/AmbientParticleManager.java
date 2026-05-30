@@ -129,9 +129,12 @@ public class AmbientParticleManager {
                 respawnParticle(p, camPos, camDir, settings);
             }
 
-            // Animate particle position (gentle floating)
-            p.pos.y -= deltaTime * 0.12f * p.speed; // Slow fall
-            p.age += deltaTime * settings.getSpeedMultiplier() * p.speed;
+            // Animate particle position (gentle Brownian drift instead of slow fall)
+            float speedMult = settings.getSpeedMultiplier() * p.speed;
+            p.pos.x += (float)Math.sin(p.age * 0.7f) * 0.08f * deltaTime * p.speed;
+            p.pos.y += (float)Math.cos(p.age * 0.5f) * 0.05f * deltaTime * p.speed;
+            p.pos.z += (float)Math.sin(p.age * 0.4f) * 0.08f * deltaTime * p.speed;
+            p.age += deltaTime * speedMult;
 
             // Sample voxel lighting (Sunlight & Blocklight)
             int px = (int) Math.floor(p.pos.x);

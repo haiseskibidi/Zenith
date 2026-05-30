@@ -194,23 +194,6 @@ public class RenderPipeline {
             viewMatrix.transformDirection(sunDir, viewDir);
             viewDir.normalize();
             
-            org.joml.Vector4f sunViewPos = new org.joml.Vector4f(viewDir.x * 100.0f, viewDir.y * 100.0f, viewDir.z * 100.0f, 1.0f);
-            org.joml.Vector4f sunClipPos = new org.joml.Vector4f();
-            camera.getProjectionMatrix().transform(sunViewPos, sunClipPos);
-            
-            boolean sunVisible = sunClipPos.w > 0.0f && sunClipPos.z > 0.0f;
-            org.joml.Vector2f sunScreenPos = new org.joml.Vector2f(0.5f, 0.5f);
-            
-            if (sunVisible) {
-                float ndcX = sunClipPos.x / sunClipPos.w;
-                float ndcY = sunClipPos.y / sunClipPos.w;
-                sunScreenPos.set(ndcX * 0.5f + 0.5f, ndcY * 0.5f + 0.5f);
-                // Expand bounds to [-0.6, 1.6] for smooth screen-space and sunset crepuscular transitions
-                if (sunScreenPos.x < -0.6f || sunScreenPos.x > 1.6f || sunScreenPos.y < -0.6f || sunScreenPos.y > 1.6f) {
-                    sunVisible = false;
-                }
-            }
-            
             // Calculate Height Attenuation (piecewise function for day/sunset crepuscular rays)
             float heightFactor = 0.0f;
             float sunHeight = sunDir.y;
@@ -221,20 +204,45 @@ public class RenderPipeline {
                 heightFactor = Math.max(0.0f, 1.0f + sunHeight / 0.25f);
             }
 
-            if (heightFactor <= 0.0f) {
-                sunVisible = false;
+            boolean sunVisible = heightFactor > 0.0f;
+            org.joml.Vector2f sunScreenPos = new org.joml.Vector2f(0.5f, 0.5f);
+            
+            if (sunVisible) {
+                // Sun must be in front of the camera (viewDir.z < 0.0f)
+                if (viewDir.z < 0.0f) {
+                    org.joml.Vector4f sunViewPos = new org.joml.Vector4f(viewDir.x * 100.0f, viewDir.y * 100.0f, viewDir.z * 100.0f, 1.0f);
+                    org.joml.Vector4f sunClipPos = new org.joml.Vector4f();
+                    camera.getProjectionMatrix().transform(sunViewPos, sunClipPos);
+                    
+                    if (sunClipPos.w > 0.0f) {
+                        float ndcX = sunClipPos.x / sunClipPos.w;
+                        float ndcY = sunClipPos.y / sunClipPos.w;
+                        sunScreenPos.set(ndcX * 0.5f + 0.5f, ndcY * 0.5f + 0.5f);
+                        
+                        // Soft fade-out bounds: only enable if close to viewport
+                        if (sunScreenPos.x < -0.7f || sunScreenPos.x > 1.7f || sunScreenPos.y < -0.7f || sunScreenPos.y > 1.7f) {
+                            sunVisible = false;
+                        }
+                    } else {
+                        sunVisible = false;
+                    }
+                } else {
+                    sunVisible = false;
+                }
             }
             
             if (sunVisible) {
                 // Calculate Dynamic Blinding (Eye Adaptation / Glare)
                 Vector3f cameraDir = camera.getDirection();
                 float cosAngle = cameraDir.dot(sunDir);
-                float glareFactor = (float) Math.pow(Math.max(0.0f, cosAngle), 12.0f);
-                float glareMultiplier = 1.0f + glareFactor * 4.0f;
+                // Highly directional glare factor (only when looking straight at the sun)
+                float glareFactor = (float) Math.pow(Math.max(0.0f, cosAngle), 16.0f);
+                float exposureMultiplier = 1.0f + glareFactor * 0.9f; // Max 1.9x glare flare
+                float weightMultiplier = 1.0f + glareFactor * 0.6f; // Max 1.6x ray density
 
                 // Combine for realistic exposure and weight
-                float customExposure = sunShaftsSettings.getExposure() * (0.15f + 0.85f * heightFactor) * glareMultiplier;
-                float customWeight = sunShaftsSettings.getWeight() * (0.25f + 0.75f * heightFactor) * (1.0f + glareFactor * 1.5f);
+                float customExposure = sunShaftsSettings.getExposure() * (0.15f + 0.6f * heightFactor) * exposureMultiplier;
+                float customWeight = sunShaftsSettings.getWeight() * (0.25f + 0.5f * heightFactor) * weightMultiplier;
 
                 sunShaftsFramebuffer.bind();
                 org.joml.Matrix4f invProjection = new org.joml.Matrix4f(camera.getProjectionMatrix()).invert();
@@ -347,14 +355,42 @@ public class RenderPipeline {
         Vector3f lightDir = RenderContext.getVector();
         lightDir.set(0.2f, -(float)Math.cos(angle), (float)Math.sin(angle)).normalize();
         
-        float sunIntensity = Math.max(0.0f, (float)Math.cos(angle));
-        float moonIntensity = Math.max(0.0f, -(float)Math.cos(angle));
+        float cosVal = (float)Math.cos(angle);
+        float sunIntensity = Math.max(0.0f, cosVal);
+        float moonIntensity = Math.max(0.0f, -cosVal);
         
         Vector3f finalLightDir = RenderContext.getVector().set(lightDir);
         if (moonIntensity > sunIntensity) finalLightDir.negate();
         
-        Vector3f ambCol = RenderContext.getVector().set(settings.ambientColor[0], settings.ambientColor[1], settings.ambientColor[2]);
-        Vector3f currentAmbient = ambCol.mul(0.2f + 0.8f * sunIntensity + 0.3f * moonIntensity);
+        // Define key colors
+        Vector3f daySunColor = RenderContext.getVector().set(settings.sunLightColor[0], settings.sunLightColor[1], settings.sunLightColor[2]);
+        Vector3f goldenSunColor = RenderContext.getVector().set(1.0f, 0.58f, 0.12f);
+        Vector3f moonLightCol = RenderContext.getVector().set(settings.moonLightColor[0], settings.moonLightColor[1], settings.moonLightColor[2]);
+        
+        // Interpolate Sun Light Color during Golden Hour
+        Vector3f currentSunColor = RenderContext.getVector().set(daySunColor);
+        if (cosVal >= 0.0f && cosVal < 0.25f) {
+            float t = cosVal / 0.25f;
+            float goldenWeight = 1.0f - t; // stronger at the horizon (cos = 0)
+            daySunColor.lerp(goldenSunColor, goldenWeight * 0.95f);
+            currentSunColor.set(daySunColor);
+        } else if (cosVal < 0.0f) {
+            currentSunColor.set(0.0f, 0.0f, 0.0f); // sun is down
+        }
+        
+        // Interpolate Ambient Color to cold blue-violet during Blue Hour
+        Vector3f baseAmbient = RenderContext.getVector().set(settings.ambientColor[0], settings.ambientColor[1], settings.ambientColor[2]);
+        Vector3f blueHourAmbient = RenderContext.getVector().set(0.08f, 0.10f, 0.24f);
+        Vector3f currentAmbient = RenderContext.getVector().set(baseAmbient);
+        
+        if (cosVal < 0.0f && cosVal >= -0.15f) {
+            // Blue Hour Ambient
+            float t = (cosVal - (-0.15f)) / 0.15f; // [0, 1]
+            blueHourAmbient.lerp(baseAmbient, t);
+            currentAmbient.set(blueHourAmbient).mul(0.35f);
+        } else {
+            currentAmbient.mul(0.2f + 0.8f * sunIntensity + 0.3f * moonIntensity);
+        }
         
         state.updateLights(finalLightDir, currentAmbient);
 
@@ -362,17 +398,51 @@ public class RenderPipeline {
         com.za.zenith.world.lighting.LightManager.update(state.getWorld(), state.getWorld().getPlayer());
         
         // Add Sun/Moon as a directional light (Zero Alloc)
-        sunSource.data.color.set(settings.sunLightColor[0], settings.sunLightColor[1], settings.sunLightColor[2])
-                .mul(sunIntensity)
-                .add(RenderContext.getVector().set(settings.moonLightColor[0], settings.moonLightColor[1], settings.moonLightColor[2]).mul(moonIntensity * 0.5f));
+        Vector3f lightColorResult = RenderContext.getVector();
+        if (sunIntensity > 0.0f) {
+            lightColorResult.set(currentSunColor).mul(sunIntensity);
+        } else {
+            lightColorResult.set(moonLightCol).mul(moonIntensity * 0.5f);
+        }
+        
+        sunSource.data.color.set(lightColorResult);
         sunSource.direction.set(finalLightDir);
         com.za.zenith.world.lighting.LightManager.addDirectionalLight(sunSource);
     }
 
     private Vector3f getSkyColor(SceneState state) {
         float cos = (float) Math.cos(((state.getWorld().getWorldTime() / com.za.zenith.world.WorldSettings.getInstance().dayLength) - 0.25f) * Math.PI * 2.0);
-        float sunInt = Math.max(0.0f, cos);
-        return RenderContext.getVector().set(0.02f, 0.02f, 0.05f).lerp(RenderContext.getVector().set(0.6f, 0.8f, 1.0f), sunInt);
+        
+        Vector3f nightColor = RenderContext.getVector().set(0.012f, 0.012f, 0.024f);
+        Vector3f blueHourColor = RenderContext.getVector().set(0.04f, 0.06f, 0.22f);
+        Vector3f goldenHourColor = RenderContext.getVector().set(0.85f, 0.52f, 0.25f);
+        Vector3f dayColor = RenderContext.getVector().set(0.50f, 0.73f, 0.98f);
+        
+        Vector3f result = RenderContext.getVector();
+        
+        if (cos < -0.15f) {
+            // Deep Night
+            result.set(nightColor);
+        } else if (cos < 0.0f) {
+            // Blue Hour (interpolating from Night to Blue Hour)
+            float t = (cos - (-0.15f)) / 0.15f; // [0, 1]
+            nightColor.lerp(blueHourColor, t);
+            result.set(nightColor);
+        } else if (cos < 0.25f) {
+            // Golden Hour (interpolating from Blue Hour/Dawn to Day)
+            float t = cos / 0.25f; // [0, 1]
+            // We want a gorgeous golden peak around cos = 0.05 - 0.12, so we shape it with smoothstep
+            float goldenWeight = (float) Math.sin(t * Math.PI); // peak at 0.5 (cos = 0.125)
+            
+            Vector3f baseMix = RenderContext.getVector().set(blueHourColor).lerp(dayColor, t);
+            baseMix.lerp(goldenHourColor, goldenWeight * 0.85f);
+            result.set(baseMix);
+        } else {
+            // Daytime
+            result.set(dayColor);
+        }
+        
+        return result;
     }
 
     public void setBreakingBlock(com.za.zenith.world.BlockPos pos, Block block, float progress, float timer, Vector3f localHitPoint, Vector3f localWeakSpot, Vector3f color, java.util.List<org.joml.Vector4f> history, World world) {

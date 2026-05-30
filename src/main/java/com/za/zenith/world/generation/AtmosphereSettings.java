@@ -20,11 +20,11 @@ public class AtmosphereSettings {
     }
 
     public static class SunShaftsSettings {
-        private boolean enabled = false;
+        private boolean enabled = true;
         private float density = 0.92f;
-        private float weight = 0.58f;
-        private float decay = 0.97f;
-        private float exposure = 0.35f;
+        private float weight = 0.45f;
+        private float decay = 0.955f;
+        private float exposure = 0.22f;
 
         @SerializedName("toon_steps")
         private int toonSteps = 4;

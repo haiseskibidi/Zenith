@@ -1,5 +1,5 @@
 {
-  "initialTime": 6000,
+  "initialTime": 12000.0,
   "dayCycleSpeed": 10.0,
   "dayLength": 240000,
   "sunriseTime": 0,

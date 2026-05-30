@@ -20,18 +20,18 @@
     "sun_shafts": {
       "enabled": true,
       "density": 0.92,
-      "weight": 0.58,
-      "decay": 0.97,
-      "exposure": 0.35,
+      "weight": 0.45,
+      "decay": 0.955,
+      "exposure": 0.22,
       "toon_steps": 4,
       "shaft_color": [1.0, 0.92, 0.75]
     },
     "ambient_particles": {
       "enabled": true,
       "particle_type": "zenith:dust_motes",
-      "density": 0.04,
-      "speed_multiplier": 0.25,
-      "scale_range": [0.08, 0.22],
+      "density": 0.02,
+      "speed_multiplier": 0.15,
+      "scale_range": [0.015, 0.045],
       "glowing_color": [1.0, 0.88, 0.6],
       "fade_in_sunlight": 12
     }
