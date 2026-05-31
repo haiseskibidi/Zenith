@@ -160,6 +160,14 @@ public class BlockDataLoader extends AbstractJsonLoader<BlockDefinition> {
                 def.setPlacementType(com.za.zenith.world.blocks.PlacementType.valueOf(obj.get("placement").getAsString().toUpperCase()));
             }
 
+            if (obj.has("tinted_faces") && obj.get("tinted_faces").isJsonArray()) {
+                java.util.List<String> tintedFaces = new java.util.ArrayList<>();
+                for (JsonElement faceEl : obj.getAsJsonArray("tinted_faces")) {
+                    tintedFaces.add(faceEl.getAsString());
+                }
+                def.setTintedFaces(tintedFaces);
+            }
+
             if (obj.has("tags") && obj.get("tags").isJsonArray()) {
                 JsonArray tagsArr = obj.getAsJsonArray("tags");
                 for (JsonElement tagEl : tagsArr) {

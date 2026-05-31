@@ -31,18 +31,49 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
     public static final int FLAG_FULL_CUBE = 16;
     public static final int FLAG_TRANSLUCENT = 32;
 
+    @SerializedName("tinted_faces")
+    private List<String> tintedFaces = null;
+    private transient int tintedFacesMask = 63; // 111111 binary, all 6 faces tinted by default
+
     public void computeFlags() {
         flags = 0;
         if (solid) flags |= FLAG_SOLID;
         if (transparent) flags |= FLAG_TRANSPARENT;
         if (translucent) flags |= FLAG_TRANSLUCENT;
         if (identifier != null && identifier.toString().contains("leaves")) flags |= FLAG_LEAVES;
-        if (tinted || tags.contains("zenith:tinted")) flags |= FLAG_TINTED;
+        if (tinted || tags.contains("zenith:tinted")) {
+            flags |= FLAG_TINTED;
+            if (tintedFaces != null) {
+                tintedFacesMask = 0;
+                for (String face : tintedFaces) {
+                    switch (face.toLowerCase()) {
+                        case "north" -> tintedFacesMask |= (1 << 0);
+                        case "south" -> tintedFacesMask |= (1 << 1);
+                        case "east" -> tintedFacesMask |= (1 << 2);
+                        case "west" -> tintedFacesMask |= (1 << 3);
+                        case "top", "up" -> tintedFacesMask |= (1 << 4);
+                        case "bottom", "down" -> tintedFacesMask |= (1 << 5);
+                        case "all" -> tintedFacesMask = 63;
+                        case "sides" -> tintedFacesMask |= 15; // North, South, East, West
+                    }
+                }
+            } else {
+                tintedFacesMask = 63;
+            }
+        }
         if (fullCube) flags |= FLAG_FULL_CUBE;
     }
 
     public boolean is(int flag) {
         return (flags & flag) != 0;
+    }
+
+    public boolean isFaceTinted(int face) {
+        return is(FLAG_TINTED) && (tintedFacesMask & (1 << face)) != 0;
+    }
+
+    public void setTintedFaces(List<String> tintedFaces) {
+        this.tintedFaces = tintedFaces;
     }
 
     @Override

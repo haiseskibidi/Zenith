@@ -510,7 +510,7 @@ public class ChunkMeshGenerator {
                 float faceBlockType = (float)block.getType();
                 if (isTranslucent) {
                     faceBlockType = -(faceBlockType + 2000.0f);
-                } else if (def.isTinted()) {
+                } else if (def.isFaceTinted(face)) {
                     faceBlockType = -(faceBlockType + 1.0f);
                 }
                 float overlayLayer = -1.0f;
@@ -580,7 +580,7 @@ public class ChunkMeshGenerator {
 
                     float faceBlockType = (float)nBlock.getType();
                     float overlayLayer = -1.0f;
-                    if (nDef.isTinted()) {
+                    if (nDef.isFaceTinted(oppFace)) {
                         faceBlockType = -(faceBlockType + 1.0f);
                         if (nDef.getTextures() != null) {
                             String innerKey = nDef.getTextures().getInner();
@@ -751,11 +751,8 @@ public class ChunkMeshGenerator {
                                     float overlayLayer = -1.0f;
                                     if (isTranslucent) {
                                         faceBlockType = -(faceBlockType + 2000.0f);
-                                    } else if (def != null && def.is(BlockDefinition.FLAG_TINTED)) {
-                                        boolean isGrassBlock = def.getIdentifier().getPath().contains("grass_block");
-                                        if (!isGrassBlock || face <= 4) { 
-                                            faceBlockType = -(faceBlockType + 1.0f);
-                                        }
+                                    } else if (def != null && def.isFaceTinted(face)) {
+                                        faceBlockType = -(faceBlockType + 1.0f);
 
                                         if (def.getTextures() != null) {
                                             String innerKey = def.getTextures().getInner();

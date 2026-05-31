@@ -15,5 +15,9 @@
   "supportScavenge": true,
   "tags": [
     "zenith:tinted"
+  ],
+  "tinted_faces": [
+    "top",
+    "sides"
   ]
 }
