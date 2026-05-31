@@ -52,10 +52,6 @@ public class MeshPool {
             String msg = "MeshPool: Buffer wrap-around! Switching active buffer to index " + activeIndex + 
                          ". Version incremented to " + version + ". Initiating seamless chunk updates...";
             Logger.warn(msg);
-            try (java.io.FileWriter fw = new java.io.FileWriter("mesh_pool_logs.txt", true);
-                 java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
-                pw.println(new java.util.Date() + " - " + msg);
-            } catch (Exception e) {}
         }
 
         int currentVOffset = vertexOffset;

@@ -97,9 +97,6 @@ public class InteractionInputHandler {
                 miningController.mine(world, player, hitPos, blockType, blockDef, currentStack, currentItem, isNewLeftClick, localHit, raycast.getNormal());
             }
         } else {
-            if (miningController.getBreakingBlockPos() != null) {
-                miningController.stopMining();
-            }
             if (raycast.isHit()) {
                 Block block = world.getBlock(raycast.getBlockPos());
                 float rx = raycast.getHitPoint().x - raycast.getBlockPos().x();

@@ -27,6 +27,15 @@ public class LightEngine {
     private static final long WINDOW_DURATION_MS = 20; // 1 tick (approx. 20ms)
 
     public void enqueueLightUpdate(BlockPos pos) {
+        enqueueLightUpdate(pos, false);
+    }
+
+    public void enqueueLightUpdate(BlockPos pos, boolean priority) {
+        if (priority) {
+            updateQueue.offer(pos);
+            return;
+        }
+
         long now = System.currentTimeMillis();
         if (now - lastSyncUpdateWindowStart > WINDOW_DURATION_MS) {
             lastSyncUpdateWindowStart = now;
@@ -49,6 +58,18 @@ public class LightEngine {
         updateQueue.offer(pos);
         if (isProcessing.compareAndSet(false, true)) {
             submitProcessTask();
+        }
+    }
+
+    public void processQueueSync() {
+        if (updateQueue.isEmpty()) return;
+        List<BlockPos> batch = new ArrayList<>();
+        BlockPos p;
+        while ((p = updateQueue.poll()) != null) {
+            batch.add(p);
+        }
+        if (!batch.isEmpty()) {
+            onBlocksChanged(batch);
         }
     }
 

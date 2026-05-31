@@ -188,13 +188,7 @@ public class NotificationManager {
         int plaqueX = pos[0];
         int plaqueY = pos[1];
 
-        // 1. Render Plaque Background
-        float[] bg = cfg.backgroundColor != null ? cfg.backgroundColor : new float[]{0.05f, 0.05f, 0.05f, 0.8f};
-        renderer.getPrimitivesRenderer().renderRect(plaqueX, plaqueY, plaqueWidth, plaqueHeight, sw, sh, bg[0], bg[1], bg[2], bg[3] * alpha);
-        
-        // 2. Render Accent Line (Top)
-        float[] accentCol = cfg.color != null ? cfg.color : new float[]{1.0f, 0.2f, 0.2f, 1.0f};
-        renderer.getPrimitivesRenderer().renderRect(plaqueX, plaqueY, plaqueWidth, 2, sw, sh, accentCol[0], accentCol[1], accentCol[2], accentCol[3] * alpha);
+        // Background and accent line removed as requested by the user to avoid black box with red stripe artifacts
 
         // 3. Render Blueprint Icon
         int textX = plaqueX + padding;

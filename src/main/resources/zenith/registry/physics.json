@@ -17,7 +17,7 @@
   "baseMiningCooldown": 0.5,
   "mouseSensitivity": 0.002,
   "itemAttractionRadius": 3.2,
-  "itemPickupRadius": 0.4,
+  "itemPickupRadius": 1.5,
   "itemAttractionForce": 12.0,
   "itemMergeRadius": 1.2,
   "itemMergeInterval": 0.5,

@@ -13,7 +13,7 @@ import java.util.List;
 public class ItemEntity extends Entity {
     private final ItemStack stack;
     private float age;
-    private float pickupDelay = 1.0f; // 1 second before it can be picked up
+    private float pickupDelay = 0.15f; // 150ms before it can be picked up
     private final Vector3f angularVelocity = new Vector3f();
     private boolean isBeingAttracted = false;
     private boolean isLockedOnPlayer = false; // "Мертвая хватка"
@@ -43,6 +43,8 @@ public class ItemEntity extends Entity {
             return;
         }
 
+        if (pickupDelay > 0) pickupDelay -= deltaTime;
+
         if (isSleeping) {
             processSleeping(deltaTime, world);
             return;
@@ -56,8 +58,6 @@ public class ItemEntity extends Entity {
             world.updateItemSpatial(this, lastChunkPos, newPos);
             lastChunkPos = newPos;
         }
-
-        if (pickupDelay > 0) pickupDelay -= deltaTime;
 
         // 0. ITEM MERGING (Every frame while moving, less when sleeping)
         mergeTimer += deltaTime;
@@ -161,11 +161,11 @@ public class ItemEntity extends Entity {
             }
         }
 
-        if (world.getWorldTime() % 1.5f < deltaTime) {             if (world.getBlock((int)Math.floor(position.x), (int)Math.floor(position.y - 0.05f), (int)Math.floor(position.z)).isAir()) {
-                isSleeping = false;
-                onGround = false;
-                sleepTimer = 0;
-             }
+        // Instant wake up if the block below is destroyed or is no longer solid (e.g. grass, water, air)
+        if (!world.getBlock((int)Math.floor(position.x), (int)Math.floor(position.y - 0.05f), (int)Math.floor(position.z)).isSolid()) {
+            isSleeping = false;
+            onGround = false;
+            sleepTimer = 0.0f;
         }
     }
 
@@ -191,6 +191,10 @@ public class ItemEntity extends Entity {
     
     public boolean canBePickedUp() {
         return pickupDelay <= 0;
+    }
+    
+    public void setPickupDelay(float pickupDelay) {
+        this.pickupDelay = pickupDelay;
     }
     
     public float getAge() {

@@ -80,11 +80,11 @@
 - **WorldSettings.java**: Контейнер настроек освещения и времени.
 
 ### com.za.zenith.world
-### com.za.zenith.world.World (UPDATED Zenith v1.0)
+### com.za.zenith.world.World (UPDATED Zenith v2.6)
 Назначение: Управление состоянием мира и сущностями.
 Функции: 
 - **Async Pipeline**: Управление асинхронным конвейером (`chunkGenExecutor`, `lightExecutor`). 
-- **Spatial Tracking**: Внедрена `itemSpatialMap` для $O(1)$ поиска предметов в чанках. 
+- **Spatial Tracking & Safe Cleanup**: Внедрена `itemSpatialMap` для $O(1)$ поиска предметов в чанках. Очистка пространственной карты при удалении или подборе предметов опирается на точное зарегистрированное поле `item.getLastChunkPos()`, исключая появление графических фантомов.
 - **Zero-Allocation**: Оптимизирован цикл обновления (`update`) — устранены все аллокации векторов и объектов. 
 - **L1 Chunk Cache**: Ускоренный доступ к данным чанков.
 

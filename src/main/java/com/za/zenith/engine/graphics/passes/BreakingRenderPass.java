@@ -17,6 +17,32 @@ public class BreakingRenderPass implements RenderPass {
 
     @Override
     public void render(SceneState state, Shader shader, ShaderStateManager stateManager, DynamicTextureAtlas atlas, Renderer wrapper, OverlayRenderSystem system) {
+        World world = state.getWorld();
+        
+        // 1. Render recently broken blocks' hole meshes to prevent X-Ray while neighbor chunks meshes update asynchronously
+        var recentlyBroken = system.getRecentlyBrokenHoles();
+        if (!recentlyBroken.isEmpty()) {
+            stateManager.setBoolean("uIsBatch", false);
+            stateManager.setFloat("uSwayOverride", -1.0f);
+            stateManager.setBoolean("uIsProxy", false);
+            
+            for (var entry : recentlyBroken.entrySet()) {
+                var bPos = entry.getKey();
+                var broken = entry.getValue();
+                if (broken.mesh != null) {
+                    Chunk c = world.getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(bPos.x(), bPos.z()));
+                    float spawnTime = (c != null) ? c.getFirstSpawnTime() : -100.0f;
+                    stateManager.setFloat("uChunkSpawnTime", spawnTime);
+                    
+                    Matrix4f model = RenderContext.getMatrix();
+                    model.translate(bPos.x(), bPos.y(), bPos.z());
+                    stateManager.setMatrix4f("model", model);
+                    
+                    broken.mesh.render(shader);
+                }
+            }
+        }
+
         if (system.getBreakingPos() == null) return;
         
         // Skip rendering overlay for blocks under cursor that haven't been hit yet
@@ -27,7 +53,6 @@ public class BreakingRenderPass implements RenderPass {
         stateManager.setBoolean("uIsBatch", false);
         stateManager.setFloat("uSwayOverride", -1.0f);
         
-        World world = state.getWorld();
         // Match chunk spawn time for visual alignment
         Chunk c = world.getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(system.getBreakingPos().x(), system.getBreakingPos().z()));
         float spawnTime = (c != null) ? c.getFirstSpawnTime() : -100.0f;

@@ -319,6 +319,8 @@ public class GameLoop {
     }
     
     private void render(float alpha, float deltaTime) {
+        world.getLightEngine().processQueueSync();
+        
         fpsTimer += deltaTime;
         fpsCounter++;
         if (fpsTimer >= 1.0f) {

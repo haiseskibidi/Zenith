@@ -57,7 +57,13 @@ public class LightManager {
 
         BlockDefinition def = BlockRegistry.getBlock(blockType);
         if (def != null && def.getEmission() > 0) {
-            LightSource source = createSource(def.getLightData(), new Vector3f(pos.x() + 0.5f, pos.y() + 0.5f, pos.z() + 0.5f), new Vector3f(0, -1, 0), (float)org.lwjgl.glfw.GLFW.glfwGetTime());
+            LightData ld = def.getLightData();
+            if (ld == null) {
+                ld = new LightData();
+                ld.intensity = (float) def.getEmission() / 15.0f * 2.0f;
+                ld.radius = def.getEmission();
+            }
+            LightSource source = createSource(ld, new Vector3f(pos.x() + 0.5f, pos.y() + 0.5f, pos.z() + 0.5f), new Vector3f(0, -1, 0), (float)org.lwjgl.glfw.GLFW.glfwGetTime());
             activeEmitters.put(new com.za.zenith.world.BlockPos(pos.x(), pos.y(), pos.z()), source);
         } else {
             activeEmitters.remove(pos);
@@ -79,7 +85,13 @@ public class LightManager {
                             BlockDefinition def = BlockRegistry.getBlock(type);
                             if (def != null && def.getEmission() > 0) {
                                 com.za.zenith.world.BlockPos pos = chunk.toWorldPos(x, y, z);
-                                LightSource source = createSource(def.getLightData(), new Vector3f(pos.x() + 0.5f, pos.y() + 0.5f, pos.z() + 0.5f), new Vector3f(0, -1, 0), (float)org.lwjgl.glfw.GLFW.glfwGetTime());
+                                LightData ld = def.getLightData();
+                                if (ld == null) {
+                                    ld = new LightData();
+                                    ld.intensity = (float) def.getEmission() / 15.0f * 2.0f;
+                                    ld.radius = def.getEmission();
+                                }
+                                LightSource source = createSource(ld, new Vector3f(pos.x() + 0.5f, pos.y() + 0.5f, pos.z() + 0.5f), new Vector3f(0, -1, 0), (float)org.lwjgl.glfw.GLFW.glfwGetTime());
                                 activeEmitters.put(pos, source);
                             }
                         }
@@ -99,6 +111,9 @@ public class LightManager {
     }
 
     private static LightSource createSource(LightData data, Vector3f pos, Vector3f dir, float time) {
+        if (data == null) {
+            data = new LightData();
+        }
         LightSource ls = new LightSource(data, pos);
         ls.direction.set(dir);
         if (data.flicker) {

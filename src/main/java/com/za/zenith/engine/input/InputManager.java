@@ -306,6 +306,7 @@ public class InputManager {
             .add(downDir.mul(0.2f));
 
         com.za.zenith.entities.ItemEntity itemEntity = new com.za.zenith.entities.ItemEntity(spawnPos, toDrop);
+        itemEntity.setPickupDelay(1.5f); // 1.5s delay for manually dropped items to avoid instant pickup
 
         float throwStrength = 6.0f / toDrop.getItem().getWeight();
         itemEntity.getVelocity().set(lookDirV).mul(throwStrength);

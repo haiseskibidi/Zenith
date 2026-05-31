@@ -46,6 +46,17 @@ public class OverlayRenderSystem {
     private final Map<com.za.zenith.world.BlockPos, Mesh> persistentHoleCache = new java.util.HashMap<>();
     private final Map<com.za.zenith.world.BlockPos, Mesh> persistentProxyCache = new java.util.HashMap<>();
 
+    // Recently broken holes (prevents X-Ray holes during asynchronous chunk meshing)
+    public static class RecentlyBrokenHole {
+        public final Mesh mesh;
+        public float remainingTime;
+        public RecentlyBrokenHole(Mesh mesh, float time) {
+            this.mesh = mesh;
+            this.remainingTime = time;
+        }
+    }
+    private final Map<com.za.zenith.world.BlockPos, RecentlyBrokenHole> recentlyBrokenHoles = new java.util.HashMap<>();
+
     // Render pipeline/passes
     private final ShaderStateManager stateManager = new ShaderStateManager();
     private final com.za.zenith.engine.graphics.passes.RenderPass[] passes = new com.za.zenith.engine.graphics.passes.RenderPass[] {
@@ -57,8 +68,24 @@ public class OverlayRenderSystem {
     };
     private RaycastResult currentHighlightedBlock;
 
+    private World lastWorld;
+
     public void setBreakingBlock(com.za.zenith.world.BlockPos pos, Block block, float progress, float timer, Vector3f localHitPoint, Vector3f localWeakSpot, Vector3f color, List<Vector4f> history, World world, DynamicTextureAtlas atlas) {
+        if (world != null) {
+            this.lastWorld = world;
+        }
         if (block == null) {
+            if (this.breakingPos != null && this.breakingProgress >= 0.99f) {
+                if (this.holeMesh == null && lastWorld != null && atlas != null) {
+                    this.holeMesh = ChunkMeshGenerator.generateHoleMesh(this.breakingPos, lastWorld, atlas);
+                }
+                if (this.holeMesh != null) {
+                    // Move hole mesh to recently broken cache to prevent X-Ray while chunk builds
+                    recentlyBrokenHoles.put(this.breakingPos, new RecentlyBrokenHole(this.holeMesh, 0.35f));
+                    this.holeMesh = null;
+                    this.holePos = null;
+                }
+            }
             this.breakingPos = null;
             this.currentBreakingBlock = null;
             return;
@@ -97,9 +124,38 @@ public class OverlayRenderSystem {
         this.previewPos = pos;
     }
 
+    public void updateRecentlyBrokenHoles(float deltaTime, World world) {
+        if (recentlyBrokenHoles.isEmpty()) return;
+        var it = recentlyBrokenHoles.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            var bPos = entry.getKey();
+            
+            // Check if the chunk containing this block has completed its mesh update
+            boolean meshIsUpToDate = false;
+            if (world != null) {
+                com.za.zenith.world.chunks.Chunk chunk = world.getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(bPos.x(), bPos.z()));
+                if (chunk != null && !chunk.needsMeshUpdate() && chunk.getCurrentMeshResult() != null) {
+                    meshIsUpToDate = true;
+                }
+            }
+            
+            entry.getValue().remainingTime -= deltaTime;
+            if (entry.getValue().remainingTime <= 0.0f || meshIsUpToDate) {
+                if (entry.getValue().mesh != null) {
+                    entry.getValue().mesh.cleanup();
+                }
+                it.remove();
+            }
+        }
+    }
+
     public void render(SceneState state, Shader shader, DynamicTextureAtlas atlas, RaycastResult highlightedBlock, Renderer wrapper) {
         this.currentHighlightedBlock = highlightedBlock;
         stateManager.bind(shader);
+        
+        // Update recently broken holes (fade-out Z-fighting guard)
+        updateRecentlyBrokenHoles(state.getDeltaTime(), state.getWorld());
         
         for (com.za.zenith.engine.graphics.passes.RenderPass pass : passes) {
             stateManager.resetToBaseline();
@@ -113,6 +169,10 @@ public class OverlayRenderSystem {
         itemMeshCache.values().forEach(Mesh::cleanup);
         itemMeshCache.clear();
         cleanupPersistentCache();
+        for (RecentlyBrokenHole rbh : recentlyBrokenHoles.values()) {
+            if (rbh.mesh != null) rbh.mesh.cleanup();
+        }
+        recentlyBrokenHoles.clear();
     }
 
     private void cleanupPersistentCache() {
@@ -128,10 +188,15 @@ public class OverlayRenderSystem {
         if (previewMesh != null) previewMesh.cleanup();
         cleanupPersistentCache();
         for (Mesh m : itemMeshCache.values()) m.cleanup();
+        for (RecentlyBrokenHole rbh : recentlyBrokenHoles.values()) {
+            if (rbh.mesh != null) rbh.mesh.cleanup();
+        }
+        recentlyBrokenHoles.clear();
         carvingRenderer.cleanup();
     }
 
     // Getters and Setters
+    public Map<com.za.zenith.world.BlockPos, RecentlyBrokenHole> getRecentlyBrokenHoles() { return recentlyBrokenHoles; }
     public BlockHighlightRenderer getHighlightRenderer() { return highlightRenderer; }
     public CarvingRenderer getCarvingRenderer() { return carvingRenderer; }
     public com.za.zenith.world.BlockPos getBreakingPos() { return breakingPos; }

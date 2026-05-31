@@ -1,6 +1,17 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **ItemEntity & Lighting Subsystem Stabilization (v2.6)**:
+  - **ItemEntity Physics & Spatial Hovering Fixes**:
+    - *Pickup delay wake up*: Moved the `pickupDelay` decrement statement to the very beginning of the `onUpdate()` method in `ItemEntity.java`, ensuring that sleeping items can still tick down their pickup timers and be cleanly picked up by the player.
+    - *Non-solid block wake up*: Upgraded `processSleeping()` in `ItemEntity.java` to check for `!isSolid()` instead of `.isAir()`, allowing sleeping items to correctly wake up and fall when their supporting block is replaced by non-solid decorations (grass, flowers, water).
+    - *Spatial mapping ghost fix*: Resolved a critical floating ghost item bug in `World.java` where coordinate-based chunk lookups on item deletion caused items to be missed and visually hoarded in the old chunk's spatial render map. Items are now safely removed from `groundEntityMap` using their exact registered `getLastChunkPos()`.
+    - *Throwing cooldown*: Implemented a public setter `setPickupDelay(float)` and configured a `1.5` seconds pickup cooldown for manually dropped items in `InputManager.java` to prevent immediate automatic re-pickup.
+  - **Robust Light Emission & GSON Light Data Parser**:
+    - *JSON Parsing support*: Added GSON parsing support for the `"light"` configuration block inside `BlockDataLoader.java` to properly populate `BlockDefinition.lightData` from block configuration files (such as `electric_lamp.json`).
+    - *NPE emission guard*: Implemented a robust null-guard in `LightManager.createSource` and added dynamic generation of `LightData` based on block `emission` intensity inside `onBlockChange()` and `onChunkLoad()` when a light-emitting block lacks a JSON `"light"` section, completely resolving the NullPointerException.
+  - **Notification Banner Simplification**:
+    - *Plaque background removal*: Completely removed the translucent black plaque background and red accent lines from the alert banners in `NotificationManager.java`, transitioning to a clean, modern floating text overlay with blueprint icons.
 - **Procedural 3D Moon Phases & Dynamic Night Sky Atmosphere (Atmosphere v2.5)**:
   - **Procedural 3D Lunar Phases**: Implemented a mathematically flawless 3D sphere normal reconstruction algorithm for the Moon disk (`0.182` radius). The terminator line is modeled using a virtual light source phase angle vector `L = vec3(sin(angle), 0.0, cos(angle))` linked to an 8-day lunar cycle (`uMoonPhase`), producing stunning waxes/wanes (crescents, gibbous, half, full).
   - **Realistic Earthshine & Velvet Corona Glow**: Embedded a faint, navy-blue Earthshine / Da Vinci glow (`0.01, 0.02, 0.04`) on the unilluminated side of the Moon, allowing the full sphere to remain subtly visible against stars. Added a soft silver velvet corona edge glow (`exp(-dist * 14.0) * 0.15`) for realistic atmospheric dispersion.

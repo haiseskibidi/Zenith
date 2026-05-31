@@ -541,7 +541,13 @@ public class World {
             Entity entity = entities.get(i);
 
             if (entity.isRemoved()) {
-                if (entity instanceof com.za.zenith.entities.ItemEntity || entity instanceof com.za.zenith.entities.ResourceEntity) {
+                if (entity instanceof com.za.zenith.entities.ItemEntity item) {
+                    com.za.zenith.world.chunks.ChunkPos cp = item.getLastChunkPos();
+                    if (cp != null) {
+                        List<Entity> list = groundEntityMap.get(cp);
+                        if (list != null) list.remove(item);
+                    }
+                } else if (entity instanceof com.za.zenith.entities.ResourceEntity) {
                     com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)entity.getPosition().x, (int)entity.getPosition().z);
                     List<Entity> list = groundEntityMap.get(cp);
                     if (list != null) list.remove(entity);
@@ -596,10 +602,12 @@ public class World {
                             com.za.zenith.utils.Logger.info("Picked up item: %s", itemEntity.getStack().getItem().getName());
                             inventoryFull = player.getInventory().isFull();
                             
-                            // Remove from spatial map
-                            com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)itemEntity.getPosition().x, (int)itemEntity.getPosition().z);
-                            List<Entity> list = groundEntityMap.get(cp);
-                            if (list != null) list.remove(itemEntity);
+                            // Remove from spatial map safely using actual registered chunk position
+                            com.za.zenith.world.chunks.ChunkPos cp = itemEntity.getLastChunkPos();
+                            if (cp != null) {
+                                List<Entity> list = groundEntityMap.get(cp);
+                                if (list != null) list.remove(itemEntity);
+                            }
                             
                             continue;
                         } else {
@@ -893,12 +901,34 @@ public class World {
             chunk.setBlock(x & 15, y, z & 15, block);
             chunk.setNeedsMeshUpdate(true);
 
+            // Wake up nearby sleeping items when a block is changed/destroyed (skip during gen)
+            if (!generating) {
+                int cx = x >> 4;
+                int cz = z >> 4;
+                List<Entity> list = groundEntityMap.get(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
+                if (list != null) {
+                    Entity[] itemsToWake = null;
+                    synchronized (list) {
+                        if (!list.isEmpty()) {
+                            itemsToWake = list.toArray(new Entity[0]);
+                        }
+                    }
+                    if (itemsToWake != null) {
+                        for (Entity e : itemsToWake) {
+                            if (e instanceof com.za.zenith.entities.ItemEntity item) {
+                                item.wakeUp();
+                            }
+                        }
+                    }
+                }
+            }
+
             // Event-driven lighting registration
             com.za.zenith.world.lighting.LightManager.onBlockChange(this, pos, block.getType());
 
-            // Update lighting asynchronously (skip during world generation for performance)
+            // Update lighting: gameplay changes are calculated synchronously to prevent lag, skip during generation
             if (notifyAndLight && !generating) {
-                lightEngine.enqueueLightUpdate(pos);
+                lightEngine.enqueueLightUpdate(pos, true);
             }
 
             // Handle block entities

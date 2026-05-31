@@ -187,15 +187,26 @@ public class ChunkRenderSystem {
         int camChunkZ = (int) Math.floor(camPos.z / Chunk.CHUNK_SIZE);
         int renderDist = world.getRenderDistance();
 
-        // 1. Process finished uploads
+        // 1. Process finished uploads (prioritize closer chunks to prevent visual lag)
         long uploadStart = System.nanoTime();
-        Iterator<Map.Entry<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>>> it = pendingUpdates.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>> entry = it.next();
+        List<ChunkUploadNode> readyUploads = new ArrayList<>();
+        
+        for (Map.Entry<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>> entry : pendingUpdates.entrySet()) {
             if (entry.getValue().isDone()) {
+                Chunk chunk = entry.getKey();
+                float distSq = camPos.distanceSquared(chunk.getPosition().x() * 16 + 8, camPos.y, chunk.getPosition().z() * 16 + 8);
+                readyUploads.add(new ChunkUploadNode(chunk, entry.getValue(), distSq));
+            }
+        }
+        
+        if (!readyUploads.isEmpty()) {
+            // Sort closer chunks first
+            readyUploads.sort(Comparator.comparingDouble(n -> n.distSq));
+            
+            for (ChunkUploadNode node : readyUploads) {
                 try {
-                    ChunkMeshGenerator.RawChunkMeshResult raw = entry.getValue().get();
-                    Chunk chunk = entry.getKey();
+                    ChunkMeshGenerator.RawChunkMeshResult raw = node.future.get();
+                    Chunk chunk = node.chunk;
                     if (world.getChunk(chunk.getPosition()) == chunk) {
                         ChunkMeshGenerator.ChunkMeshResult res = raw.upload(meshPool);
                         raw.cleanup();
@@ -206,9 +217,17 @@ public class ChunkRenderSystem {
                     } else {
                         raw.cleanup();
                     }
-                    it.remove();
-                    if (System.nanoTime() - uploadStart > 2_000_000) break;
-                } catch (Exception e) { it.remove(); }
+                    pendingUpdates.remove(chunk);
+                    
+                    // Priority chunks (within 24m) bypass the time limit budget to ensure zero-lag instant breaking!
+                    if (node.distSq > 24 * 24) {
+                        if (System.nanoTime() - uploadStart > 2_000_000) {
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    pendingUpdates.remove(node.chunk);
+                }
             }
         }
 
@@ -242,15 +261,6 @@ public class ChunkRenderSystem {
                             scheduledLowPriority++;
                         }
 
-                        try (java.io.FileWriter fw = new java.io.FileWriter("mesh_triggers.txt", true);
-                             java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
-                            pw.println("Scheduling Chunk " + chunk.getPosition() + 
-                                       ". needsUpdate=" + chunk.needsMeshUpdate() + 
-                                       " (dirty=" + chunk.getDirtyCounter() + 
-                                       ", lastMesh=" + chunk.getLastMeshCounter() + ")" +
-                                       " currentMeshNull=" + (chunk.getCurrentMeshResult() == null) +
-                                       " isLowPriority=" + isLowPriority);
-                        } catch (Exception e) {}
                         scheduleChunkMesh(chunk, world, atlas, camPos);
                         scheduled++;
                     }
@@ -359,5 +369,17 @@ public class ChunkRenderSystem {
         translucentBatches[0].cleanup();
         translucentBatches[1].cleanup();
         com.za.zenith.utils.NioBufferPool.clearPools();
+    }
+
+    private static class ChunkUploadNode {
+        final Chunk chunk;
+        final Future<ChunkMeshGenerator.RawChunkMeshResult> future;
+        final float distSq;
+
+        ChunkUploadNode(Chunk chunk, Future<ChunkMeshGenerator.RawChunkMeshResult> future, float distSq) {
+            this.chunk = chunk;
+            this.future = future;
+            this.distSq = distSq;
+        }
     }
 }
