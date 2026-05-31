@@ -25,6 +25,7 @@ public enum InputAction {
     // Системные действия
     PAUSE("pause"),
     DEBUG_MENU("debug_menu"),
+    TOGGLE_WEATHER("toggle_weather"),
     EDITOR_TOGGLE("editor_toggle"),
     LIVE_INSPECTOR("live_inspector"),
     TOGGLE_FLY("toggle_fly"),

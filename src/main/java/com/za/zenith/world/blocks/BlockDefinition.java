@@ -62,6 +62,7 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
     private boolean transparent;
     private boolean translucent;
     private float hardness = 1.0f; // Default hardness
+    private float wetnessFactor = 0.5f; // How shiny the block gets when wet (0.0 = absorbs, 1.0 = glossy)
     private String requiredTool = "none"; // pickaxe, shovel, axe, crowbar, knife
     
     // Legacy support fields
@@ -362,6 +363,10 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
 
     public float getHardness() {
         return hardness;
+    }
+
+    public float getWetnessFactor() {
+        return wetnessFactor;
     }
 
     public String getRequiredTool() {

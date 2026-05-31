@@ -232,7 +232,20 @@ public class ChunkMeshGenerator {
                 int bType = ((int)blockTypeId) & 0xFFFF;
                 int nMask = ((int)neighborMask) & 0x3F;
                 int wt = weight > 0.5f ? 1 : 0;
-                int packedBlock = bType | (nMask << 16) | (wt << 22);
+                
+                // Pack wetness factor (0.0 - 1.0) into 4 bits (0-15)
+                float wetness = 0.5f; // Default
+                if (bType != 0) {
+                    int realType = bType;
+                    if (realType >= 2000) realType -= 2000;
+                    else if (blockTypeId < 0.0f) realType = (int) (Math.abs(blockTypeId) - 1.0f);
+                    
+                    BlockDefinition bDef = BlockRegistry.getBlock(realType);
+                    if (bDef != null) wetness = bDef.getWetnessFactor();
+                }
+                int wFactor = (int)(wetness * 15.0f) & 0xF;
+                
+                int packedBlock = bType | (nMask << 16) | (wt << 22) | (wFactor << 23);
 
                 int l0 = ((int)tempLightBuf[0]) & 0xF;
                 int l1 = ((int)tempLightBuf[1]) & 0xF;

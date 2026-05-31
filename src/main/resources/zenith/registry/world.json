@@ -18,5 +18,12 @@
     0.4,
     0.45,
     0.55
-  ]
+  ],
+  "weather": {
+    "checkIntervalSeconds": 1.0,
+    "clearWeight": 0.0,
+    "rainWeight": 1.0,
+    "stormWeight": 0.0,
+    "transitionDurationSeconds": 10.0
+  }
 }

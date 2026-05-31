@@ -35,10 +35,24 @@ public class SystemInputHandler {
             PlayerMode newMode = visible ? PlayerMode.DEVELOPER : PlayerMode.SURVIVAL;
             player.setMode(newMode);
             com.za.zenith.utils.Logger.info("Debug HUD: %b, Player mode: %s", visible, newMode);
-        }
+            }
 
-        
-        // R - Vertical Mode (for slabs)
+            // F4 - Toggle Weather
+            if (manager.wasJustPressed(InputAction.TOGGLE_WEATHER) && !anyScreen && !nappingOpen) {
+            var world = GameLoop.getInstance().getWorld();
+            if (world != null && world.getWeatherManager() != null) {
+                var wm = world.getWeatherManager();
+                if (wm.getCurrentState() == com.za.zenith.world.weather.WeatherManager.WeatherState.CLEAR) {
+                    wm.forceWeather(com.za.zenith.world.weather.WeatherManager.WeatherState.RAIN);
+                    com.za.zenith.utils.Logger.info("Weather forced to: RAIN");
+                } else {
+                    wm.forceWeather(com.za.zenith.world.weather.WeatherManager.WeatherState.CLEAR);
+                    com.za.zenith.utils.Logger.info("Weather forced to: CLEAR");
+                }
+            }
+            }
+
+            // R - Vertical Mode (for slabs)
         if (manager.wasJustPressed(InputAction.TOGGLE_VERTICAL_MODE) && !anyScreen && !nappingOpen) {
             verticalMode = !verticalMode;
         }

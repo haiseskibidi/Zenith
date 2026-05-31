@@ -1,6 +1,21 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **Mathemagical Synchronized Rain & Realistic Wetness (Atmosphere v2.8)**:
+  - **Spatiotemporal Synchronized Rain**: Developed a "Mathemagical Sync" algorithm that uses a deterministic 0.5x0.5m global grid to synchronize falling rain streaks with surface effects. Every rain drop is calculated purely on the GPU in `rain_vertex.glsl` based on time and cell ID, while the surface shader (`fragment.glsl`) uses the *exact same* formula to detect impact.
+  - **Zero-Allocation GPU-Driven VFX**: The system requires 0 communication between CPU and GPU for individual drops. 3000 rain streaks are rendered in a single draw call using **Instanced Rendering** with custom VAO layouts.
+  - **Procedural Surface Splashes & Ripples**:
+    - *Impact Splashes*: At the precise moment of a deterministic drop hit, the block surface renders a white vertical needle "splash" that jumps up and dissipates.
+    - *Expanding Ripples*: Synchronized circular rings expand from the hit point on top faces.
+    - *Unique Block Patterns*: Each block has a completely unique ripple/splash pattern derived from its world position (`vBlockPos`), eliminating repeating patterns.
+  - **Data-Driven Block Wetness (DDD)**:
+    - *Wetness Factor*: Added `"wetnessFactor"` to `BlockDefinition` (0.0 to 1.0). Porous blocks (dirt) only darken, while glossy blocks (glass, metal, stone) gain intense **Blinn-Phong Specular Highlights**.
+    - *Vertical Droplets*: Side faces render procedural downward-flowing water streaks using UV scrolling and noise on the GPU.
+  - **DDD Weather System**:
+    - *WeatherManager*: Implemented a state machine (`CLEAR`, `RAIN`, `STORM`) with configurable transition durations.
+    - *Dynamic Weights*: Weather probabilities and check intervals are fully configurable via `world.json`.
+    - *Atmospheric Integration*: The sky, sun, and ambient light automatically dim and haze increases during rain via `AtmosphereManager`.
+  - **Hotkey Control**: Added **F4** key to instantly toggle weather states for developer testing.
 - **High-Speed Breaking GPU-Hiding & Remesh Coalescing (v2.7)**:
   - **GPU Hiding for Recently Broken Blocks**: Re-routed recently broken block positions (`recentlyBrokenHoles`) into the GPU `uHiddenPositions` uniform array in `RenderPipeline.java`. This guarantees that mined blocks are collapse-culled at the vertex-shader stage instantly, preventing their top/side faces from flickering for a single frame before the chunk mesh is rebuilt.
   - **Adaptive Chunk Remesh Rate-Limiting**: Implemented an adaptive coalescing & rate-limiting mechanism (`lastRemeshTimestamps` + `dirtyChunksCoalesceMap` with an `80ms` threshold) in `ChunkRenderSystem.java` for already built chunks. Single block breaks update the mesh **instantly with zero delay** (ensuring immediate light updates and adjacent face generation), while fast rapid mining (20+ blocks/sec) is automatically throttled and coalesced, maintaining a flat **165+ FPS** and zero lag.

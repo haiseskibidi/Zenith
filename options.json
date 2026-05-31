@@ -12,6 +12,7 @@
     "move_right": 68,
     "inventory": 69,
     "move_forward": 87,
+    "toggle_weather": 293,
     "slot_4": 52,
     "slot_3": 51,
     "slot_2": 50,

@@ -88,6 +88,15 @@
     - **MSAA Resolve Step**: Финальный этап рендеринга перед пост-обработкой — операция `Resolve` (`glBlitFramebuffer`), которая объединяет мультисэмплы в обычную текстуру.
     - **High-Fidelity Filtering**: Принудительное включение **8x Anisotropic Filtering** и `LINEAR_MIPMAP_LINEAR` фильтрации для всех текстурных атласов, что устраняет мерцание (moiré) и размытие текстур под углом.
 
+7.  **Mathemagical Weather & Wetness (v1.0 NEW)**:
+    - **Spatiotemporal Synchronization**: Система "Mathemagical Sync" обеспечивает идеальную синхронизацию между падающими каплями дождя и брызгами на блоках без коммуникации между CPU и GPU. Обе системы используют детерминированную формулу на основе мировых координат сетки (0.5м) и глобального времени `uTime`.
+    - **Zero-Allocation GPU VFX**: Весь визуальный ряд дождя (3000+ капель) и процедурных кругов/всплесков на поверхности генерируется на 100% на GPU. Java-код (`WeatherManager`) управляет только глобальной интенсивностью.
+    - **Procedural Surface Dynamics**: Фрагментный шейдер генерирует:
+        - *Expanding Ripples*: Круги на верхних гранях.
+        - *Impact Splashes*: Белые вертикальные "иглы" в момент удара капли.
+        - *Flowing Droplets*: Стекающие потеки на стенах через UV-скроллинг шума.
+    - **Blinn-Phong Wet Specular**: Блоки приобретают глянцевый блеск, интенсивность которого настраивается через `"wetnessFactor"` в JSON блока.
+
 ### Core Engine Systems (NEW)
 1. **Settings & Input Architecture**:
     - **SettingsManager (SSOT)**: Централизованный синглтон для `options.json`. Хранит FOV, Sensitivity, VSync, DevMode и бинды (Map<String, Integer>).

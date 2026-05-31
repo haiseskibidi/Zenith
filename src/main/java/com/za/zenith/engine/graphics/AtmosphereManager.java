@@ -100,6 +100,19 @@ public class AtmosphereManager {
 
         // 6. Compute Horizon Color (for matching volumetric fog)
         computeHorizonColor(cosVal);
+
+        // 7. Apply Rain Darkening
+        float rainIntensity = world.getWeatherManager() != null ? world.getWeatherManager().getRainIntensity() : 0.0f;
+        if (rainIntensity > 0.0f) {
+            float darkening = 1.0f - (rainIntensity * 0.25f); // Reduced from 0.45 to 0.25
+            skyColor.mul(darkening);
+            horizonColor.mul(darkening);
+            sunColor.mul(1.0f - (rainIntensity * 0.5f)); // Reduced from 0.7 to 0.5
+            ambientColor.mul(1.0f - (rainIntensity * 0.15f)); // Reduced from 0.3 to 0.15
+            
+            // Also increase haze/fog density during rain
+            haze = Math.max(haze, rainIntensity * 0.8f);
+        }
     }
 
     private void computeSkyColor(float cos) {

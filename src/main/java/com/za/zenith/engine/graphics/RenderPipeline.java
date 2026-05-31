@@ -39,6 +39,7 @@ public class RenderPipeline {
     private final UIRenderer uiRenderer;
     private final SkyRenderer skyRenderer = new SkyRenderer();
     private final ParticleRenderer particleRenderer = new ParticleRenderer();
+    private final com.za.zenith.engine.graphics.vfx.RainRenderer rainRenderer = new com.za.zenith.engine.graphics.vfx.RainRenderer();
     private final com.za.zenith.world.particles.AmbientParticleManager ambientParticleManager;
     
     private boolean fxaaEnabled = false;
@@ -175,6 +176,9 @@ public class RenderPipeline {
         
         // Particles
         particleRenderer.render(camera, com.za.zenith.world.particles.ParticleManager.getInstance().getActiveParticles(), atlas, alpha, sceneState.getAmbientLight());
+        
+        // Rain Streaks
+        rainRenderer.render(camera, world, alpha, deltaTime);
         
         // Ambient Particles (Dust Motes) - Disabled for realism
         // ambientParticleManager.render(camera, biome);
@@ -374,6 +378,13 @@ public class RenderPipeline {
         blockShader.setFloat("uSwayOverride", -1.0f);
         blockShader.setVector3f("uOverrideLight", -1.0f, -1.0f, -1.0f);
         blockShader.setFloat("uChunkSpawnTime", -100.0f);
+        
+        // Pass rain intensity for wetness effects
+        if (state.getWorld().getWeatherManager() != null) {
+            blockShader.setFloat("uRainIntensity", state.getWorld().getWeatherManager().getRainIntensity());
+        } else {
+            blockShader.setFloat("uRainIntensity", 0.0f);
+        }
 
         // Pass dynamic lights to shader
         blockShader.setLights("uLights", com.za.zenith.world.lighting.LightManager.getActiveLights());
@@ -517,6 +528,7 @@ public class RenderPipeline {
         chunkSystem.cleanup();
         entitySystem.cleanup();
         overlaySystem.cleanup();
+        rainRenderer.cleanup();
         msaaFramebuffer.cleanup();
         resolveFramebuffer.cleanup();
         sunShaftsFramebuffer.cleanup();

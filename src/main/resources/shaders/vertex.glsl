@@ -42,6 +42,7 @@ out float vBreakingIntensity;
 out vec2 vLight;
 out float vAO;
 out float vChunkAge;
+out float vWetness;
 flat out ivec3 vBlockPos;
 
 void main() {
@@ -66,6 +67,7 @@ void main() {
     float finalVerticalWeight;
     vec2 finalLight;
     float finalAO;
+    float finalWetness = 0.5;
     int packedPos = 0;
 
     if (uIsCompressed) {
@@ -87,6 +89,7 @@ void main() {
         finalBlockType = float(bType);
         finalNeighborData = float((packedBlock >> 16) & 0x3Fu);
         finalVerticalWeight = float((packedBlock >> 22) & 0x1u);
+        finalWetness = float((packedBlock >> 23) & 0xFu) / 15.0;
 
         uint packedLight = floatBitsToUint(neighborOrPackedLight.x);
         finalLight = vec2(float(packedLight & 0xFu), float((packedLight >> 4) & 0xFu));
@@ -106,6 +109,7 @@ void main() {
     }
 
     fragTexCoord = finalTexCoord;
+    vWetness = finalWetness;
 
     if (uOverrideLight.x >= 0.0) {
         vLight = uOverrideLight.xy;

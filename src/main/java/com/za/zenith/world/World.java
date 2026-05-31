@@ -170,6 +170,12 @@ public class World {
     private final long seed;
     private boolean generating = false;
 
+    private final com.za.zenith.world.weather.WeatherManager weatherManager = new com.za.zenith.world.weather.WeatherManager();
+
+    public com.za.zenith.world.weather.WeatherManager getWeatherManager() {
+        return weatherManager;
+    }
+
     public World() {
         this.chunks = new ConcurrentHashMap<>();
         this.blockEntities = new ConcurrentHashMap<>();
@@ -519,6 +525,7 @@ public class World {
 
     public void update(float deltaTime) {
         updateChunks();
+        weatherManager.update(deltaTime);
 
         // Advance time
         worldTime += deltaTime * WorldSettings.getInstance().dayCycleSpeed * 20.0f; 
