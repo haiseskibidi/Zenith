@@ -26,6 +26,7 @@ public class AtmosphereManager {
 
     // Computed colors (cached for Zero-Allocation access)
     private final Vector3f skyColor = new Vector3f();
+    private final Vector3f horizonColor = new Vector3f();
     private final Vector3f sunColor = new Vector3f();
     private final Vector3f ambientColor = new Vector3f();
 
@@ -53,6 +54,8 @@ public class AtmosphereManager {
 
     // Temp variables for zero-allocation calculations
     private final Vector3f tempVec1 = new Vector3f();
+    private final Vector3f tempVec2 = new Vector3f();
+    private final Vector3f tempVec3 = new Vector3f();
 
     private AtmosphereManager() {
         // Private constructor for Singleton
@@ -94,6 +97,9 @@ public class AtmosphereManager {
 
         // 5. Compute Dynamic Ambient Color
         computeAmbientColor(cosVal, cosVal >= 0.0f ? Math.max(0.0f, cosVal) : 0.0f, cosVal < 0.0f ? Math.max(0.0f, -cosVal) : 0.0f);
+
+        // 6. Compute Horizon Color (for matching volumetric fog)
+        computeHorizonColor(cosVal);
     }
 
     private void computeSkyColor(float cos) {
@@ -122,8 +128,12 @@ public class AtmosphereManager {
             float t = cosVal / 0.25f;
             float goldenWeight = 1.0f - t; // stronger at the horizon (cos = 0)
             
-            // Mix sun color with golden hour warmth
-            daySunColor.lerp(goldenSunColor, goldenWeight * 0.95f, sunColor);
+            // Mix sun color with dynamic golden hour warmth
+            tempVec2.set(1.0f, 0.85f, 0.38f); // cold lemon-gold sun
+            tempVec3.set(1.0f, 0.36f, 0.02f); // warm intense orange-crimson sun
+            tempVec2.lerp(tempVec3, warmth, tempVec3); // tempVec3 now holds active goldenSunColor
+            
+            daySunColor.lerp(tempVec3, goldenWeight * 0.95f, sunColor);
         } else if (cosVal < 0.0f) {
             sunColor.set(0.0f, 0.0f, 0.0f); // sun is down
         } else {
@@ -142,8 +152,43 @@ public class AtmosphereManager {
         }
     }
 
+    private void computeHorizonColor(float cosVal) {
+        // Day vs Night factor (1.0 day, 0.0 night)
+        float dayFactor = (cosVal >= -0.18f) ? Math.min(1.0f, (cosVal - (-0.18f)) / 0.36f) : 0.0f;
+        
+        // Midday horizon haze color (warm pale cream-gold)
+        tempVec1.set(0.96f, 0.92f, 0.84f);
+        
+        // Night horizon color: skyColor * 1.45
+        tempVec2.set(skyColor).mul(1.45f);
+        
+        // Base horizon color: lerp(night, day, dayFactor)
+        tempVec2.lerp(tempVec1, dayFactor, tempVec3);
+        
+        // Sunset factor (sharp decay, threshold = 0.30)
+        float sunsetFactor = (cosVal >= 0.0f) ? Math.max(0.0f, 1.0f - (cosVal / 0.30f)) : 0.0f;
+        if (cosVal < 0.0f) {
+            sunsetFactor = (cosVal >= -0.5f) ? Math.min(1.0f, (cosVal - (-0.5f)) / 0.35f) : 0.0f;
+        }
+        
+        // Non-linear blend like in the shader
+        float sunsetBlend = (float) Math.pow(sunsetFactor, 1.25);
+        
+        // Sunset color
+        tempVec1.set(0.98f, 0.78f, 0.38f); // coldSunset
+        tempVec2.set(0.98f, 0.28f, 0.12f); // warmSunset
+        tempVec1.lerp(tempVec2, warmth, tempVec1);
+        
+        // Blend in sunset color (using average sunGlow = 0.5 for volumetric fog)
+        float sunGlow = 0.5f;
+        float sunsetWeight = sunsetBlend * (0.65f + 0.35f * sunGlow);
+        
+        tempVec3.lerp(tempVec1, sunsetWeight, horizonColor);
+    }
+
     // Getters for read-only vectors
     public Vector3f getSkyColor() { return skyColor; }
+    public Vector3f getHorizonColor() { return horizonColor; }
     public Vector3f getSunColor() { return sunColor; }
     public Vector3f getAmbientColor() { return ambientColor; }
     public float getWarmth() { return warmth; }

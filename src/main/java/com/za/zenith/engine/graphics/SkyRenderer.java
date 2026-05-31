@@ -11,6 +11,7 @@ import static org.lwjgl.opengl.GL30.*;
 
 public class SkyRenderer {
     private Shader shader;
+    private Shader domeShader;
     private int vaoId;
     private int vboId;
     private Texture sunTexture;
@@ -20,6 +21,7 @@ public class SkyRenderer {
 
     public void init() {
         shader = new Shader("src/main/resources/shaders/sky_vertex.glsl", "src/main/resources/shaders/sky_fragment.glsl");
+        domeShader = new Shader("src/main/resources/shaders/sky_dome_vertex.glsl", "src/main/resources/shaders/sky_dome_fragment.glsl");
         
         // Simple quad [-1, 1]
         float[] positions = {
@@ -57,25 +59,44 @@ public class SkyRenderer {
         glBindVertexArray(0);
     }
 
-    public void render(Camera camera, Vector3f lightDirection) {
+    public void render(Camera camera, Vector3f lightDirection, float alpha) {
         SkySettings settings = SkySettings.getInstance();
         
         // Update textures if needed
         updateTextures(settings);
 
-        shader.use();
-
         glDisable(GL_DEPTH_TEST);
         glDepthMask(false);
-        glEnable(GL_BLEND);
 
         glBindVertexArray(vaoId);
 
-        // 1. Render Sun (additive glow blend) - Sun is at negate(lightDirection) pointing up during the day
+        // 1. Render Sky Dome Background
+        glDisable(GL_BLEND);
+        domeShader.use();
+        
+        org.joml.Matrix4f viewMatrix = new org.joml.Matrix4f(camera.getViewMatrix(alpha));
+        viewMatrix.m30(0.0f);
+        viewMatrix.m31(0.0f);
+        viewMatrix.m32(0.0f);
+        org.joml.Matrix4f invViewProj = new org.joml.Matrix4f(camera.getProjectionMatrix()).mul(viewMatrix).invert();
+        domeShader.setMatrix4f("uInvViewProj", invViewProj);
+        
+        AtmosphereManager atmosphere = AtmosphereManager.getInstance();
+        domeShader.setVector3f("uSkyColor", atmosphere.getSkyColor());
+        domeShader.setVector3f("uSunColor", atmosphere.getSunColor());
+        domeShader.setFloat("uWarmth", atmosphere.getWarmth());
+        
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        // 2. Render Celestial Bodies
+        glEnable(GL_BLEND);
+        shader.use();
+
+        // 2.1 Render Sun (additive glow blend) - Sun is at negate(lightDirection) pointing up during the day
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         renderBody(settings.sun, new Vector3f(lightDirection).negate(), shader, true);
 
-        // 2. Render Moon (normal alpha blend, no glow) - Moon is at lightDirection pointing up during the night
+        // 2.2 Render Moon (normal alpha blend, no glow) - Moon is at lightDirection pointing up during the night
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         renderBody(settings.moon, lightDirection, shader, false);
 
@@ -90,8 +111,14 @@ public class SkyRenderer {
         shader.setBoolean("uIsSun", isSun);
         shader.setVector3f("uOffset", direction);
         shader.setFloat("uScale", body.scale);
+        
         float[] c = body.color;
-        shader.setVector4f("uColor", new Vector4f(c[0], c[1], c[2], c[3]));
+        org.joml.Vector4f finalColor = new org.joml.Vector4f(c[0], c[1], c[2], c[3]);
+        if (isSun) {
+            Vector3f dynSunColor = AtmosphereManager.getInstance().getSunColor();
+            finalColor.set(dynSunColor.x, dynSunColor.y, dynSunColor.z, 1.0f);
+        }
+        shader.setVector4f("uColor", finalColor);
 
         if (type == 0) {
             Texture tex = "pixels".equals(body.type) ? pixelTextures.get(body) : (body == SkySettings.getInstance().sun ? sunTexture : moonTexture);
@@ -142,6 +169,7 @@ public class SkyRenderer {
 
     public void cleanup() {
         if (shader != null) shader.cleanup();
+        if (domeShader != null) domeShader.cleanup();
         if (sunTexture != null) sunTexture.cleanup();
         if (moonTexture != null) moonTexture.cleanup();
         for (Texture t : pixelTextures.values()) t.cleanup();

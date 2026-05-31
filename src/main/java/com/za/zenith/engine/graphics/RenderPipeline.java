@@ -43,6 +43,7 @@ public class RenderPipeline {
     
     private boolean fxaaEnabled = false;
     private long frameCounter = 0;
+    private float smoothSunVisibility = 1.0f;
 
     // Persistent States (Zero Alloc)
     private final SceneState sceneState = new SceneState(null, null, 0, 0);
@@ -153,7 +154,7 @@ public class RenderPipeline {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Sky
-        skyRenderer.render(camera, sceneState.getLightDirection());
+        skyRenderer.render(camera, sceneState.getLightDirection(), alpha);
         
         // World
         renderWorld(sceneState, networkClient, highlightedBlock, wrapper);
@@ -232,13 +233,64 @@ public class RenderPipeline {
             }
             
             if (sunVisible) {
+                // Perform fast CPU-side raycast to determine smooth visibility through foliage or blocks
+                float currentVisibility = 1.0f;
+                float startDist = 0.5f;
+                float maxDist = 48.0f;
+                float step = 0.4f;
+                Vector3f eyePos = camera.getPosition();
+                
+                for (float d = startDist; d < maxDist; d += step) {
+                    float px = eyePos.x + sunDir.x * d;
+                    float py = eyePos.y + sunDir.y * d;
+                    float pz = eyePos.z + sunDir.z * d;
+                    
+                    int ix = (int) Math.floor(px);
+                    int iy = (int) Math.floor(py);
+                    int iz = (int) Math.floor(pz);
+                    
+                    if (iy < 0 || iy >= 256) {
+                        if (iy >= 256) break; // Sky is clear above 256
+                        if (iy < 0) {
+                            currentVisibility = 0.0f;
+                            break;
+                        }
+                    }
+                    
+                    Block block = world.getBlock(ix, iy, iz);
+                    if (!block.isAir()) {
+                        com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+                        if (def != null) {
+                            if (def.is(com.za.zenith.world.blocks.BlockDefinition.FLAG_LEAVES)) {
+                                // Leaf block: lets sunlight pass through, filters it gently
+                                currentVisibility *= 0.85f;
+                            } else if (def.isTransparent() || def.is(com.za.zenith.world.blocks.BlockDefinition.FLAG_TRANSLUCENT)) {
+                                currentVisibility *= 0.90f;
+                            } else if (def.is(com.za.zenith.world.blocks.BlockDefinition.FLAG_SOLID)) {
+                                // Solid block: fully blocks the sun
+                                currentVisibility = 0.0f;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Exponential moving average for frame-rate independent smooth adaptation
+                float blendFactor = 1.0f - (float) Math.exp(-deltaTime * 7.5f);
+                smoothSunVisibility = smoothSunVisibility + (currentVisibility - smoothSunVisibility) * blendFactor;
+            } else {
+                float blendFactor = 1.0f - (float) Math.exp(-deltaTime * 7.5f);
+                smoothSunVisibility = smoothSunVisibility + (0.0f - smoothSunVisibility) * blendFactor;
+            }
+            
+            if (sunVisible) {
                 // Calculate Dynamic Blinding (Eye Adaptation / Glare)
                 Vector3f cameraDir = camera.getDirection();
                 float cosAngle = cameraDir.dot(sunDir);
                 // Highly directional glare factor (only when looking straight at the sun)
                 float glareFactor = (float) Math.pow(Math.max(0.0f, cosAngle), 16.0f);
-                float exposureMultiplier = 1.0f + glareFactor * 0.9f; // Max 1.9x glare flare
-                float weightMultiplier = 1.0f + glareFactor * 0.6f; // Max 1.6x ray density
+                float exposureMultiplier = 1.0f + glareFactor * 0.3f; // Max 1.3x exposure
+                float weightMultiplier = 1.0f + glareFactor * 0.2f; // Max 1.2x weight
 
                 // Combine for realistic exposure and weight
                 float hazeMultiplier = AtmosphereManager.getInstance().getHazeMultiplier();
@@ -258,16 +310,18 @@ public class RenderPipeline {
                     viewDir, 
                     sunShaftsSettings,
                     customExposure,
-                    customWeight
+                    customWeight,
+                    smoothSunVisibility
                 );
                 sunShaftsFramebuffer.unbind();
                 finalInputColorTexture = sunShaftsFramebuffer.getColorTextureId();
             }
         }
         
-        Vector3f currentSkyColor = AtmosphereManager.getInstance().getSkyColor();
-        if (fxaaEnabled) postProcessor.processFXAA(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentSkyColor);
-        else postProcessor.processPassthrough(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentSkyColor);
+        Vector3f currentHorizonColor = AtmosphereManager.getInstance().getHorizonColor();
+        float hazeDensity = 0.012f * AtmosphereManager.getInstance().getHazeMultiplier();
+        if (fxaaEnabled) postProcessor.processFXAA(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentHorizonColor, hazeDensity);
+        else postProcessor.processPassthrough(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentHorizonColor, hazeDensity);
 
         uiRenderer.renderCrosshair(window.getWidth(), window.getHeight());
         uiRenderer.renderHotbar(window.getWidth(), window.getHeight(), atlas);

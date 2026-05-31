@@ -15,8 +15,8 @@ public class SkySettings implements com.za.zenith.utils.LiveReloadable {
         com.za.zenith.utils.Logger.info("SkySettings: Applied live changes");
     }
 
-    public BodyConfig sun = new BodyConfig("procedural", null, 15.0f, new float[]{1.0f, 1.0f, 0.8f, 1.0f});
-    public BodyConfig moon = new BodyConfig("procedural", null, 10.0f, new float[]{0.7f, 0.7f, 1.0f, 1.0f});
+    public BodyConfig sun = new BodyConfig("procedural", null, 3.5f, new float[]{1.0f, 1.0f, 0.8f, 1.0f});
+    public BodyConfig moon = new BodyConfig("procedural", null, 3.0f, new float[]{0.7f, 0.7f, 1.0f, 1.0f});
 
     public static class BodyConfig {
         public String type = "texture"; // texture, pixels, procedural

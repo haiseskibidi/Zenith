@@ -8,6 +8,7 @@ uniform sampler2D depthTexture;
 
 uniform vec2 uSunScreenPos; // Sun position on screen [0, 1]
 uniform bool uSunVisible;   // Is sun in front of the camera
+uniform float uSunVisibility; // CPU-calculated smooth visibility [0, 1]
 uniform vec3 uSunDirView;   // Sun direction in View Space
 
 // Atmosphere Sun Shafts parameters (loaded from Biome JSON)
@@ -33,21 +34,13 @@ float getNoise(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-// Depth-adaptive visibility function to let shafts shine through tree foliage but block in caves
-float getSampleVisibility(float depth) {
-    // If depth is in the viewmodel range (0.0 to 0.05), it is the player's hand/tool.
-    // The hand should NOT occlude the sun rays or atmospheric blinding glow.
-    if (depth <= 0.05) {
-        return 1.0;
-    }
-    if (depth > 0.99) {
-        return 1.0; // Clear sky (full visibility)
-    }
-    if (depth < 0.95) {
-        return 0.0; // Close solid wall / cave (complete occlusion)
-    }
-    // Foliage or far objects: partial visibility (smooth fading between 0.95 and 0.99)
-    return smoothstep(0.95, 0.99, depth) * 0.8 + 0.2;
+// Helper: linearize depth at a ray sample point (for raymarching occlusion decay)
+float getLinearDist(vec2 uv, float rawDepth) {
+    float z = rawDepth * 2.0 - 1.0;
+    vec4 clipSpacePos = vec4(uv * 2.0 - 1.0, z, 1.0);
+    vec4 viewSpacePos = uInvProjection * clipSpacePos;
+    viewSpacePos /= viewSpacePos.w;
+    return -viewSpacePos.z;
 }
 
 void main() {
@@ -110,7 +103,8 @@ void main() {
         vec3 sampleColor = texture(screenTexture, textCoords).rgb;
         float depth = texture(depthTexture, textCoords).r;
         
-        // Geometric occlusion check
+        // Far-away clouds and sky pixels (depth > 0.98) act as the light sources for crepuscular rays.
+        // This beautifully projects rays from sky gaps between tree foliage.
         if (depth > 0.98) {
             float brightness = dot(sampleColor, vec3(0.299, 0.587, 0.114));
             
@@ -121,31 +115,24 @@ void main() {
             // Viewmodel hand/tool: does NOT block the sun ray propagation.
             // We just let the light pass through it cleanly without any decay!
         } else {
-            // Occlusion: foreground geometry (foliage, blocks) blocks the sun ray propagation
-            illuminationDecay *= 0.88;
+            // Geometry occlusion: distance-aware decay.
+            // Close blocks (caves, walls) kill rays aggressively.
+            // Distant foliage allows rays to shimmer through canopy gaps.
+            float linDist = getLinearDist(textCoords, depth);
+            // smoothstep: at 5m → decay=0.85 (aggressive), at 25m+ → decay=0.96 (soft foliage)
+            float foliageDecay = mix(0.85, 0.96, smoothstep(5.0, 25.0, linDist));
+            illuminationDecay *= foliageDecay;
         }
         
         illuminationDecay *= uDecay;
     }
     
-    // 5-Point Depth Probe around uSunScreenPos on GPU to dynamically check sun occlusion.
-    // Fades glare when behind walls/caves, but shimmers realistically when behind tree foliage.
-    float visibility = 0.0;
-    float offsetVal = 0.012; // Radius around the sun disk to probe
-    
-    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos).r) * 0.3;
-    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos + vec2(offsetVal, 0.0)).r) * 0.175;
-    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos - vec2(offsetVal, 0.0)).r) * 0.175;
-    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos + vec2(0.0, offsetVal)).r) * 0.175;
-    visibility += getSampleVisibility(texture(depthTexture, uSunScreenPos - vec2(0.0, offsetVal)).r) * 0.175;
-    
-    // Apply Henyey-Greenstein phase, exposure, biome tint, and dynamic occlusion visibility
-    vec3 finalRays = raysColor * uExposure * phase * uShaftColor * visibility;
+    // Apply Henyey-Greenstein phase, exposure, biome tint
+    vec3 finalRays = raysColor * uExposure * phase * uShaftColor;
     
     // Apply non-linear contrast enhancement to final shafts.
-    // This sharpens light beams and deepens ambient crepuscular shadows (dark rays),
-    // preventing details from washing out even when looking directly at the sun.
-    finalRays = pow(finalRays, vec3(1.45)) * 1.65;
+    // This sharpens light beams into delicate needles of light and deepens shadows.
+    finalRays = pow(finalRays, vec3(1.6)) * 1.3;
     
     // Volumetric Blend
     vec3 blended = baseColor.rgb + finalRays;
@@ -155,6 +142,27 @@ void main() {
     
     // Exposure correction to match base brightness levels
     vec3 finalColor = mix(blended, mapped * 1.6, smoothstep(0.0, 1.0, length(finalRays)));
+    
+    // Dynamic Blinding Glare (Physically-based Eye Adaptation & Lens Flooding)
+    // blindingFactor peaks when the sun is in the center of the screen
+    float screenCenterDist = distance(uSunScreenPos, vec2(0.5));
+    float blindingFactor = smoothstep(0.35, 0.05, screenCenterDist) * uSunVisibility;
+    
+    if (blindingFactor > 0.001) {
+        // Blinding flare is tightly focused around the physical sun position
+        float sunDist = length((fragTexCoord - uSunScreenPos) * vec2(uAspectRatio, 1.0));
+        
+        // Super sharp, physically-realistic tiny atmospheric glow centered strictly on the sun disk
+        float centerGlow = exp(-sunDist * 35.0) * 0.70; 
+        
+        // Gentle blinding color (harmoniously propped by uShaftColor)
+        vec3 blindColor = uShaftColor * centerGlow * blindingFactor * 0.4;
+        
+        // Localized and subtle wash out (only over the sun disk itself to simulate retina adaptation)
+        float washOut = exp(-sunDist * 22.0) * 0.15 * blindingFactor;
+        finalColor = mix(finalColor, vec3(1.0), washOut);
+        finalColor += blindColor;
+    }
     
     fragColor = vec4(finalColor, 1.0);
 }

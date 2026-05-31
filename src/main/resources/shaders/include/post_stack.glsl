@@ -1,6 +1,7 @@
 // --- STYLIZED AAA POST-STACK (Toon & Atmosphere) ---
 
 uniform vec3 uSkyColor;
+uniform float uHazeDensity;
 
 float near = 0.01; 
 float far  = 1000.0; 
@@ -32,8 +33,9 @@ vec3 applyPostProcessing(vec3 color, vec2 fragTexCoord, vec2 texelSize, sampler2
             }
         }
         
-        // 2. Atmospheric Fog
-        float fogFactor = smoothstep(40.0, 200.0, d);
+        // 2. Atmospheric Fog (Physically-based Exponential Haze)
+        float fogFactor = 1.0 - exp(-max(0.0, d - 8.0) * uHazeDensity);
+        fogFactor = clamp(fogFactor, 0.0, 1.0);
         color = mix(color, uSkyColor, fogFactor);
     }
     

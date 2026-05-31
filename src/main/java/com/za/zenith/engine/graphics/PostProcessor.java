@@ -95,7 +95,7 @@ public class PostProcessor {
         memFree(indexBuffer);
     }
     
-    public void processFXAA(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor) {
+    public void processFXAA(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor, float hazeDensity) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         
@@ -103,6 +103,7 @@ public class PostProcessor {
         fxaaShader.setVector2f("screenSize", new Vector2f(screenWidth, screenHeight));
         fxaaShader.setInt("depthTexture", 1);
         fxaaShader.setVector3f("uSkyColor", skyColor);
+        fxaaShader.setFloat("uHazeDensity", hazeDensity);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorTexture);
@@ -120,13 +121,14 @@ public class PostProcessor {
         glEnable(GL_CULL_FACE);
     }
     
-    public void processPassthrough(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor) {
+    public void processPassthrough(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor, float hazeDensity) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         
         passthroughShader.use();
         passthroughShader.setVector2f("screenSize", new Vector2f(screenWidth, screenHeight));
         passthroughShader.setVector3f("uSkyColor", skyColor);
+        passthroughShader.setFloat("uHazeDensity", hazeDensity);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorTexture);
@@ -145,13 +147,14 @@ public class PostProcessor {
         glEnable(GL_CULL_FACE);
     }
     
-    public void processSunShafts(int colorTexture, int depthTexture, int screenWidth, int screenHeight, Vector2f sunScreenPos, boolean sunVisible, org.joml.Matrix4f invProjection, org.joml.Vector3f sunDirView, com.za.zenith.world.generation.AtmosphereSettings.SunShaftsSettings settings, float customExposure, float customWeight) {
+    public void processSunShafts(int colorTexture, int depthTexture, int screenWidth, int screenHeight, Vector2f sunScreenPos, boolean sunVisible, org.joml.Matrix4f invProjection, org.joml.Vector3f sunDirView, com.za.zenith.world.generation.AtmosphereSettings.SunShaftsSettings settings, float customExposure, float customWeight, float sunVisibility) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         
         sunShaftsShader.use();
         sunShaftsShader.setVector2f("uSunScreenPos", sunScreenPos);
         sunShaftsShader.setBoolean("uSunVisible", sunVisible);
+        sunShaftsShader.setFloat("uSunVisibility", sunVisibility);
         sunShaftsShader.setMatrix4f("uInvProjection", invProjection);
         sunShaftsShader.setVector3f("uSunDirView", sunDirView);
         sunShaftsShader.setFloat("uDensity", settings.getDensity());

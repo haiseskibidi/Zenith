@@ -20,9 +20,9 @@
     "sun_shafts": {
       "enabled": true,
       "density": 0.92,
-      "weight": 0.45,
+      "weight": 0.52,
       "decay": 0.955,
-      "exposure": 0.22,
+      "exposure": 0.20,
       "toon_steps": 4,
       "shaft_color": [1.0, 0.92, 0.75]
     },
