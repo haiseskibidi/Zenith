@@ -10,9 +10,9 @@ uniform float uWarmth;
 
 void main() {
     vec3 viewDir = normalize(fragViewDir);
-    // uSunDirection represents light direction (pointing downwards from sun to camera).
-    // Negate it to obtain the vector pointing from camera to the sun.
-    vec3 sunDir = normalize(-uSunDirection);
+    // uSunDirection represents light direction (pointing downwards from active celestial body to camera).
+    // During night, uSunDirection is inverted. Correct the vector to point from camera to the actual sun.
+    vec3 sunDir = uIsNight ? normalize(uSunDirection) : normalize(-uSunDirection);
     
     // Height above horizon (0.0 at horizon, 1.0 at zenith)
     float h = max(0.0, viewDir.y);
@@ -68,7 +68,7 @@ void main() {
     baseSkyColor = mix(baseSkyColor, activeHorizon, horizonWeight);
     
     // 6. Wide Volumetric Golden Sun Glow
-    if (sunDir.y > -0.2) {
+    if (!uIsNight && sunDir.y > -0.2) {
         float sunGlowAngle = max(0.0, cosAngle);
         // Exponential wide atmospheric scatter
         float scatterGlow = pow(sunGlowAngle, 8.0) * 0.35 * smoothstep(-0.2, 0.15, sunDir.y);

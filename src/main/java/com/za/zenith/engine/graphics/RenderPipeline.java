@@ -134,12 +134,23 @@ public class RenderPipeline {
         // Update global lighting/environment
         updateEnvironment(sceneState);
         
+        // Determine day/night state and moon phase for sky rendering and moon shafts
+        com.za.zenith.world.WorldSettings ws = com.za.zenith.world.WorldSettings.getInstance();
+        float timeRatio = world.getWorldTime() / ws.dayLength;
+        float angle = (timeRatio - 0.25f) * (float)Math.PI * 2.0f;
+        float cosVal = (float)Math.cos(angle);
+        boolean isNight = Math.max(0.0f, -cosVal) > Math.max(0.0f, cosVal);
+        
+        long currentDay = (long) (world.getWorldTime() / ws.dayLength);
+        float phaseProgress = (currentDay % 8) / 8.0f;
+        float moonPhase = (float) Math.cos(phaseProgress * Math.PI * 2.0);
+        
         // 1.5. Update Ambient Particles (Dust Motes) - Disabled for realism
         com.za.zenith.world.generation.BiomeDefinition biome = world.getBiomeManager().getBiome((int)camera.getPosition().x, (int)camera.getPosition().z);
         // ambientParticleManager.update(deltaTime, camera, world, biome);
         
         // Update UBO and Context
-        RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getAmbientLight());
+        RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getAmbientLight(), isNight);
 
         // 2. Main Rendering Pass (MSAA)
         msaaFramebuffer.resize(window.getWidth(), window.getHeight());
@@ -154,7 +165,7 @@ public class RenderPipeline {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Sky
-        skyRenderer.render(camera, sceneState.getLightDirection(), alpha);
+        skyRenderer.render(camera, sceneState.getLightDirection(), isNight, moonPhase, alpha);
         
         // World
         renderWorld(sceneState, networkClient, highlightedBlock, wrapper);
@@ -297,6 +308,19 @@ public class RenderPipeline {
                 float customExposure = sunShaftsSettings.getExposure() * (0.15f + 0.6f * heightFactor) * exposureMultiplier * hazeMultiplier;
                 float customWeight = sunShaftsSettings.getWeight() * (0.25f + 0.5f * heightFactor) * weightMultiplier * hazeMultiplier;
 
+                // Decouple shaft color and scale down for dynamic Moon Shafts at night
+                org.joml.Vector3f shaftColor = new org.joml.Vector3f(
+                    sunShaftsSettings.getShaftColor()[0],
+                    sunShaftsSettings.getShaftColor()[1],
+                    sunShaftsSettings.getShaftColor()[2]
+                );
+                
+                if (isNight) {
+                    customExposure *= 0.40f; // Moon rays are softer
+                    customWeight *= 0.45f;
+                    shaftColor.set(ws.moonLightColor[0], ws.moonLightColor[1], ws.moonLightColor[2]);
+                }
+
                 sunShaftsFramebuffer.bind();
                 org.joml.Matrix4f invProjection = new org.joml.Matrix4f(camera.getProjectionMatrix()).invert();
                 postProcessor.processSunShafts(
@@ -309,6 +333,7 @@ public class RenderPipeline {
                     invProjection, 
                     viewDir, 
                     sunShaftsSettings,
+                    shaftColor,
                     customExposure,
                     customWeight,
                     smoothSunVisibility

@@ -30,6 +30,7 @@ public class RenderContext {
     private static final Matrix4f projectionMatrix = new Matrix4f();
     private static final Vector3f cameraPos = new Vector3f();
     private static final Vector3f grassColor = new Vector3f();
+    private static boolean isNight;
 
     // Zero Alloc Pools
     private static final Matrix4f[] matrixPool = new Matrix4f[256];
@@ -65,7 +66,7 @@ public class RenderContext {
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
-    public static void update(World world, Camera camera, float alpha, Vector3f lightDir, Vector3f ambient) {
+    public static void update(World world, Camera camera, float alpha, Vector3f lightDir, Vector3f ambient, boolean isNightFlag) {
         time = (float) (org.lwjgl.glfw.GLFW.glfwGetTime() % 3600.0);
         sunDirection.set(lightDir);
         ambientColor.set(ambient);
@@ -73,6 +74,7 @@ public class RenderContext {
         projectionMatrix.set(camera.getProjectionMatrix());
         cameraPos.set(camera.getPosition());
         grassColor.set(com.za.zenith.engine.graphics.ColorProvider.getGrassColor());
+        isNight = isNightFlag;
 
         sync();
     }
@@ -98,18 +100,18 @@ public class RenderContext {
         uboBuffer.put(38, sunDirection.z);
         uboBuffer.put(39, time);
         
-        // 40-43: Ambient Data (xyz=color, w=0)
+        // 40-43: Ambient Data (xyz=color, w=isNight)
         uboBuffer.put(40, ambientColor.x);
         uboBuffer.put(41, ambientColor.y);
         uboBuffer.put(42, ambientColor.z);
-        uboBuffer.put(43, 0.0f);
+        uboBuffer.put(43, isNight ? 1.0f : 0.0f);
         
         // 44-47: Grass Data (xyz=color, w=0)
         uboBuffer.put(44, grassColor.x);
         uboBuffer.put(45, grassColor.y);
         uboBuffer.put(46, grassColor.z);
         uboBuffer.put(47, 0.0f);
-
+ 
         // Limit the buffer to the used portion
         uboBuffer.position(0);
         uboBuffer.limit(48);

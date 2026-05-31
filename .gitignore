@@ -57,3 +57,7 @@ bin/
 /academy-web/yarn-debug.log*
 /academy-web/yarn-error.log*
 /academy-web/.pnpm-debug.log*
+
+# Zenith Debug & Logs
+mesh_triggers.txt
+mesh_pool_logs.txt

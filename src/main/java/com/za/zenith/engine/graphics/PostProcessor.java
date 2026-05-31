@@ -147,7 +147,7 @@ public class PostProcessor {
         glEnable(GL_CULL_FACE);
     }
     
-    public void processSunShafts(int colorTexture, int depthTexture, int screenWidth, int screenHeight, Vector2f sunScreenPos, boolean sunVisible, org.joml.Matrix4f invProjection, org.joml.Vector3f sunDirView, com.za.zenith.world.generation.AtmosphereSettings.SunShaftsSettings settings, float customExposure, float customWeight, float sunVisibility) {
+    public void processSunShafts(int colorTexture, int depthTexture, int screenWidth, int screenHeight, Vector2f sunScreenPos, boolean sunVisible, org.joml.Matrix4f invProjection, org.joml.Vector3f sunDirView, com.za.zenith.world.generation.AtmosphereSettings.SunShaftsSettings settings, org.joml.Vector3f shaftColor, float customExposure, float customWeight, float sunVisibility) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         
@@ -163,8 +163,7 @@ public class PostProcessor {
         sunShaftsShader.setFloat("uExposure", customExposure);
         sunShaftsShader.setFloat("uAspectRatio", (float)screenWidth / (float)screenHeight);
         sunShaftsShader.setInt("uToonSteps", settings.getToonSteps());
-        float[] col = settings.getShaftColor();
-        sunShaftsShader.setVector3f("uShaftColor", new org.joml.Vector3f(col[0], col[1], col[2]));
+        sunShaftsShader.setVector3f("uShaftColor", shaftColor);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorTexture);

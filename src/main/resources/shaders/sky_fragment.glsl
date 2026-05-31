@@ -7,6 +7,7 @@ uniform sampler2D uTexture;
 uniform vec4 uColor;
 uniform int uType; // 0=Texture, 1=Procedural
 uniform bool uIsSun;
+uniform float uMoonPhase; // -1.0 (New), 0.0 (Half), 1.0 (Full)
 
 void main() {
     if (uType == 1) {
@@ -26,23 +27,40 @@ void main() {
             
             fragColor = vec4(finalRGB, finalAlpha);
         } else {
-            // Perfect Round Moon with silver lunar seas and subtle velvet edge glow (no neon look)
+            // Perfect 3D Sphere Moon with craters and silver-indigo velvet glow
             float moonDisk = smoothstep(0.182, 0.178, dist);
             
+            // Reconstruct 3D normal vector on the front hemisphere of the Moon sphere
+            float nx = (fragTexCoord.x - 0.5) / 0.182;
+            float ny = (fragTexCoord.y - 0.5) / 0.182;
+            float nz = sqrt(max(0.0, 1.0 - nx*nx - ny*ny));
+            vec3 N = vec3(nx, ny, nz);
+            
+            // Calculate virtual light direction based on uMoonPhase [-1.0 (New), 0.0 (Half), 1.0 (Full)]
+            float angle = (1.0 - uMoonPhase) * 1.570796325; // 90 degrees factor
+            vec3 L = vec3(sin(angle), 0.0, cos(angle));
+            
+            // 3D illumination dot product with smooth shadow terminator
+            float diffuse = dot(N, L);
+            float illumination = smoothstep(-0.06, 0.06, diffuse);
+            
             // Subtly simulate lunar seas (craters and dark spots) inside the moon disk
-            vec2 uv = (fragTexCoord - vec2(0.5)) * 5.0; // scale up for detailing
-            float detail = sin(uv.x * 2.2 + uv.y) * cos(uv.y * 2.5 - uv.x) * 0.12;
-            detail += sin(uv.y * 5.0) * cos(uv.x * 4.0) * 0.05;
+            vec2 detailUV = (fragTexCoord - vec2(0.5)) * 5.0; // scale up for detailing
+            float detail = sin(detailUV.x * 2.2 + detailUV.y) * cos(detailUV.y * 2.5 - detailUV.x) * 0.12;
+            detail += sin(detailUV.y * 5.0) * cos(detailUV.x * 4.0) * 0.05;
             detail = clamp(detail, -0.2, 0.2);
             
-            // Very subtle, soft silver edge glow for realistic depth and anti-aliasing
-            float glow = exp(-dist * 16.0) * 0.1;
+            // Soft, silver-indigo velvet edge glow for realistic depth and ambient dispersion
+            float glow = exp(-dist * 14.0) * 0.15;
             
-            // Lunar cool silver-grey base color with detail, white highlighted core
-            vec3 moonBaseColor = uColor.rgb * (0.85 + detail);
+            // Lunar cool silver-grey base color with detail
+            vec3 moonBaseColor = uColor.rgb * (0.88 + detail);
             
-            vec3 finalRGB = mix(uColor.rgb * glow, moonBaseColor, moonDisk);
-            float finalAlpha = max(moonDisk * 0.95, glow * uColor.a);
+            // Dynamic moon color blended with soft procedural phase shadow
+            vec3 illuminatedMoon = mix(vec3(0.01, 0.02, 0.04), moonBaseColor, illumination);
+            
+            vec3 finalRGB = mix(uColor.rgb * glow, illuminatedMoon, moonDisk);
+            float finalAlpha = max(moonDisk * mix(0.1, 0.95, illumination), glow * uColor.a);
             
             fragColor = vec4(finalRGB, finalAlpha);
         }

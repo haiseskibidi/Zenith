@@ -59,7 +59,7 @@ public class SkyRenderer {
         glBindVertexArray(0);
     }
 
-    public void render(Camera camera, Vector3f lightDirection, float alpha) {
+    public void render(Camera camera, Vector3f lightDirection, boolean isNight, float moonPhase, float alpha) {
         SkySettings settings = SkySettings.getInstance();
         
         // Update textures if needed
@@ -92,23 +92,34 @@ public class SkyRenderer {
         glEnable(GL_BLEND);
         shader.use();
 
-        // 2.1 Render Sun (additive glow blend) - Sun is at negate(lightDirection) pointing up during the day
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        renderBody(settings.sun, new Vector3f(lightDirection).negate(), shader, true);
+        if (!isNight) {
+            // Day: Sun is above horizon (negated lightDirection), Moon is below horizon (normal)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            renderBody(settings.sun, new Vector3f(lightDirection).negate(), shader, true, moonPhase);
 
-        // 2.2 Render Moon (normal alpha blend, no glow) - Moon is at lightDirection pointing up during the night
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        renderBody(settings.moon, lightDirection, shader, false);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            renderBody(settings.moon, lightDirection, shader, false, moonPhase);
+        } else {
+            // Night: Moon is above horizon (negated lightDirection), Sun is below horizon (normal)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            renderBody(settings.sun, lightDirection, shader, true, moonPhase);
+
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            renderBody(settings.moon, new Vector3f(lightDirection).negate(), shader, false, moonPhase);
+        }
 
         glBindVertexArray(0);
         glDepthMask(true);
         glEnable(GL_DEPTH_TEST);
     }
 
-    private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader, boolean isSun) {
+    private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader, boolean isSun, float moonPhase) {
         int type = "procedural".equals(body.type) ? 1 : 0;
         shader.setInt("uType", type);
         shader.setBoolean("uIsSun", isSun);
+        if (!isSun) {
+            shader.setFloat("uMoonPhase", moonPhase);
+        }
         shader.setVector3f("uOffset", direction);
         shader.setFloat("uScale", body.scale);
         
