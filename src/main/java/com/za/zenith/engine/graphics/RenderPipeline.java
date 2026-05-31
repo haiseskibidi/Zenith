@@ -158,7 +158,7 @@ public class RenderPipeline {
         
         msaaFramebuffer.bind();
         glEnable(GL_MULTISAMPLE);
-        glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
+        glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE); // Disable during sky rendering to prevent MSAA stipple noise on sky/Moon gradients
         
         Vector3f skyColor = getSkyColor(sceneState);
         glClearColor(skyColor.x, skyColor.y, skyColor.z, 1.0f);
@@ -166,6 +166,9 @@ public class RenderPipeline {
 
         // Sky
         skyRenderer.render(camera, sceneState.getLightDirection(), isNight, moonPhase, alpha);
+        
+        // Enable Alpha-to-Coverage now for smooth voxel foliage and transparent blocks
+        glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
         
         // World
         renderWorld(sceneState, networkClient, highlightedBlock, wrapper);
