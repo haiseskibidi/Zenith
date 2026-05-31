@@ -96,6 +96,20 @@ public class AtmosphereManager {
         float angle = (timeRatio - 0.25f) * (float) Math.PI * 2.0f;
         float cosVal = (float) Math.cos(angle);
 
+        // --- Compute Haze Density (Fog) ---
+        // Haze peaks during Golden Hour (cosVal close to 0)
+        float hazeTarget = 0.0f;
+        if (cosVal > -0.40f && cosVal < 0.40f) {
+            // Smooth bell curve for morning/evening fog
+            hazeTarget = 1.0f - Math.abs(cosVal) / 0.40f;
+            hazeTarget = (float) Math.pow(Math.clamp(hazeTarget, 0.0f, 1.0f), 2.0);
+        }
+        computedHaze = computedHaze + (hazeTarget - computedHaze) * Math.min(1.0f, deltaTime * 2.0f);
+
+        // --- Determine Day Warmth (Morning/Evening intensity) ---
+        warmth = 1.0f - Math.abs(cosVal) / 0.35f;
+        warmth = Math.clamp(warmth, 0.0f, 1.0f);
+
         // 3. Compute Dynamic Sky Color
         computeSkyColor(cosVal);
 
@@ -103,8 +117,8 @@ public class AtmosphereManager {
         computeSunColor(cosVal);
 
         // 5. Compute Dynamic Ambient Color
-        float smoothSunInt = (float) Math.pow(Math.clamp((cosVal + 0.12f) / 0.45f, 0.0f, 1.0f), 1.2);
-        float smoothMoonInt = (float) Math.pow(Math.clamp((-cosVal + 0.12f) / 0.45f, 0.0f, 1.0f), 1.2);
+        float smoothSunInt = Math.clamp((cosVal + 0.30f) / 0.60f, 0.0f, 1.0f);
+        float smoothMoonInt = Math.clamp((-cosVal + 0.30f) / 0.60f, 0.0f, 1.0f);
         computeAmbientColor(cosVal, smoothSunInt, smoothMoonInt);
 
         // 6. Compute Horizon Color (for matching volumetric fog)
@@ -244,37 +258,33 @@ public class AtmosphereManager {
     }
 
     private void computeSunColor(float cosVal) {
-        // Allow smooth fade-in from deeper below the horizon (-0.15 to 0.10)
-        // This makes the dawn glow appear much earlier and sunset fade much later.
-        float visibility = (cosVal + 0.15f) / 0.25f;
-        visibility = Math.clamp(visibility, 0.0f, 1.0f);
+        // The sun should start glowing as soon as it's 'loaded' into the world (-0.40)
+        // We use a very wide range to ensure smooth scattering fade-in.
+        float visibility = Math.clamp((cosVal + 0.40f) / 0.55f, 0.0f, 1.0f);
         
-        if (cosVal >= -0.15f && cosVal < 0.35f) {
-            // Golden hour starts slightly earlier and ends slightly later
-            float t = Math.clamp((cosVal + 0.05f) / 0.40f, 0.0f, 1.0f);
-            float goldenWeight = 1.0f - t; 
-            
-            tempVec2.set(1.0f, 0.85f, 0.38f); // cold lemon-gold sun
-            tempVec3.set(1.0f, 0.36f, 0.02f); // warm intense orange-crimson sun
-            tempVec2.lerp(tempVec3, warmth, tempVec3); 
-            
-            daySunColor.lerp(tempVec3, goldenWeight * 0.95f, sunColor);
-            sunColor.mul(visibility); // smooth fade-in
-        } else if (cosVal < -0.15f) {
-            sunColor.set(0.0f, 0.0f, 0.0f); 
-        } else {
-            sunColor.set(daySunColor);
-        }
+        // Golden hour transition (0.35 to -0.15)
+        float t = Math.clamp((cosVal + 0.15f) / 0.50f, 0.0f, 1.0f);
+        float goldenWeight = 1.0f - t; 
+        
+        tempVec2.set(1.0f, 0.85f, 0.38f); // cold lemon-gold sun
+        tempVec3.set(1.0f, 0.36f, 0.02f); // warm intense orange-crimson sun
+        tempVec2.lerp(tempVec3, warmth, tempVec3); 
+        
+        daySunColor.lerp(tempVec3, goldenWeight * 0.98f, sunColor);
+        
+        // Physically-based intensity boost: sun is brighter when high, but never 'dead'
+        float intensity = 0.4f + 0.6f * Math.clamp(cosVal * 2.0f, 0.0f, 1.0f);
+        sunColor.mul(visibility * intensity);
     }
 
     private void computeAmbientColor(float cosVal, float sunIntensity, float moonIntensity) {
-        // Unified smooth ambient calculation without sharp branch jumps at the horizon
+        // Ambient follows a smooth curve that doesn't bottom out early
         float baseIntensity = 0.22f + 0.78f * sunIntensity + 0.35f * moonIntensity;
         ambientColor.set(baseAmbient).mul(baseIntensity);
 
-        // Smooth Blue Hour Ambient (Transition -0.18 to 0.10)
-        float blueHourWeight = 1.0f - Math.abs(cosVal - (-0.04f)) / 0.14f;
-        blueHourWeight = (float) Math.pow(Math.clamp(blueHourWeight, 0.0f, 1.0f), 1.5);
+        // Blue Hour Ambient (Transition -0.25 to 0.15)
+        float blueHourWeight = 1.0f - Math.abs(cosVal - (-0.08f)) / 0.18f;
+        blueHourWeight = (float) Math.pow(Math.clamp(blueHourWeight, 0.0f, 1.0f), 1.3);
         
         if (blueHourWeight > 0.0f) {
             tempVec1.set(blueHourAmbient).mul(0.35f + 0.15f * warmth);
