@@ -41,9 +41,17 @@ public class ChunkRenderSystem {
             visibleSectionIndices = newIndices;
         }
     }
-    private final Deque<BFSNode> bfsQueue = new ArrayDeque<>();
-    private final Set<Long> visitedSections = new HashSet<>();
     
+    // Zero-Allocation BFS structures
+    private static final int MAX_QUEUE_SIZE = 65536;
+    private final int[] bfsQueueX = new int[MAX_QUEUE_SIZE];
+    private final int[] bfsQueueZ = new int[MAX_QUEUE_SIZE];
+    private final int[] bfsQueueY = new int[MAX_QUEUE_SIZE];
+    private final byte[] bfsQueueEntry = new byte[MAX_QUEUE_SIZE];
+    
+    private final java.util.BitSet visitedMask = new java.util.BitSet();
+    private int maxRenderDistMaskSize = 0;
+
     // Performance optimization: Avoid re-sorting if camera hasn't moved much
     private final org.joml.Vector3f lastSortPos = new org.joml.Vector3f(Float.MAX_VALUE);
 
@@ -52,9 +60,6 @@ public class ChunkRenderSystem {
     private int lastCamSecY = Integer.MAX_VALUE;
     private int lastCamSecZ = Integer.MAX_VALUE;
     private int lastPoolVersion = 0;
-
-
-    private record BFSNode(int cx, int cz, int secIdx, com.za.zenith.utils.Direction entryFace) {}
 
     public ChunkRenderSystem(MeshPool meshPool) {
         this.meshPool = meshPool;
@@ -84,6 +89,14 @@ public class ChunkRenderSystem {
             chunk.setCurrentMeshResult(null);
         }
     }
+    
+    private int getVisitedIndex(int cx, int cz, int cy, int camCx, int camCz, int renderDist) {
+        int side = renderDist * 2 + 1;
+        int rx = cx - camCx + renderDist;
+        int rz = cz - camCz + renderDist;
+        if (rx < 0 || rx >= side || rz < 0 || rz >= side || cy < 0 || cy >= Chunk.NUM_SECTIONS) return -1;
+        return (rx * side + rz) * Chunk.NUM_SECTIONS + cy;
+    }
 
     public void updateVisibility(SceneState state) {
         World world = state.getWorld();
@@ -91,6 +104,8 @@ public class ChunkRenderSystem {
         int camChunkX = (int) Math.floor(camPos.x / Chunk.CHUNK_SIZE);
         int camChunkZ = (int) Math.floor(camPos.z / Chunk.CHUNK_SIZE);
         int camSecY = (int) Math.floor(camPos.y / ChunkSection.SECTION_SIZE);
+        // Robustness: Handle camera being way above the sky limit
+        int rootSecY = Math.max(0, Math.min(Chunk.NUM_SECTIONS - 1, camSecY));
         int renderDist = world.getRenderDistance();
 
         // Check for pool wrap-around
@@ -114,45 +129,89 @@ public class ChunkRenderSystem {
             lastFrustumMatrix.set(currentFrustum);
             visibleSectionsCount = 0;
             int poolVer = meshPool.getVersion();
-
-            // Zero-Allocation monolithic spiral chunk scan
-            int x = 0, z = 0, dx = 0, dz = -1;
-            int maxChunks = (renderDist * 2 + 1) * (renderDist * 2 + 1);
             
-            for (int i = 0; i < maxChunks; i++) {
-                if (-renderDist <= x && x <= renderDist && -renderDist <= z && z <= renderDist) {
-                    Chunk chunk = world.getChunk(camChunkX + x, camChunkZ + z);
-                    if (chunk != null && chunk.isReady()) {
-                        ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
-                        if (result != null) {
-                            float cx = (camChunkX + x) * 16;
-                            float cz = (camChunkZ + z) * 16;
-                            
-                            // 1. Hierarchical Frustum Culling: Test the entire chunk column (16x512x16) first to skip all its sections at once!
-                            if (state.getFrustum().testAab(cx, 0.0f, cz, cx + 16.0f, 512.0f, cz + 16.0f)) {
-                                for (int secIdx = 0; secIdx < Chunk.NUM_SECTIONS; secIdx++) {
-                                    ChunkSection section = chunk.getSections()[secIdx];
-                                    if (section == null || section.isEmpty()) continue;
-                                    
-                                    float sy = secIdx * 16;
-                                    // 2. Frustum culling per individual section
-                                    if (state.getFrustum().testAab(cx, sy, cz, cx + 16, sy + 16, cz + 16)) {
-                                        if (isSectionMeshValid(result, secIdx, poolVer)) {
-                                            ensureVisibleSectionsCapacity();
-                                            visibleChunks[visibleSectionsCount] = chunk;
-                                            visibleSectionIndices[visibleSectionsCount] = secIdx;
-                                            visibleSectionsCount++;
-                                        }
-                                    }
-                                }
-                            }
+            int side = renderDist * 2 + 1;
+            int requiredMaskSize = side * side * Chunk.NUM_SECTIONS;
+            if (requiredMaskSize > maxRenderDistMaskSize) {
+                maxRenderDistMaskSize = requiredMaskSize;
+            }
+            visitedMask.clear();
+
+            int head = 0;
+            int tail = 0;
+            
+            // Push root
+            bfsQueueX[tail] = camChunkX;
+            bfsQueueZ[tail] = camChunkZ;
+            bfsQueueY[tail] = rootSecY;
+            bfsQueueEntry[tail] = -1; // -1 means origin (can go anywhere)
+            int rootIdx = getVisitedIndex(camChunkX, camChunkZ, rootSecY, camChunkX, camChunkZ, renderDist);
+            if(rootIdx >= 0) visitedMask.set(rootIdx);
+            tail++;
+
+            com.za.zenith.utils.Direction[] dirs = com.za.zenith.utils.Direction.values();
+
+            while (head < tail && tail < MAX_QUEUE_SIZE - 6) {
+                int cx = bfsQueueX[head];
+                int cz = bfsQueueZ[head];
+                int cy = bfsQueueY[head];
+                int entryFace = bfsQueueEntry[head];
+                head++;
+
+                float worldX = cx * 16.0f;
+                float worldY = cy * 16.0f;
+                float worldZ = cz * 16.0f;
+
+                // 1. Frustum Check (skip entirely if not in camera)
+                if (!state.getFrustum().testAab(worldX, worldY, worldZ, worldX + 16.0f, worldY + 16.0f, worldZ + 16.0f)) {
+                    continue;
+                }
+
+                Chunk chunk = world.getChunk(cx, cz);
+                ChunkSection section = null;
+                boolean isSolid = false;
+                
+                if (chunk != null && chunk.isReady()) {
+                    section = chunk.getSections()[cy];
+                    ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
+                    if (result != null && section != null && !section.isEmpty()) {
+                        if (isSectionMeshValid(result, cy, poolVer)) {
+                            ensureVisibleSectionsCapacity();
+                            visibleChunks[visibleSectionsCount] = chunk;
+                            visibleSectionIndices[visibleSectionsCount] = cy;
+                            visibleSectionsCount++;
                         }
                     }
                 }
-                if (x == z || (x < 0 && x == -z) || (x > 0 && x == 1 - z)) {
-                    int temp = dx; dx = -dz; dz = temp;
+
+                // 2. Queue neighbors
+                for (int i = 0; i < 6; i++) {
+                    com.za.zenith.utils.Direction outDir = dirs[i];
+                    
+                    // Occlusion Check: Can we see *through* the current section to the neighbor?
+                    if (entryFace != -1 && section != null && !section.isEmpty()) {
+                        com.za.zenith.utils.Direction inDir = dirs[entryFace];
+                        if (!section.canSeeThrough(inDir, outDir)) {
+                            continue; // Blocked by this section's geometry!
+                        }
+                    }
+
+                    int ncx = cx + outDir.getDx();
+                    int ncz = cz + outDir.getDz();
+                    int ncy = cy + outDir.getDy();
+
+                    int nIdx = getVisitedIndex(ncx, ncz, ncy, camChunkX, camChunkZ, renderDist);
+                    // Out of bounds or already visited
+                    if (nIdx < 0 || visitedMask.get(nIdx)) continue;
+
+                    visitedMask.set(nIdx);
+                    
+                    bfsQueueX[tail] = ncx;
+                    bfsQueueZ[tail] = ncz;
+                    bfsQueueY[tail] = ncy;
+                    bfsQueueEntry[tail] = (byte) outDir.getOpposite().ordinal();
+                    tail++;
                 }
-                x += dx; z += dz;
             }
             
             lastCamSecX = camChunkX; lastCamSecY = camSecY; lastCamSecZ = camChunkZ;
@@ -169,15 +228,6 @@ public class ChunkRenderSystem {
             return meshVer == poolVer || meshVer == poolVer - 1;
         }
         return false;
-    }
-
-    private void processEmptyNeighbor(BFSNode node, int camChunkX, int camChunkZ, int renderDist) {
-        for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
-            int ncx = node.cx+dir.getDx(), ncz = node.cz+dir.getDz(), nsec = node.secIdx+dir.getDy();
-            if (nsec < 0 || nsec >= Chunk.NUM_SECTIONS) continue;
-            if (Math.abs(ncx-camChunkX) > renderDist || Math.abs(ncz-camChunkZ) > renderDist) continue;
-            if (visitedSections.add(packSectionPos(ncx, ncz, nsec))) bfsQueue.add(new BFSNode(ncx, ncz, nsec, dir.getOpposite()));
-        }
     }
 
     public void updateMeshes(SceneState state, DynamicTextureAtlas atlas) {
