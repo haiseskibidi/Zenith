@@ -35,6 +35,7 @@ public class AtmosphereManager {
     private final Vector3f skyColor = new Vector3f();
     private final Vector3f horizonColor = new Vector3f();
     private final Vector3f sunColor = new Vector3f();
+    private final Vector3f moonColor = new Vector3f();
     private final Vector3f ambientColor = new Vector3f();
 
     // Constant reference colors for LERPing
@@ -97,28 +98,30 @@ public class AtmosphereManager {
         float cosVal = (float) Math.cos(angle);
 
         // --- Compute Haze Density (Fog) ---
-        // Haze peaks during Golden Hour (cosVal close to 0)
+        // Haze follows the sun's presence in the world (from -0.80 depth)
         float hazeTarget = 0.0f;
-        if (cosVal > -0.40f && cosVal < 0.40f) {
-            // Smooth bell curve for morning/evening fog
-            hazeTarget = 1.0f - Math.abs(cosVal) / 0.40f;
+        if (cosVal > -0.80f && cosVal < 0.80f) {
+            // Smooth bell curve centered at the horizon (cosVal=0)
+            hazeTarget = 1.0f - Math.abs(cosVal) / 0.80f;
             hazeTarget = (float) Math.pow(Math.clamp(hazeTarget, 0.0f, 1.0f), 2.0);
         }
         computedHaze = computedHaze + (hazeTarget - computedHaze) * Math.min(1.0f, deltaTime * 2.0f);
 
         // --- Determine Day Warmth (Morning/Evening intensity) ---
-        warmth = 1.0f - Math.abs(cosVal) / 0.35f;
+        // Warmth covers the whole range from sun-entry (-0.80) to peak golden hour (0.35)
+        warmth = 1.0f - Math.abs(cosVal - 0.05f) / 0.75f;
         warmth = Math.clamp(warmth, 0.0f, 1.0f);
 
         // 3. Compute Dynamic Sky Color
         computeSkyColor(cosVal);
 
-        // 4. Compute Dynamic Sun Light Color
+        // 4. Compute Dynamic Celestial Colors
         computeSunColor(cosVal);
+        computeMoonColor(cosVal);
 
         // 5. Compute Dynamic Ambient Color
-        float smoothSunInt = Math.clamp((cosVal + 0.30f) / 0.60f, 0.0f, 1.0f);
-        float smoothMoonInt = Math.clamp((-cosVal + 0.30f) / 0.60f, 0.0f, 1.0f);
+        float smoothSunInt = Math.clamp((cosVal + 0.80f) / 1.60f, 0.0f, 1.0f);
+        float smoothMoonInt = Math.clamp((-cosVal + 0.80f) / 1.60f, 0.0f, 1.0f);
         computeAmbientColor(cosVal, smoothSunInt, smoothMoonInt);
 
         // 6. Compute Horizon Color (for matching volumetric fog)
@@ -237,12 +240,13 @@ public class AtmosphereManager {
     }
 
     private void computeSkyColor(float cos) {
-        if (cos < -0.15f) {
+        if (cos < -0.85f) {
             // Deep Night
             skyColor.set(nightSkyColor);
         } else if (cos < 0.0f) {
-            // Blue Hour (interpolating from Night to Blue Hour)
-            float t = (cos - (-0.15f)) / 0.15f; // [0, 1]
+            // Transition from Night to Blue Hour/Dawn
+            // Range expanded to match sun materialization (-0.85 to 0.0)
+            float t = (cos - (-0.85f)) / 0.85f; 
             nightSkyColor.lerp(blueHourColor, t, skyColor);
         } else if (cos < 0.25f) {
             // Golden Hour (interpolating from Blue Hour/Dawn to Day)
@@ -258,23 +262,35 @@ public class AtmosphereManager {
     }
 
     private void computeSunColor(float cosVal) {
-        // The sun should start glowing as soon as it's 'loaded' into the world (-0.40)
-        // We use a very wide range to ensure smooth scattering fade-in.
-        float visibility = Math.clamp((cosVal + 0.40f) / 0.55f, 0.0f, 1.0f);
-        
-        // Golden hour transition (0.35 to -0.15)
-        float t = Math.clamp((cosVal + 0.15f) / 0.50f, 0.0f, 1.0f);
+        // Range from -0.85 (deep night) to 0.50 (full day)
+        // Non-linear visibility: sun 'materializes' faster at the start
+        float visibility = Math.clamp((cosVal + 0.85f) / 1.35f, 0.0f, 1.0f);
+        visibility = (float) Math.pow(visibility, 0.55); // fatter curve at the start
+
+        // Golden hour transition (starts early from -0.85)
+        float t = Math.clamp((cosVal + 0.35f) / 0.85f, 0.0f, 1.0f);
         float goldenWeight = 1.0f - t; 
-        
+
         tempVec2.set(1.0f, 0.85f, 0.38f); // cold lemon-gold sun
-        tempVec3.set(1.0f, 0.36f, 0.02f); // warm intense orange-crimson sun
+        tempVec3.set(1.0f, 0.28f, 0.01f); // EXTRA intense warm orange-crimson sun
         tempVec2.lerp(tempVec3, warmth, tempVec3); 
-        
-        daySunColor.lerp(tempVec3, goldenWeight * 0.98f, sunColor);
-        
-        // Physically-based intensity boost: sun is brighter when high, but never 'dead'
+
+        daySunColor.lerp(tempVec3, goldenWeight * 0.99f, sunColor);
+
+        // Physically-based intensity boost: sun is brighter when high
+        // High base intensity (0.4) ensures it's visible immediately as it appears
         float intensity = 0.4f + 0.6f * Math.clamp(cosVal * 2.0f, 0.0f, 1.0f);
         sunColor.mul(visibility * intensity);
+    }
+
+    private void computeMoonColor(float cosVal) {
+        // Moon is at -cosVal relative to the horizon
+        float moonHeight = -cosVal;
+        float visibility = Math.clamp((moonHeight + 0.85f) / 1.35f, 0.0f, 1.0f);
+        visibility = (float) Math.pow(visibility, 0.6);
+
+        // Moon color is ALWAYS silver-indigo, never warm or golden
+        moonColor.set(moonLightCol).mul(visibility * 0.8f);
     }
 
     private void computeAmbientColor(float cosVal, float sunIntensity, float moonIntensity) {
@@ -330,6 +346,7 @@ public class AtmosphereManager {
     public Vector3f getSkyColor() { return skyColor; }
     public Vector3f getHorizonColor() { return horizonColor; }
     public Vector3f getSunColor() { return sunColor; }
+    public Vector3f getMoonColor() { return moonColor; }
     public Vector3f getAmbientColor() { return ambientColor; }
     public float getWarmth() { return warmth; }
     public float getHaze() { return computedHaze; }
