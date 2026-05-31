@@ -1,6 +1,10 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **Data-Driven Block Tinting & Grass Fix (v1.3)**:
+  - **Per-Face Tinting Control**: Introduced `"tinted_faces"` JSON property in `BlockDefinition` to precisely control which faces of a block receive procedural tinting (e.g., grass color). This system is fully data-driven and removes the need for block-specific hardcoding in the mesh generator.
+  - **Grass Block Logic Correction**: Updated `grass_block.json` to only tint the `top` and `side` faces, resolving a long-standing bug where the bottom face of grass blocks would incorrectly appear green during block breaking or when viewed from below.
+  - **Loader & Generator Synchronization**: Updated `BlockDataLoader` to support the new property and refactored `ChunkMeshGenerator` to use `def.isFaceTinted(face)` across all mesh generation paths (standard, breaking, and holes).
 - **Uniform Red Weak Spots for Wood Blocks (v1.2)**:
   - **Color Consistency**: Updated all wood-related blocks (`logs`, `stripped logs`, `felling stages`) to use pure red `[1.0, 0.0, 0.0]` for weak spots in `mining_logic`. This ensures a unified visual feedback during timber harvesting.
   - **Surgical JSON Updates**: Applied targeted edits to 15+ JSON files, ensuring that blocks previously lacking a color (like `oak_log` or `felling_stages`) or having non-standard colors (like `birch_log`) now adhere to the standard.

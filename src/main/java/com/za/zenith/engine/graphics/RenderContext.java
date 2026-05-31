@@ -28,9 +28,10 @@ public class RenderContext {
     private static final Vector3f ambientColor = new Vector3f();
     private static final Matrix4f viewMatrix = new Matrix4f();
     private static final Matrix4f projectionMatrix = new Matrix4f();
+    private static final Matrix4f invProjectionMatrix = new Matrix4f();
     private static final Vector3f cameraPos = new Vector3f();
     private static final Vector3f grassColor = new Vector3f();
-    private static boolean isNight;
+    private static float nightFactor;
 
     // Zero Alloc Pools
     private static final Matrix4f[] matrixPool = new Matrix4f[256];
@@ -60,21 +61,22 @@ public class RenderContext {
     public static void init() {
         uboId = glGenBuffers();
         glBindBuffer(GL_UNIFORM_BUFFER, uboId);
-        // Size: 2 * 64 (matrices) + 4 * 16 (vectors/floats with padding) = 192 bytes
+        // Size: 3 * 64 (matrices) + 4 * 16 (vectors/floats with padding) = 256 bytes
         glBufferData(GL_UNIFORM_BUFFER, 256, GL_DYNAMIC_DRAW); 
         glBindBufferBase(GL_UNIFORM_BUFFER, GLOBAL_BINDING_POINT, uboId);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
-    public static void update(World world, Camera camera, float alpha, Vector3f lightDir, Vector3f ambient, boolean isNightFlag) {
+    public static void update(World world, Camera camera, float alpha, Vector3f lightDir, Vector3f ambient, float nightFactorVal) {
         time = (float) (org.lwjgl.glfw.GLFW.glfwGetTime() % 3600.0);
         sunDirection.set(lightDir);
         ambientColor.set(ambient);
         viewMatrix.set(camera.getViewMatrix(alpha));
         projectionMatrix.set(camera.getProjectionMatrix());
+        projectionMatrix.invert(invProjectionMatrix);
         cameraPos.set(camera.getPosition());
         grassColor.set(com.za.zenith.engine.graphics.ColorProvider.getGrassColor());
-        isNight = isNightFlag;
+        nightFactor = nightFactorVal;
 
         sync();
     }
@@ -100,21 +102,24 @@ public class RenderContext {
         uboBuffer.put(38, sunDirection.z);
         uboBuffer.put(39, time);
         
-        // 40-43: Ambient Data (xyz=color, w=isNight)
+        // 40-43: Ambient Data (xyz=color, w=nightFactor)
         uboBuffer.put(40, ambientColor.x);
         uboBuffer.put(41, ambientColor.y);
         uboBuffer.put(42, ambientColor.z);
-        uboBuffer.put(43, isNight ? 1.0f : 0.0f);
+        uboBuffer.put(43, nightFactor);
         
         // 44-47: Grass Data (xyz=color, w=0)
         uboBuffer.put(44, grassColor.x);
         uboBuffer.put(45, grassColor.y);
         uboBuffer.put(46, grassColor.z);
         uboBuffer.put(47, 0.0f);
+
+        // 48-63: Inverse Projection Matrix
+        invProjectionMatrix.get(48, uboBuffer);
  
         // Limit the buffer to the used portion
         uboBuffer.position(0);
-        uboBuffer.limit(48);
+        uboBuffer.limit(64);
 
         glBindBuffer(GL_UNIFORM_BUFFER, uboId);
         glBufferSubData(GL_UNIFORM_BUFFER, 0, uboBuffer);

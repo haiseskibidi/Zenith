@@ -59,7 +59,7 @@ public class SkyRenderer {
         glBindVertexArray(0);
     }
 
-    public void render(Camera camera, Vector3f lightDirection, boolean isNight, float moonPhase, float alpha) {
+    public void render(Camera camera, SceneState state, float moonPhase, float alpha) {
         SkySettings settings = SkySettings.getInstance();
         
         // Update textures if needed
@@ -93,21 +93,16 @@ public class SkyRenderer {
         glEnable(GL_BLEND);
         shader.use();
 
-        if (!isNight) {
-            // Day: Sun is above horizon (negated lightDirection), Moon is below horizon (normal)
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-            renderBody(settings.sun, new Vector3f(lightDirection).negate(), shader, true, moonPhase);
+        // Get absolute astronomical sun direction from SceneState
+        Vector3f sunDir = state.getSunDirection();
+        
+        // --- Render Sun ---
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE); 
+        renderBody(settings.sun, sunDir, shader, true, moonPhase);
 
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            renderBody(settings.moon, lightDirection, shader, false, moonPhase);
-        } else {
-            // Night: Moon is above horizon (negated lightDirection), Sun is below horizon (normal)
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-            renderBody(settings.sun, lightDirection, shader, true, moonPhase);
-
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            renderBody(settings.moon, new Vector3f(lightDirection).negate(), shader, false, moonPhase);
-        }
+        // --- Render Moon ---
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+        renderBody(settings.moon, new Vector3f(sunDir).negate(), shader, false, moonPhase);
 
         glBindVertexArray(0);
         glDepthMask(true);
@@ -115,9 +110,9 @@ public class SkyRenderer {
     }
 
     private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader, boolean isSun, float moonPhase) {
-        // Do not render celestial bodies when they are below the horizon (Y < -0.08)
-        // Offset of -0.08 allows soft atmospheric glow to set cleanly below the hills
-        if (direction.y < -0.08f) {
+        // Celestial bodies are always "there", even below horizon, until they fully fade out.
+        // We only skip rendering if they are deep below (-0.4) to save some draw calls.
+        if (direction.y < -0.40f) {
             return;
         }
         int type = "procedural".equals(body.type) ? 1 : 0;

@@ -271,11 +271,12 @@
 - **Stump (In-World) Rendering**: Автоматически формирует схему из ингредиентов и инструмента. Добавляет стрелку и количество ударов.
 - **Napping Rendering**: Рисует 5x5 сетку паттерна. Поддерживает анимацию циклической смены иконок, если для рецепта подходит несколько типов материалов (например, камень и кремень).
 
-### 4. Rendering & Tinting (v2.5 UPDATED)
+### 4. Rendering & Tinting (v2.6 UPDATED)
 - **Universal Tinting**: Механика наложения биомного тинта на блоки (трава, листва).
 - **Implementation**:
-    - `BlockDefinition` содержит флаг `tinted` (загружается через тег `zenith:tinted`).
-    - `ChunkMeshGenerator` передает отрицательный ID (`-(id + 1)`) для тонируемых блоков.
+    - `BlockDefinition` содержит флаг `tinted` (загружается через тег `zenith:tinted`) и список `tinted_faces`.
+    - **Per-Face Control**: Поддержка массива `tinted_faces` (north, south, east, west, up, down) в JSON позволяет окрашивать только нужные грани (например, у блока земли окрашиваются только верх и бока, низ остается чистым).
+    - `ChunkMeshGenerator` использует `def.isFaceTinted(face)` и передает отрицательный ID (`-(id + 1)`) только для тех граней, которые должны быть окрашены.
 - **Transparency/Translucency Split (NEW)**:
     - **Transparent (Culling)**: Флаг `FLAG_TRANSPARENT` (JSON `transparent: true`). Используется исключительно для оптимизации геометрии чанков (соседи рисуют грани). Применяется для неполных блоков (плиты, стадии дерева).
     - **Translucent (Rendering)**: Флаг `FLAG_TRANSLUCENT` (JSON `translucent: true`). Управляет попаданием в прозрачный пас рендеринга (Blending Pass).

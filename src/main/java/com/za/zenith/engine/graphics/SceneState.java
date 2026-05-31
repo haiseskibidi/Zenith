@@ -21,6 +21,7 @@ public class SceneState {
     private final FrustumIntersection frustum = new FrustumIntersection();
     
     private final Vector3f lightDirection = new Vector3f();
+    private final Vector3f sunDirection = new Vector3f();
     private final Vector3f ambientLight = new Vector3f();
     private final Vector3f cameraPos = new Vector3f();
     
@@ -54,6 +55,10 @@ public class SceneState {
         this.ambientLight.set(ambient);
     }
 
+    public void updateSunDirection(Vector3f direction) {
+        this.sunDirection.set(direction);
+    }
+
     public void setFrameCounter(long counter) {
         this.frameCounter = counter;
     }
@@ -68,6 +73,7 @@ public class SceneState {
     public Matrix4f getFrustumMatrix() { return frustumMatrix; }
     public FrustumIntersection getFrustum() { return frustum; }
     public Vector3f getLightDirection() { return lightDirection; }
+    public Vector3f getSunDirection() { return sunDirection; }
     public Vector3f getAmbientLight() { return ambientLight; }
     public Vector3f getCameraPos() { return cameraPos; }
     public float getTime() { return time; }

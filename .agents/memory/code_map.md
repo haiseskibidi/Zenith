@@ -269,7 +269,12 @@
 - **HeldItemRenderer**: Реализует точечную передачу уровня жара инструменту. Метод `getOrGenerateMesh` сделан публичным для системы выбора.
 
 ### com.za.zenith.world.blocks (UPDATED)
-- **CarTireBlockDefinition.java**: Базовый декоративный блок покрышки. Поддерживает трансформацию в `TireWithBoard` при Shift+ПКМ досками.
+- **BlockDefinition.java**: (v1.3 UPDATED) Базовый класс для определений блоков.
+    - `computeFlags()`: Вычисляет битовые флаги и маску окрашиваемых граней на основе `tinted_faces`.
+    - `isFaceTinted(int face)`: Проверяет, должна ли конкретная грань окрашиваться.
+    - `onBlockBreak(...)`: Логика разрушения блока.
+- **CarTireBlockDefinition.java**:
+ Базовый декоративный блок покрышки. Поддерживает трансформацию в `TireWithBoard` при Shift+ПКМ досками.
 - **TireWithBoardBlockDefinition.java**: Промежуточная стадия сборки стола. Трансформируется в `ScavengerTable` при Shift+ПКМ листом металла.
 - **ScavengerTableBlockDefinition.java**: Блок Стола Мусорщика. Делегирует взаимодействие `ScavengerTableBlockEntity`.
 - **StumpBlockDefinition.java**: Определение блока для пня (Stump).
@@ -365,7 +370,7 @@
 - **GUIDataLoader.java**: Загрузка конфигураций интерфейсов.
 
 ### com.za.zenith.world.chunks
-- **ChunkMeshGenerator.java**: (v3.0 UPDATED) Генератор геометрии. Внедрена поддержка `FLAG_TRANSLUCENT` для разделения пасов. Устранены критические NPE при обращении к соседям.
+- **ChunkMeshGenerator.java**: (v3.1 UPDATED) Генератор геометрии. Внедрена поддержка `FLAG_TRANSLUCENT` и погранного окрашивания (`isFaceTinted`). Устранены критические NPE при обращении к соседям.
 - **Chunk.java**: (v1.1 UPDATED) Добавлена защита от повреждения палитры (`Palette Corruption Guard`) с автоматическим восстановлением индексов.
 
 ### com.za.zenith.engine.input

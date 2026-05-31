@@ -103,7 +103,9 @@ public class AtmosphereManager {
         computeSunColor(cosVal);
 
         // 5. Compute Dynamic Ambient Color
-        computeAmbientColor(cosVal, cosVal >= 0.0f ? Math.max(0.0f, cosVal) : 0.0f, cosVal < 0.0f ? Math.max(0.0f, -cosVal) : 0.0f);
+        float smoothSunInt = (float) Math.pow(Math.clamp((cosVal + 0.12f) / 0.45f, 0.0f, 1.0f), 1.2);
+        float smoothMoonInt = (float) Math.pow(Math.clamp((-cosVal + 0.12f) / 0.45f, 0.0f, 1.0f), 1.2);
+        computeAmbientColor(cosVal, smoothSunInt, smoothMoonInt);
 
         // 6. Compute Horizon Color (for matching volumetric fog)
         computeHorizonColor(cosVal);
@@ -242,31 +244,41 @@ public class AtmosphereManager {
     }
 
     private void computeSunColor(float cosVal) {
-        if (cosVal >= 0.0f && cosVal < 0.25f) {
-            float t = cosVal / 0.25f;
-            float goldenWeight = 1.0f - t; // stronger at the horizon (cos = 0)
+        // Allow smooth fade-in from deeper below the horizon (-0.15 to 0.10)
+        // This makes the dawn glow appear much earlier and sunset fade much later.
+        float visibility = (cosVal + 0.15f) / 0.25f;
+        visibility = Math.clamp(visibility, 0.0f, 1.0f);
+        
+        if (cosVal >= -0.15f && cosVal < 0.35f) {
+            // Golden hour starts slightly earlier and ends slightly later
+            float t = Math.clamp((cosVal + 0.05f) / 0.40f, 0.0f, 1.0f);
+            float goldenWeight = 1.0f - t; 
             
-            // Mix sun color with dynamic golden hour warmth
             tempVec2.set(1.0f, 0.85f, 0.38f); // cold lemon-gold sun
             tempVec3.set(1.0f, 0.36f, 0.02f); // warm intense orange-crimson sun
-            tempVec2.lerp(tempVec3, warmth, tempVec3); // tempVec3 now holds active goldenSunColor
+            tempVec2.lerp(tempVec3, warmth, tempVec3); 
             
             daySunColor.lerp(tempVec3, goldenWeight * 0.95f, sunColor);
-        } else if (cosVal < 0.0f) {
-            sunColor.set(0.0f, 0.0f, 0.0f); // sun is down
+            sunColor.mul(visibility); // smooth fade-in
+        } else if (cosVal < -0.15f) {
+            sunColor.set(0.0f, 0.0f, 0.0f); 
         } else {
             sunColor.set(daySunColor);
         }
     }
 
     private void computeAmbientColor(float cosVal, float sunIntensity, float moonIntensity) {
-        if (cosVal < 0.0f && cosVal >= -0.15f) {
-            // Blue Hour Ambient
-            float t = (cosVal - (-0.15f)) / 0.15f; // [0, 1]
-            blueHourAmbient.lerp(baseAmbient, t, ambientColor);
-            ambientColor.mul(0.35f);
-        } else {
-            ambientColor.set(baseAmbient).mul(0.2f + 0.8f * sunIntensity + 0.3f * moonIntensity);
+        // Unified smooth ambient calculation without sharp branch jumps at the horizon
+        float baseIntensity = 0.22f + 0.78f * sunIntensity + 0.35f * moonIntensity;
+        ambientColor.set(baseAmbient).mul(baseIntensity);
+
+        // Smooth Blue Hour Ambient (Transition -0.18 to 0.10)
+        float blueHourWeight = 1.0f - Math.abs(cosVal - (-0.04f)) / 0.14f;
+        blueHourWeight = (float) Math.pow(Math.clamp(blueHourWeight, 0.0f, 1.0f), 1.5);
+        
+        if (blueHourWeight > 0.0f) {
+            tempVec1.set(blueHourAmbient).mul(0.35f + 0.15f * warmth);
+            ambientColor.lerp(tempVec1, blueHourWeight, ambientColor);
         }
     }
 

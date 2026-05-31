@@ -143,18 +143,21 @@ public class RenderPipeline {
         float timeRatio = world.getWorldTime() / ws.dayLength;
         float angle = (timeRatio - 0.25f) * (float)Math.PI * 2.0f;
         float cosVal = (float)Math.cos(angle);
-        boolean isNight = Math.max(0.0f, -cosVal) > Math.max(0.0f, cosVal);
-        
+
+        // Smooth isNight factor (0.0 = day, 1.0 = night). Transition from -0.15 to 0.15.
+        float nightFactor = Math.clamp((-cosVal + 0.15f) / 0.30f, 0.0f, 1.0f);
+        boolean isNight = nightFactor > 0.5f;
+
         long currentDay = (long) (world.getWorldTime() / ws.dayLength);
         float phaseProgress = (currentDay % 8) / 8.0f;
         float moonPhase = (float) Math.cos(phaseProgress * Math.PI * 2.0);
-        
+
         // 1.5. Update Ambient Particles (Dust Motes) - Disabled for realism
         com.za.zenith.world.generation.BiomeDefinition biome = world.getBiomeManager().getBiome((int)camera.getPosition().x, (int)camera.getPosition().z);
         // ambientParticleManager.update(deltaTime, camera, world, biome);
-        
-        // Update UBO and Context
-        RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getAmbientLight(), isNight);
+
+        // Update UBO and Context (pass nightFactor as float for smooth transition)
+        RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getAmbientLight(), nightFactor);
 
         // 2. Main Rendering Pass (MSAA)
         msaaFramebuffer.resize(window.getWidth(), window.getHeight());
@@ -171,8 +174,8 @@ public class RenderPipeline {
         glClearColor(skyColor.x, skyColor.y, skyColor.z, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Sky
-        skyRenderer.render(camera, sceneState.getLightDirection(), isNight, moonPhase, alpha);
+        // Sky (uses SceneState for absolute sun direction)
+        skyRenderer.render(camera, sceneState, moonPhase, alpha);
         
         // Enable Alpha-to-Coverage now for smooth voxel foliage and transparent blocks
         glEnable(GL_SAMPLE_ALPHA_TO_COVERAGE);
@@ -500,6 +503,11 @@ public class RenderPipeline {
         
         Vector3f finalLightDir = RenderContext.getVector().set(lightDir);
         if (moonIntensity > sunIntensity) finalLightDir.negate();
+        
+        // Save the raw Sun direction (opposite of lightDir if lightDir points from sun to origin)
+        // lightDir.y is -cosVal, so -lightDir.y is cosVal. Sun is up if cosVal > 0.
+        Vector3f rawSunDir = RenderContext.getVector().set(lightDir).negate();
+        state.updateSunDirection(rawSunDir);
         
         // Get dynamic colors from AtmosphereManager
         Vector3f currentSunColor = atmosphere.getSunColor();

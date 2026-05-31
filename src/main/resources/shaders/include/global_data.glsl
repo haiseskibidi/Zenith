@@ -1,10 +1,11 @@
 layout (std140) uniform GlobalData {
-    mat4 gProjection;   // 0 - 63
-    mat4 gView;         // 64 - 127
-    vec4 gCameraPos;    // 128 - 143 (w unused)
-    vec4 gSunDirection; // 144 - 159 (w is time)
-    vec4 gAmbientColor; // 160 - 175 (w isNight flag)
-    vec4 gGrassColor;   // 176 - 191 (w unused)
+    mat4 gProjection;    // 0 - 63
+    mat4 gView;          // 64 - 127
+    vec4 gCameraPos;     // 128 - 143 (w unused)
+    vec4 gSunDirection;  // 144 - 159 (w is time)
+    vec4 gAmbientColor;  // 160 - 175 (w isNight flag)
+    vec4 gGrassColor;    // 176 - 191 (w unused)
+    mat4 gInvProjection; // 192 - 255
 };
 
 // Explicit helpers that don't use macros if possible, but macros are fine for convenience

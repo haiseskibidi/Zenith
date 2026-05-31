@@ -61,6 +61,10 @@ public class PostProcessor {
         sunShaftsShader.setInt("screenTexture", 0);
         sunShaftsShader.setInt("depthTexture", 1);
         
+        RenderContext.bindShader(fxaaShader);
+        RenderContext.bindShader(passthroughShader);
+        RenderContext.bindShader(sunShaftsShader);
+        
         Logger.info("PostProcessor initialized with FXAA, passthrough and sun shafts shaders");
     }
     
