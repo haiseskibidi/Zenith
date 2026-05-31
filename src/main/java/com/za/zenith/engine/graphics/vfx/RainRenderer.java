@@ -24,6 +24,8 @@ public class RainRenderer {
     // Using a fixed count of virtual "cells" around the player
     private static final int RAIN_COUNT = 3000; 
 
+    private float startX, startZ, gridSize;
+
     public RainRenderer() {
         this.rainShader = new Shader("src/main/resources/shaders/rain_vertex.glsl", "src/main/resources/shaders/rain_fragment.glsl");
         
@@ -64,32 +66,39 @@ public class RainRenderer {
         glBindVertexArray(0);
     }
 
-    public void render(Camera camera, World world, float alpha, float deltaTime) {
+    public void update(Camera camera, World world) {
         float rainIntensity = world.getWeatherManager().getRainIntensity();
         if (rainIntensity <= 0.05f) return;
 
         // 1. Рассчитываем границы сетки высот вокруг камеры
         Vector3f camPos = camera.getPosition();
         float grid = 0.5f;
-        float startX = (float)Math.floor(camPos.x / grid) * grid - 32.0f * grid;
-        float startZ = (float)Math.floor(camPos.z / grid) * grid - 32.0f * grid;
-        float gridSize = 64.0f * grid; // 32.0m
+        this.startX = (float)Math.floor(camPos.x / grid) * grid - 32.0f * grid;
+        this.startZ = (float)Math.floor(camPos.z / grid) * grid - 32.0f * grid;
+        this.gridSize = 64.0f * grid; // 32.0m
         
-        // 2. Заполняем массив высот на CPU с переводом во всемирные логические координаты (вычитаем LOGICAL_OFFSET_Y)
+        // 2. Заполняем массив высот на CPU
         for (int z = 0; z < 64; z++) {
             float worldZ = startZ + z * grid;
             int iz = (int)Math.floor(worldZ);
             for (int x = 0; x < 64; x++) {
                 float worldX = startX + x * grid;
                 int ix = (int)Math.floor(worldX);
-                heightData[z * 64 + x] = (float) (world.getHighestBlock(ix, iz) - com.za.zenith.world.chunks.Chunk.LOGICAL_OFFSET_Y);
+                heightData[z * 64 + x] = (float) world.getHighestBlock(ix, iz);
             }
         }
         
         // 3. Загружаем данные в текстуру на GPU
-        glActiveTexture(GL_TEXTURE0);
+        glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, heightmapTexId);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 64, 64, GL_RED, GL_FLOAT, heightData);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
+    public void render(Camera camera, World world, float alpha, float deltaTime) {
+        float rainIntensity = world.getWeatherManager().getRainIntensity();
+        if (rainIntensity <= 0.05f) return;
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -99,6 +108,9 @@ public class RainRenderer {
         rainShader.use();
         rainShader.setFloat("uRainIntensity", rainIntensity);
         rainShader.setInt("uHeightmap", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, heightmapTexId);
+        
         rainShader.setVector2f("uGridStart", new org.joml.Vector2f(startX, startZ));
         rainShader.setVector2f("uGridSize", new org.joml.Vector2f(gridSize, gridSize));
         
@@ -113,6 +125,11 @@ public class RainRenderer {
         glEnable(GL_CULL_FACE);
         glDisable(GL_BLEND);
     }
+
+    public int getHeightmapTexId() { return heightmapTexId; }
+    public float getStartX() { return startX; }
+    public float getStartZ() { return startZ; }
+    public float getGridSize() { return gridSize; }
     
     public void cleanup() {
         glDeleteTextures(heightmapTexId);

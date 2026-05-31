@@ -117,6 +117,7 @@ public class RenderPipeline {
 
         blockShader.use();
         blockShader.setInt("textureSampler", 0);
+        blockShader.setInt("uHeightmap", 1); // Slot 1 for heightmap to avoid conflict with slot 0
 
         float[] glassUV = atlas.uvFor("zenith/textures/block/glass.png");
         if (glassUV != null) blockShader.setFloat("glassLayer", glassUV[2]);
@@ -158,6 +159,9 @@ public class RenderPipeline {
         // 2. Main Rendering Pass (MSAA)
         msaaFramebuffer.resize(window.getWidth(), window.getHeight());
         resolveFramebuffer.resize(window.getWidth(), window.getHeight());
+        
+        // Update heightmap before world rendering for synchronized occlusion
+        rainRenderer.update(camera, world);
         
         msaaFramebuffer.bind();
         glEnable(GL_MULTISAMPLE);
@@ -386,7 +390,18 @@ public class RenderPipeline {
         
         // Pass rain intensity for wetness effects
         if (state.getWorld().getWeatherManager() != null) {
-            blockShader.setFloat("uRainIntensity", state.getWorld().getWeatherManager().getRainIntensity());
+            float rainIntensity = state.getWorld().getWeatherManager().getRainIntensity();
+            blockShader.setFloat("uRainIntensity", rainIntensity);
+            
+            // Pass heightmap data for synchronized occlusion
+            if (rainIntensity > 0.05f) {
+                blockShader.setInt("uHeightmap", 1);
+                blockShader.setVector2f("uGridStart", new org.joml.Vector2f(rainRenderer.getStartX(), rainRenderer.getStartZ()));
+                blockShader.setVector2f("uGridSize", new org.joml.Vector2f(rainRenderer.getGridSize(), rainRenderer.getGridSize()));
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, rainRenderer.getHeightmapTexId());
+                glActiveTexture(GL_TEXTURE0); // Reset for other textures
+            }
         } else {
             blockShader.setFloat("uRainIntensity", 0.0f);
         }

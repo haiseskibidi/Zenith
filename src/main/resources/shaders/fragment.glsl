@@ -36,6 +36,9 @@ uniform bool isHand = false;
 uniform float uHandPartWeight = 0.0; // 1.0=hand, 0.6=forearm, 0.3=shoulder
 
 uniform float uRainIntensity; // Global rain intensity (0.0 to 1.0)
+uniform sampler2D uHeightmap;
+uniform vec2 uGridStart;
+uniform vec2 uGridSize;
 
 // Modular Includes
 #include "include/noise.glsl"
@@ -57,7 +60,20 @@ void main() {
     float alpha = 1.0;
 
     // Determine if block is exposed to rain (smooth step based on sunlight to prevent blocky discrete wetness boundaries)
-    float rainExposure = smoothstep(7.0, 12.0, vLight.x) * (fragPos.y > 0.0 ? 1.0 : 0.0);
+    float rainExposure = smoothstep(7.0, 12.0, vLight.x);
+    
+    // AAA Polish: Heightmap-based precise occlusion for splashes
+    // This ensures that even if light leaks into a cave, splashes only appear where rain actually hits the ground.
+    vec2 heightmapUV = (fragPos.xz - uGridStart) / uGridSize;
+    if (heightmapUV.x >= 0.0 && heightmapUV.x <= 1.0 && heightmapUV.y >= 0.0 && heightmapUV.y <= 1.0) {
+        float groundHeight = texture(uHeightmap, heightmapUV).r;
+        // If the block surface is significantly below the highest block at this XZ, it's occluded.
+        // We use a small epsilon (0.2) to allow splashes on the very top surface of the block.
+        if (fragPos.y < groundHeight - 0.2) {
+            rainExposure = 0.0;
+        }
+    }
+
     float rainEffect = uRainIntensity * rainExposure;
 
     if (highlightPass != 0) {

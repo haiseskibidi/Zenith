@@ -66,11 +66,12 @@ void main() {
     vec3 worldPos = vec3(worldBase.x, uCameraPos.y + offset.y, worldBase.z);
     
     // Сэмплируем высоту земли в этой точке XZ
-    vec2 heightmapUV = (worldPos.xz - uGridStart) / uGridSize;
+    vec2 heightmapUV = (worldBase.xz - uGridStart) / uGridSize;
     float groundHeight = texture(uHeightmap, heightmapUV).r;
     
     // Если капля падает ниже земли, схлопываем её вершины в 0 в Clip Space
-    if (worldPos.y < groundHeight) {
+    // Добавляем небольшой эпсилон, чтобы капли не "втыкались" в землю
+    if (worldPos.y < groundHeight + 0.05) {
         gl_Position = vec4(0.0);
         return;
     }
