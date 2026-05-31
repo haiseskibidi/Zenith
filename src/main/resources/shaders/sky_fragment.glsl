@@ -25,9 +25,9 @@ void main() {
             float borderFade = smoothstep(0.5, 0.35, dist);
             glow *= borderFade;
             
-            // Bright white core, warm golden-tinted outer atmospheric glow
-            vec3 finalRGB = mix(uColor.rgb * glow * 2.0, vec3(1.0), sunDisk);
-            float finalAlpha = max(sunDisk, glow * uColor.a);
+            // Bright dynamic core, warm golden-tinted outer atmospheric glow
+            vec3 finalRGB = mix(uColor.rgb * glow * 2.0, uColor.rgb, sunDisk);
+            float finalAlpha = max(sunDisk * uColor.a, glow * uColor.a);
             
             fragColor = vec4(finalRGB, finalAlpha);
         } else {

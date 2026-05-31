@@ -67,9 +67,9 @@ public class RenderContext {
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
-    public static void update(World world, Camera camera, float alpha, Vector3f lightDir, Vector3f ambient, float nightFactorVal) {
+    public static void update(World world, Camera camera, float alpha, Vector3f lightDir, Vector3f rawSunDir, Vector3f ambient, float nightFactorVal) {
         time = (float) (org.lwjgl.glfw.GLFW.glfwGetTime() % 3600.0);
-        sunDirection.set(lightDir);
+        sunDirection.set(rawSunDir);
         ambientColor.set(ambient);
         viewMatrix.set(camera.getViewMatrix(alpha));
         projectionMatrix.set(camera.getProjectionMatrix());

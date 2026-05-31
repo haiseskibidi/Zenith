@@ -84,6 +84,8 @@ public class SkyRenderer {
         AtmosphereManager atmosphere = AtmosphereManager.getInstance();
         domeShader.setVector3f("uSkyColor", atmosphere.getSkyColor());
         domeShader.setVector3f("uSunColor", atmosphere.getSunColor());
+        domeShader.setVector3f("uMoonColor", atmosphere.getMoonColor());
+        domeShader.setVector3f("uHorizonColor", atmosphere.getHorizonColor()); // NEW: Direct fog/horizon sync
         domeShader.setFloat("uWarmth", atmosphere.getWarmth());
         domeShader.setFloat("uRainIntensity", atmosphere.getRainIntensity());
         
@@ -111,8 +113,8 @@ public class SkyRenderer {
 
     private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader, boolean isSun, float moonPhase) {
         // Celestial bodies are always "there", even below horizon, until they fully fade out.
-        // We only skip rendering if they are deep below (-0.4) to save some draw calls.
-        if (direction.y < -0.40f) {
+        // We only skip rendering if they are deep below (-0.75) to save some draw calls.
+        if (direction.y < -0.75f) {
             return;
         }
         int type = "procedural".equals(body.type) ? 1 : 0;
@@ -128,7 +130,14 @@ public class SkyRenderer {
         org.joml.Vector4f finalColor = new org.joml.Vector4f(c[0], c[1], c[2], c[3]);
         if (isSun) {
             Vector3f dynSunColor = AtmosphereManager.getInstance().getSunColor();
-            finalColor.set(dynSunColor.x, dynSunColor.y, dynSunColor.z, 1.0f);
+            // Use the average brightness to determine the alpha. 
+            // 5.0x multiplier ensures the disk is solid enough to be seen early.
+            float intensity = (dynSunColor.x + dynSunColor.y + dynSunColor.z) / 3.0f;
+            finalColor.set(dynSunColor.x, dynSunColor.y, dynSunColor.z, Math.clamp(intensity * 5.0f, 0.0f, 1.0f));
+        } else {
+            Vector3f dynMoonColor = AtmosphereManager.getInstance().getMoonColor();
+            float intensity = (dynMoonColor.x + dynMoonColor.y + dynMoonColor.z) / 3.0f;
+            finalColor.set(dynMoonColor.x, dynMoonColor.y, dynMoonColor.z, Math.clamp(intensity * 8.0f, 0.0f, 1.0f));
         }
         shader.setVector4f("uColor", finalColor);
 

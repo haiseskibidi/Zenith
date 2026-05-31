@@ -156,8 +156,8 @@ public class RenderPipeline {
         com.za.zenith.world.generation.BiomeDefinition biome = world.getBiomeManager().getBiome((int)camera.getPosition().x, (int)camera.getPosition().z);
         // ambientParticleManager.update(deltaTime, camera, world, biome);
 
-        // Update UBO and Context (pass nightFactor as float for smooth transition)
-        RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getAmbientLight(), nightFactor);
+        // Update UBO and Context (pass raw sun direction and night factor for smooth transition)
+        RenderContext.update(world, camera, alpha, sceneState.getLightDirection(), sceneState.getSunDirection(), sceneState.getAmbientLight(), nightFactor);
 
         // 2. Main Rendering Pass (MSAA)
         msaaFramebuffer.resize(window.getWidth(), window.getHeight());

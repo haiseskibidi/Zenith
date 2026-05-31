@@ -43,19 +43,20 @@ vec3 applyPostProcessing(vec3 color, vec2 fragTexCoord, vec2 texelSize, sampler2
         
         // 2. Atmospheric Fog (Physically-based Exponential Haze)
         float baseHaze = uHazeDensity;
-        
+
         // Directional Golden Dawn Haze: Denser towards the sun when it's low
+        // Using astronomical sun direction from UBO
         float sunElevation = uSunDirection.y;
-        if (sunElevation > -0.2 && sunElevation < 0.3) {
+        if (sunElevation > -0.85) {
             float sunGlowFactor = max(0.0, dot(viewDir, uSunDirection));
-            // Intensity peaks at the horizon (sunElevation = 0)
-            float lowSunWeight = 1.0 - abs(sunElevation - 0.05) / 0.25;
+            // Intensity peaks at the horizon (sunElevation = 0), fades towards -0.85 and 0.40
+            float lowSunWeight = 1.0 - abs(sunElevation - 0.05) / 0.80;
             lowSunWeight = clamp(lowSunWeight, 0.0, 1.0);
-            
+
             // Apply directional density boost (up to 3x denser towards the sun)
             baseHaze *= (1.0 + lowSunWeight * pow(sunGlowFactor, 3.0) * 2.5);
         }
-        
+
         float fogFactor = 1.0 - exp(-max(0.0, d - 8.0) * baseHaze);
         fogFactor = clamp(fogFactor, 0.0, 1.0);
         color = mix(color, uSkyColor, fogFactor);
