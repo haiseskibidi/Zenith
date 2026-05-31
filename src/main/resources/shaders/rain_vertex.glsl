@@ -7,6 +7,10 @@ layout(location = 1) in vec2 aUV;
 out vec2 vUV;
 out float vInstanceID;
 
+uniform sampler2D uHeightmap;
+uniform vec2 uGridStart;
+uniform vec2 uGridSize;
+
 // Fast hash for 1D float
 float hash11(float p) {
     p = fract(p * .1031);
@@ -56,12 +60,20 @@ void main() {
     float t = fract(uTime / cycleTime + cellHash);
     
     // Height: start from sky (e.g. 20m above camera) and fall to ground
-    // Ground is assumed at uCameraPos.y - something, but we just fall 30m
     float startHeight = 20.0;
     offset.y = startHeight - (t * 35.0); 
     
-    // Billboarding (face camera Y)
     vec3 worldPos = vec3(worldBase.x, uCameraPos.y + offset.y, worldBase.z);
+    
+    // Сэмплируем высоту земли в этой точке XZ
+    vec2 heightmapUV = (worldPos.xz - uGridStart) / uGridSize;
+    float groundHeight = texture(uHeightmap, heightmapUV).r;
+    
+    // Если капля падает ниже земли, схлопываем её вершины в 0 в Clip Space
+    if (worldPos.y < groundHeight) {
+        gl_Position = vec4(0.0);
+        return;
+    }
     
     // Apply wind tilt
     float tilt = 0.12;
