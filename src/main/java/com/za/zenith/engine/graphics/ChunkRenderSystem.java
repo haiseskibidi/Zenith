@@ -43,7 +43,7 @@ public class ChunkRenderSystem {
     }
     
     // Zero-Allocation BFS structures
-    private static final int MAX_QUEUE_SIZE = 65536;
+    private static final int MAX_QUEUE_SIZE = 131072;
     private final int[] bfsQueueX = new int[MAX_QUEUE_SIZE];
     private final int[] bfsQueueZ = new int[MAX_QUEUE_SIZE];
     private final int[] bfsQueueY = new int[MAX_QUEUE_SIZE];
@@ -150,6 +150,10 @@ public class ChunkRenderSystem {
             tail++;
 
             com.za.zenith.utils.Direction[] dirs = com.za.zenith.utils.Direction.values();
+            
+            Chunk lastChunk = null;
+            int lastChunkX = Integer.MAX_VALUE;
+            int lastChunkZ = Integer.MAX_VALUE;
 
             while (head < tail && tail < MAX_QUEUE_SIZE - 6) {
                 int cx = bfsQueueX[head];
@@ -167,7 +171,22 @@ public class ChunkRenderSystem {
                     continue;
                 }
 
-                Chunk chunk = world.getChunk(cx, cz);
+                Chunk chunk;
+                if (cx == lastChunkX && cz == lastChunkZ) {
+                    chunk = lastChunk;
+                } else {
+                    chunk = world.getChunk(cx, cz);
+                    lastChunkX = cx;
+                    lastChunkZ = cz;
+                    lastChunk = chunk;
+                }
+                
+                // CRITICAL: Stop BFS wave if chunk is unloaded! 
+                // Prevents the wave from infinitely exploring the "air" void outside the generated world.
+                if (chunk == null || !chunk.isReady()) {
+                    continue;
+                }
+
                 ChunkSection section = null;
                 boolean isSolid = false;
                 
