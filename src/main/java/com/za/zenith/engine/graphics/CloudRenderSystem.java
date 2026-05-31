@@ -27,12 +27,15 @@ public class CloudRenderSystem {
         
         // Компилируем шейдеры облаков
         shader = new Shader("src/main/resources/shaders/cloud_vertex.glsl", "src/main/resources/shaders/cloud_fragment.glsl");
+        RenderContext.bindShader(shader); // Bind to global UBO
         
         // Генерируем и настраиваем геометрию сферы на низком уровне
         createSphereGeometry();
         
         initialized = true;
     }
+
+    public Shader getShader() { return shader; }
 
     private void createSphereGeometry() {
         int rings = 8;

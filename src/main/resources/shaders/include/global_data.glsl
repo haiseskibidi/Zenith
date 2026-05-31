@@ -15,4 +15,5 @@ layout (std140) uniform GlobalData {
 #define uAmbientColor gAmbientColor.xyz
 #define uGrassColor gGrassColor.xyz
 #define uIsNight (gAmbientColor.w > 0.5)
+#define uNightFactor gAmbientColor.w
 

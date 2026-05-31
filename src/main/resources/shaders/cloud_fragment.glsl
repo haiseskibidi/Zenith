@@ -13,56 +13,49 @@ out vec4 fragColor;
 void main() {
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(uCameraPos - vWorldPos);
-    vec3 sunDir = -normalize(uSunDirection);
-
-    // 1. Плавное полутоновое освещение Ламберта
-    float diff = dot(normal, sunDir);
-    float light = smoothstep(-0.3, 0.7, diff);
-
-    // 2. Реалистичные цвета для дня с учетом дождя (Storm transition)
-    // В ясную погоду: белоснежные облака с нежной голубоватой тенью.
-    // В дождь: тяжелые, свинцово-черные грозовые тучи.
-    vec3 shadowColor = mix(vec3(0.68, 0.73, 0.83), vec3(0.10, 0.12, 0.18), uRainIntensity);
-    vec3 litColor = mix(vec3(1.0, 1.0, 1.0), vec3(0.20, 0.24, 0.30), uRainIntensity);
     
-    // При дожде прямое солнце скрывается, свет становится полностью рассеянным (ambient).
-    // Подавляем прямой солнечный свет на 85%, убирая неестественное свечение белых боков туч.
-    float lightFactor = mix(light, light * 0.15, uRainIntensity);
-    vec3 baseColor = mix(shadowColor, litColor, lightFactor);
+    // Astronomical directions
+    vec3 sunDir = normalize(uSunDirection);
+    vec3 moonDir = -sunDir;
 
-    // В дождь принудительно перекрашиваем облака в тяжелый грозовой свинцовый цвет
-    // для абсолютной гарантии отсутствия белых/светлых облаков во время шторма.
+    // 1. Dual-Celestial Lighting
+    float sunDiff = smoothstep(-0.3, 0.7, dot(normal, sunDir));
+    float moonDiff = smoothstep(-0.3, 0.7, dot(normal, moonDir));
+    
+    // 2. Day Colors (Storm-aware)
+    vec3 dayShadow = mix(vec3(0.68, 0.73, 0.83), vec3(0.10, 0.12, 0.18), uRainIntensity);
+    vec3 dayLit = mix(vec3(1.0, 1.0, 1.0), vec3(0.20, 0.24, 0.30), uRainIntensity);
+    vec3 dayColor = mix(dayShadow, dayLit, mix(sunDiff, sunDiff * 0.15, uRainIntensity));
+    
     if (uRainIntensity > 0.0) {
-        vec3 stormColor = vec3(0.12, 0.14, 0.19); // Базовый темно-свинцовый цвет тучи
-        baseColor = mix(baseColor, stormColor, uRainIntensity * 0.95);
+        dayColor = mix(dayColor, vec3(0.12, 0.14, 0.19), uRainIntensity * 0.95);
     }
 
-    // 3. Эффект "серебристой каймы" (Silver Lining)
-    // При дожде кайма полностью угасает, так как солнце скрывается за пеленой туч
+    // 3. Night Colors (Storm-aware Moon lighting)
+    vec3 nightLit = mix(vec3(0.28, 0.35, 0.52), vec3(0.05, 0.06, 0.10), uRainIntensity);
+    vec3 nightColor = mix(vec3(0.02, 0.03, 0.06), nightLit, moonDiff);
+    
+    // 4. Smooth Day/Night Transition
+    vec3 baseColor = mix(dayColor, nightColor, uNightFactor);
+
+    // 5. Silver Lining Effect (Sun only)
     float viewDotSun = max(0.0, dot(viewDir, sunDir));
     float edgeDecline = 1.0 - max(0.0, dot(normal, viewDir));
     float silverLining = pow(viewDotSun, 5.0) * pow(edgeDecline, 2.0) * mix(1.5, 0.0, uRainIntensity);
     
     vec3 sunGlowColor = vec3(1.0, 0.93, 0.82);
-    baseColor = mix(baseColor, sunGlowColor, silverLining * 0.7 * (1.0 - uRainIntensity));
+    // Silver lining fades at night
+    baseColor = mix(baseColor, sunGlowColor, silverLining * 0.7 * (1.0 - uRainIntensity) * (1.0 - uNightFactor));
 
-    // 4. Мягкость и пушистость (Fresnel Transparency) с учетом плотности дождя
+    // 6. Fresnel Transparency
     float fresnelAlpha = pow(max(0.0, dot(normal, viewDir)), 0.65);
-    
-    // В дождь облака становятся гораздо более плотными, густыми и непрозрачными
     float targetMaxAlpha = mix(0.88, 0.98, uRainIntensity);
-    float alpha = targetMaxAlpha * fresnelAlpha * vAlpha;
-
-    // 5. Ночное время суток: перекрашиваем под холодную лунную ночь
-    if (uIsNight) {
-        // Мягкий сине-индиговый лунный свет (в дождь становится совсем темным)
-        vec3 nightLit = mix(vec3(0.28, 0.35, 0.52), vec3(0.05, 0.06, 0.10), uRainIntensity);
-        baseColor = mix(vec3(0.02, 0.03, 0.06), nightLit, lightFactor);
-        
-        // В дождь тучи не должны терять плотность ночью, поэтому ослабление убирается
-        float nightAlphaMult = mix(0.65, 0.95, uRainIntensity);
-        alpha *= nightAlphaMult;
-    }
+    
+    // Night clouds are slightly more transparent/ethereal
+    float nightAlphaMult = mix(0.65, 0.95, uRainIntensity);
+    float finalAlphaMult = mix(1.0, nightAlphaMult, uNightFactor);
+    
+    float alpha = targetMaxAlpha * fresnelAlpha * vAlpha * finalAlphaMult;
 
     fragColor = vec4(baseColor, alpha);
 }
