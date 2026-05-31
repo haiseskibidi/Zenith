@@ -323,20 +323,33 @@ public class Chunk {
         this.dirtyCounter.set(dirtyCounterVal);
     }
 
-    public record DataSnapshot(ChunkPos position, int[] blockData, byte[] lightData) {
+    public record DataSnapshot(ChunkPos position, java.util.List<Integer> palette, short[][] blockIndices, byte[][] lightData) {
         public int getRawBlockData(int x, int y, int z) {
             if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE) return 0;
-            return blockData[y * (CHUNK_SIZE * CHUNK_SIZE) + z * CHUNK_SIZE + x];
+            int secIdx = y >> 4;
+            short[] indices = blockIndices[secIdx];
+            if (indices == null) return 0;
+            int localY = y & 15;
+            int palIdx = indices[localY * 256 + z * 16 + x] & 0xFFFF;
+            return palIdx < palette.size() ? palette.get(palIdx) : 0;
         }
         
         public int getSunlight(int x, int y, int z) {
             if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE) return 15;
-            return (lightData[y * (CHUNK_SIZE * CHUNK_SIZE) + z * CHUNK_SIZE + x] >> 4) & 0xF;
+            int secIdx = y >> 4;
+            byte[] lights = lightData[secIdx];
+            if (lights == null) return 15;
+            int localY = y & 15;
+            return (lights[localY * 256 + z * 16 + x] >> 4) & 0xF;
         }
 
         public int getBlockLight(int x, int y, int z) {
             if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE) return 0;
-            return lightData[y * (CHUNK_SIZE * CHUNK_SIZE) + z * CHUNK_SIZE + x] & 0xF;
+            int secIdx = y >> 4;
+            byte[] lights = lightData[secIdx];
+            if (lights == null) return 0;
+            int localY = y & 15;
+            return lights[localY * 256 + z * 16 + x] & 0xF;
         }
     }
 
@@ -362,53 +375,57 @@ public class Chunk {
         return data; 
     }
 
-    public DataSnapshot getSnapshot(int[] outBlockData, byte[] outLightData) {
+    public DataSnapshot getSnapshot() {
         long stamp = lock.readLock();
-        java.util.List<com.za.zenith.world.BlockPos> corrupted = null;
         try {
-            for (int y = 0; y < CHUNK_HEIGHT; y++) {
-                ChunkSection sec = getSection(y);
-                if (sec == null) continue;
-                short[] indices = sec.getBlockIndices();
-                int baseIdx = y * 256;
-                int localY = y & 15;
-                for (int z = 0; z < CHUNK_SIZE; z++) {
-                    for (int x = 0; x < CHUNK_SIZE; x++) {
-                        int palIdx = indices[localY * 256 + z * 16 + x] & 0xFFFF;
-                        if (palIdx < palette.size()) {
-                            outBlockData[baseIdx + z * 16 + x] = palette.get(palIdx);
-                        } else {
-                            com.za.zenith.utils.Logger.error("Palette corruption in chunk %s at local [%d, %d, %d]: Index %d out of bounds for palette size %d. Resetting to Air.", 
-                                position, x, y, z, palIdx, palette.size());
-                            outBlockData[baseIdx + z * 16 + x] = 0;
-                            if (corrupted == null) {
-                                corrupted = new java.util.ArrayList<>();
-                            }
-                            corrupted.add(new com.za.zenith.world.BlockPos(x, y, z));
-                        }
-                    }
+            java.util.List<Integer> paletteCopy = new java.util.ArrayList<>(this.palette);
+            short[][] blockIndicesCopy = new short[NUM_SECTIONS][];
+            byte[][] lightDataCopy = new byte[NUM_SECTIONS][];
+            
+            for (int i = 0; i < NUM_SECTIONS; i++) {
+                ChunkSection sec = sections[i];
+                if (sec != null && !sec.isEmpty()) {
+                    blockIndicesCopy[i] = new short[ChunkSection.SECTION_VOLUME];
+                    System.arraycopy(sec.getBlockIndices(), 0, blockIndicesCopy[i], 0, ChunkSection.SECTION_VOLUME);
+                    
+                    lightDataCopy[i] = new byte[ChunkSection.SECTION_VOLUME];
+                    System.arraycopy(sec.getLightData(), 0, lightDataCopy[i], 0, ChunkSection.SECTION_VOLUME);
                 }
             }
-            for (int i = 0; i < NUM_SECTIONS; i++) {
-                System.arraycopy(sections[i].getLightData(), 0, outLightData, i * ChunkSection.SECTION_VOLUME, ChunkSection.SECTION_VOLUME);
-            }
-            return new DataSnapshot(position, outBlockData, outLightData);
+            return new DataSnapshot(position, paletteCopy, blockIndicesCopy, lightDataCopy);
         } finally {
             lock.unlockRead(stamp);
-            
-            if (corrupted != null) {
-                long writeStamp = lock.writeLock();
-                try {
-                    for (com.za.zenith.world.BlockPos pos : corrupted) {
-                        ChunkSection sec = getSection(pos.y());
-                        if (sec != null) {
-                            sec.setBlockIndex(pos.x(), pos.y() & 15, pos.z(), (short)0, false, true);
+        }
+    }
+
+    public Chunk(DataSnapshot snapshot) {
+        this.position = snapshot.position();
+        this.sections = new ChunkSection[NUM_SECTIONS];
+        this.palette.addAll(snapshot.palette());
+        this.heightMap = new short[CHUNK_SIZE * CHUNK_SIZE];
+        java.util.Arrays.fill(heightMap, (short)-1);
+        
+        for (int i = 0; i < NUM_SECTIONS; i++) {
+            short[] indices = snapshot.blockIndices()[i];
+            byte[] lights = snapshot.lightData()[i];
+            if (indices != null && lights != null) {
+                this.sections[i] = new ChunkSection();
+                System.arraycopy(indices, 0, this.sections[i].getBlockIndices(), 0, ChunkSection.SECTION_VOLUME);
+                System.arraycopy(lights, 0, this.sections[i].getLightData(), 0, ChunkSection.SECTION_VOLUME);
+                
+                int nonEmpty = 0;
+                for (int j = 0; j < ChunkSection.SECTION_VOLUME; j++) {
+                    int palIdx = indices[j] & 0xFFFF;
+                    if (palIdx < snapshot.palette().size()) {
+                        int raw = snapshot.palette().get(palIdx);
+                        if ((raw >> 8) != 0) {
+                            nonEmpty++;
                         }
                     }
-                } finally {
-                    lock.unlockWrite(writeStamp);
                 }
+                this.sections[i].setNonEmptyBlockCount(nonEmpty);
             }
         }
+        this.isReady = true;
     }
 }

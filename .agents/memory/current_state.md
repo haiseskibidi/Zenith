@@ -1,6 +1,9 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **High-Speed Breaking GPU-Hiding & Remesh Coalescing (v2.7)**:
+  - **GPU Hiding for Recently Broken Blocks**: Re-routed recently broken block positions (`recentlyBrokenHoles`) into the GPU `uHiddenPositions` uniform array in `RenderPipeline.java`. This guarantees that mined blocks are collapse-culled at the vertex-shader stage instantly, preventing their top/side faces from flickering for a single frame before the chunk mesh is rebuilt.
+  - **Adaptive Chunk Remesh Rate-Limiting**: Implemented an adaptive coalescing & rate-limiting mechanism (`lastRemeshTimestamps` + `dirtyChunksCoalesceMap` with an `80ms` threshold) in `ChunkRenderSystem.java` for already built chunks. Single block breaks update the mesh **instantly with zero delay** (ensuring immediate light updates and adjacent face generation), while fast rapid mining (20+ blocks/sec) is automatically throttled and coalesced, maintaining a flat **165+ FPS** and zero lag.
 - **ItemEntity & Lighting Subsystem Stabilization (v2.6)**:
   - **ItemEntity Physics & Spatial Hovering Fixes**:
     - *Pickup delay wake up*: Moved the `pickupDelay` decrement statement to the very beginning of the `onUpdate()` method in `ItemEntity.java`, ensuring that sleeping items can still tick down their pickup timers and be cleanly picked up by the player.

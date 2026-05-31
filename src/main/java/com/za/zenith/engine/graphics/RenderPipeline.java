@@ -391,6 +391,15 @@ public class RenderPipeline {
                 hiddenCount++;
             }
         }
+        
+        // Hide recently broken blocks (holes) on GPU until their chunk mesh is fully rebuilt
+        for (com.za.zenith.world.BlockPos rPos : overlaySystem.getRecentlyBrokenHoles().keySet()) {
+            if (hiddenCount >= 16) break;
+            if (bPos != null && rPos.equals(bPos)) continue;
+            blockShader.setVector3f("uHiddenPositions[" + hiddenCount + "]", rPos.x(), rPos.y(), rPos.z());
+            hiddenCount++;
+        }
+        
         for (var entry : state.getWorld().getBlockDamageMap().entrySet()) {
             if (hiddenCount >= 16) break;
             long packed = entry.getKey();
@@ -398,6 +407,17 @@ public class RenderPipeline {
             int by = com.za.zenith.world.World.unpackBlockY(packed);
             int bz = com.za.zenith.world.World.unpackBlockZ(packed);
             if (bPos != null && bx == bPos.x() && by == bPos.y() && bz == bPos.z()) continue;
+            
+            // Avoid duplicate GPU hiding if already hidden by recently broken holes
+            boolean alreadyHidden = false;
+            for (com.za.zenith.world.BlockPos rPos : overlaySystem.getRecentlyBrokenHoles().keySet()) {
+                if (rPos.x() == bx && rPos.y() == by && rPos.z() == bz) {
+                    alreadyHidden = true;
+                    break;
+                }
+            }
+            if (alreadyHidden) continue;
+            
             blockShader.setVector3f("uHiddenPositions[" + hiddenCount + "]", bx, by, bz);
             hiddenCount++;
         }

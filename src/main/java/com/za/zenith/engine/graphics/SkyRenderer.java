@@ -114,6 +114,11 @@ public class SkyRenderer {
     }
 
     private void renderBody(SkySettings.BodyConfig body, Vector3f direction, Shader shader, boolean isSun, float moonPhase) {
+        // Do not render celestial bodies when they are below the horizon (Y < -0.08)
+        // Offset of -0.08 allows soft atmospheric glow to set cleanly below the hills
+        if (direction.y < -0.08f) {
+            return;
+        }
         int type = "procedural".equals(body.type) ? 1 : 0;
         shader.setInt("uType", type);
         shader.setBoolean("uIsSun", isSun);

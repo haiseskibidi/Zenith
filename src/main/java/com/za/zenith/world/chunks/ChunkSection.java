@@ -196,6 +196,10 @@ public class ChunkSection {
         return nonEmptyBlockCount == 0;
     }
     
+    public void setNonEmptyBlockCount(int count) {
+        this.nonEmptyBlockCount = count;
+    }
+    
     public long getDirtyCounter() {
         return dirtyCounter.get();
     }

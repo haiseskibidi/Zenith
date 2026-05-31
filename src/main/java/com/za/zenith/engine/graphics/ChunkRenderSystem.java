@@ -274,9 +274,7 @@ public class ChunkRenderSystem {
     }
 
     private void scheduleChunkMesh(Chunk chunk, World world, DynamicTextureAtlas atlas, Vector3f camPos) {
-        int[] bd = com.za.zenith.utils.ArrayPool.rentBlockDataArray();
-        byte[] ld = com.za.zenith.utils.ArrayPool.rentLightDataArray();
-        Chunk.DataSnapshot snapshot = chunk.getSnapshot(bd, ld);
+        Chunk.DataSnapshot snapshot = chunk.getSnapshot();
         long version = chunk.getDirtyCounter();
         float distSq = camPos.distanceSquared(snapshot.position().x() * 16 + 8, camPos.y, snapshot.position().z() * 16 + 8);
         float spawnTime = chunk.getFirstSpawnTime();
@@ -284,15 +282,10 @@ public class ChunkRenderSystem {
         pendingUpdates.put(chunk, meshExecutor.submit(new com.za.zenith.utils.PriorityExecutorService.PrioritizedCallable<>() {
             @Override public int getPriority() { return (int)distSq; }
             @Override public ChunkMeshGenerator.RawChunkMeshResult call() throws Exception {
-                try {
-                    Chunk temp = new Chunk(snapshot.position(), snapshot.blockData(), snapshot.lightData());
-                    temp.setDirtyCounter(version);
-                    temp.setFirstSpawnTime(spawnTime);
-                    return ChunkMeshGenerator.generateRawMesh(temp, world, atlas);
-                } finally {
-                    com.za.zenith.utils.ArrayPool.returnBlockDataArray(snapshot.blockData());
-                    com.za.zenith.utils.ArrayPool.returnLightDataArray(snapshot.lightData());
-                }
+                Chunk temp = new Chunk(snapshot);
+                temp.setDirtyCounter(version);
+                temp.setFirstSpawnTime(spawnTime);
+                return ChunkMeshGenerator.generateRawMesh(temp, world, atlas);
             }
         }));
     }

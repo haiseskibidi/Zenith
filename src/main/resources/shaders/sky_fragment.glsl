@@ -21,6 +21,10 @@ void main() {
             // Gives a soft, expansive, glowing golden halo initially in the sky
             float glow = exp(-dist * 4.5) * 0.85;
             
+            // Soft radial fade near the quad edges to prevent ugly square clipping artifacts
+            float borderFade = smoothstep(0.5, 0.35, dist);
+            glow *= borderFade;
+            
             // Bright white core, warm golden-tinted outer atmospheric glow
             vec3 finalRGB = mix(uColor.rgb * glow * 2.0, vec3(1.0), sunDisk);
             float finalAlpha = max(sunDisk, glow * uColor.a);
@@ -52,6 +56,7 @@ void main() {
             
             // Soft, silver-indigo velvet edge glow for realistic depth and ambient dispersion
             float glow = exp(-dist * 14.0) * 0.15;
+            glow *= smoothstep(0.5, 0.35, dist);
             
             // Lunar cool silver-grey base color with detail
             vec3 moonBaseColor = uColor.rgb * (0.88 + detail);
