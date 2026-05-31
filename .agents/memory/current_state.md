@@ -1,6 +1,9 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **Uniform Red Weak Spots for Wood Blocks (v1.2)**:
+  - **Color Consistency**: Updated all wood-related blocks (`logs`, `stripped logs`, `felling stages`) to use pure red `[1.0, 0.0, 0.0]` for weak spots in `mining_logic`. This ensures a unified visual feedback during timber harvesting.
+  - **Surgical JSON Updates**: Applied targeted edits to 15+ JSON files, ensuring that blocks previously lacking a color (like `oak_log` or `felling_stages`) or having non-standard colors (like `birch_log`) now adhere to the standard.
 - **Mathemagical Synchronized Rain & Realistic Wetness (Atmosphere v2.8)**:
   - **Spatiotemporal Synchronized Rain**: Developed a "Mathemagical Sync" algorithm that uses a deterministic 0.5x0.5m global grid to synchronize falling rain streaks with surface effects. Every rain drop is calculated purely on the GPU in `rain_vertex.glsl` based on time and cell ID, while the surface shader (`fragment.glsl`) uses the *exact same* formula to detect impact.
   - **Zero-Allocation GPU-Driven VFX**: The system requires 0 communication between CPU and GPU for individual drops. 3000 rain streaks are rendered in a single draw call using **Instanced Rendering** with custom VAO layouts.

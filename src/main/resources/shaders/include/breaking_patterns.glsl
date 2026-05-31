@@ -53,8 +53,8 @@ vec3 applyWoodNotch(vec3 color, vec3 localPos, vec4 notchPosAndIntensity, float 
         float intensity = (1.0 - (vDist / range)) * smoothstep(0.25, 0.0, horizDist) * intensityMultiplier;
         
         if (isFresh) {
-            // Restore bright white fresh cut for wood
-            return mix(color, vec3(1.0, 1.0, 1.0), intensity * 0.9);
+            // Use dynamic weak spot color instead of hardcoded white (critical for birch)
+            return mix(color, uWeakSpotColor, intensity * 0.9);
         } else {
             // Dark damaged old cut
             return mix(color, color * 0.15, intensity * 0.8);

@@ -8,7 +8,8 @@
   "mining_logic": {
     "strategy": "weak_spots",
     "precision": 0.2,
-    "miss_multiplier": 0.3
+    "miss_multiplier": 0.3,
+    "weak_spot_color": [1.0, 0.0, 0.0]
   },
   "hardness": 2.0,
   "textures": {
