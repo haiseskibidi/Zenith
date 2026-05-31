@@ -320,12 +320,8 @@ public class ChunkMeshGenerator {
             float totalSun = 0;
             float totalBlock = 0;
 
-            int cx = fx, cy = fy, cz = fz;
-            if (neighborhood.isBreaking(fx, fy, fz)) {
-                cx = x; cy = y; cz = z;
-            }
-            float centralSun = neighborhood.getSunlight(cx, cy, cz);
-            float centralBlock = neighborhood.getBlockLight(cx, cy, cz);
+            float centralSun = neighborhood.getSunlight(fx, fy, fz);
+            float centralBlock = neighborhood.getBlockLight(fx, fy, fz);
             
             for (int i = 0; i < 4; i++) {
                 int sx = fx, sy = fy, sz = fz;
@@ -340,12 +336,8 @@ public class ChunkMeshGenerator {
                     if (i == 2 || i == 3) sz += nz;
                 }
                 
-                int sx2 = sx, sy2 = sy, sz2 = sz;
-                if (neighborhood.isBreaking(sx, sy, sz)) {
-                    sx2 = x; sy2 = y; sz2 = z;
-                }
-                totalSun += neighborhood.getSunlight(sx2, sy2, sz2);
-                totalBlock += neighborhood.getBlockLight(sx2, sy2, sz2);
+                totalSun += neighborhood.getSunlight(sx, sy, sz);
+                totalBlock += neighborhood.getBlockLight(sx, sy, sz);
             }
 
             out[0] = Math.max(centralSun, totalSun * 0.25f);
@@ -557,7 +549,7 @@ public class ChunkMeshGenerator {
             Block nBlock = world.getBlock(nPos);
             BlockDefinition nDef = BlockRegistry.getBlock(nBlock.getType());
 
-            if (nBlock.getType() != 0 && nDef != null && nDef.getPlacementType() == com.za.zenith.world.blocks.PlacementType.DEFAULT) {
+            if (nBlock.getType() != 0 && nDef != null && nDef.getPlacementType() == com.za.zenith.world.blocks.PlacementType.DEFAULT && nDef.is(BlockDefinition.FLAG_SOLID) && !nDef.is(BlockDefinition.FLAG_TRANSPARENT)) {
                 int oppFace = oppositeFaces[face];
 
                 VoxelShape shape = nBlock.getShape();

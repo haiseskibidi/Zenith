@@ -76,7 +76,8 @@ public class OverlayRenderSystem {
         }
         if (block == null) {
             if (this.breakingPos != null && this.breakingProgress >= 0.99f) {
-                if (this.holeMesh == null && lastWorld != null && atlas != null) {
+                if (lastWorld != null && atlas != null) {
+                    if (this.holeMesh != null) this.holeMesh.cleanup();
                     this.holeMesh = ChunkMeshGenerator.generateHoleMesh(this.breakingPos, lastWorld, atlas);
                 }
                 if (this.holeMesh != null) {

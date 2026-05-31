@@ -928,7 +928,7 @@ public class World {
 
             // Update lighting: gameplay changes are calculated synchronously to prevent lag, skip during generation
             if (notifyAndLight && !generating) {
-                lightEngine.enqueueLightUpdate(pos, true);
+                lightEngine.enqueueLightUpdate(pos, false);
             }
 
             // Handle block entities
