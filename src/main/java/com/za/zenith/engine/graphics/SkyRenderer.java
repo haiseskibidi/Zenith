@@ -85,6 +85,7 @@ public class SkyRenderer {
         domeShader.setVector3f("uSkyColor", atmosphere.getSkyColor());
         domeShader.setVector3f("uSunColor", atmosphere.getSunColor());
         domeShader.setFloat("uWarmth", atmosphere.getWarmth());
+        domeShader.setFloat("uRainIntensity", atmosphere.getRainIntensity());
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 

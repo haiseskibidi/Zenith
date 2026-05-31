@@ -13,7 +13,6 @@ public class TerrainGenerator {
     public TerrainGenerator(long seed) {
         this.pipeline = new GenerationPipeline();
         
-        // Регистрируем шаги пайплайна
         this.pipeline.addStep(new TerrainStep(seed));
         this.pipeline.addStep(new OvergrowthStep(seed));
         this.pipeline.addStep(new ScavengeDecorationStep(seed));

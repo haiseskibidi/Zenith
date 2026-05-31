@@ -23,6 +23,13 @@ public class AtmosphereManager {
     private long lastCalculatedDay = -1;
     private float warmth = 0.5f;
     private float haze = 0.5f;
+    private float computedHaze = 0.5f; // Вычисленный туман с учетом осадков и прояснений
+    private float rainIntensity = 0.0f;
+    private float currentCloudShadow = 0.0f; // Текущий уровень тени от облаков
+    private float clearUpFactor = 0.0f; // Коэффициент прояснения [0.0..1.0] после дождя
+    private float lastRainIntensity = 0.0f; // Предыдущая интенсивность дождя для отслеживания момента окончания
+    private boolean postRainClearing = false; // Фаза активного роста прояснения после дождя
+    private boolean wasRaining = false;       // Был ли дождь в последнее время
 
     // Computed colors (cached for Zero-Allocation access)
     private final Vector3f skyColor = new Vector3f();
@@ -61,7 +68,7 @@ public class AtmosphereManager {
         // Private constructor for Singleton
     }
 
-    public void update(World world) {
+    public void update(World world, float deltaTime) {
         WorldSettings settings = WorldSettings.getInstance();
         float worldTime = world.getWorldTime();
         long currentDay = (long) (worldTime / settings.dayLength);
@@ -101,18 +108,116 @@ public class AtmosphereManager {
         // 6. Compute Horizon Color (for matching volumetric fog)
         computeHorizonColor(cosVal);
 
-        // 7. Apply Rain Darkening
+        // 7. Apply Rain Darkening and Dynamic Clear-Up Effect
         float rainIntensity = world.getWeatherManager() != null ? world.getWeatherManager().getRainIntensity() : 0.0f;
+        this.rainIntensity = rainIntensity;
+        
+        // Отслеживаем наличие дождя
         if (rainIntensity > 0.0f) {
-            float darkening = 1.0f - (rainIntensity * 0.25f); // Reduced from 0.45 to 0.25
+            wasRaining = true;
+            postRainClearing = false;
+            // Во время дождя прояснение плавно угасает (за 0.5с), если оно еще оставалось от прошлого раза
+            clearUpFactor = Math.max(0.0f, clearUpFactor - deltaTime * 2.0f);
+        } else {
+            // Дождь закончился (rainIntensity == 0.0f)
+            if (wasRaining) {
+                postRainClearing = true;
+                wasRaining = false;
+            }
+        }
+        
+        if (postRainClearing) {
+            // Плавно наращиваем прояснение от 0.0f до 1.0f за ~8 секунд
+            clearUpFactor = Math.min(1.0f, clearUpFactor + deltaTime * 0.12f);
+            if (clearUpFactor >= 1.0f) {
+                postRainClearing = false; // Достигли максимума, переходим к фазе медленного затухания
+            }
+        } else if (clearUpFactor > 0.0f && rainIntensity == 0.0f) {
+            // Плавно возвращаем туман к обычному значению за ~125 секунд
+            clearUpFactor = Math.max(0.0f, clearUpFactor - deltaTime * 0.008f);
+        }
+        
+        lastRainIntensity = rainIntensity;
+
+        // Вычисляем итоговый туман
+        float activeHaze = haze;
+        if (clearUpFactor > 0.0f) {
+            // После дождя туман рассеивается почти до нуля (на 98% прозрачности при максимальном clearUpFactor!)
+            activeHaze = activeHaze * (1.0f - clearUpFactor * 0.98f);
+        }
+        if (rainIntensity > 0.0f) {
+            activeHaze = Math.max(activeHaze, rainIntensity * 0.85f);
+        }
+        this.computedHaze = activeHaze;
+
+        if (rainIntensity > 0.0f) {
+            float darkening = 1.0f - (rainIntensity * 0.45f); // Сгущаем краски неба на 45%
             skyColor.mul(darkening);
             horizonColor.mul(darkening);
-            sunColor.mul(1.0f - (rainIntensity * 0.5f)); // Reduced from 0.7 to 0.5
-            ambientColor.mul(1.0f - (rainIntensity * 0.15f)); // Reduced from 0.3 to 0.15
             
-            // Also increase haze/fog density during rain
-            haze = Math.max(haze, rainIntensity * 0.8f);
+            // Солнце и эмбиент темнеют слегка от дождя (основное затемнение идет от Cloud Shadows)
+            sunColor.mul(1.0f - (rainIntensity * 0.35f)); 
+            ambientColor.mul(1.0f - (rainIntensity * 0.15f)); 
         }
+
+        // 8. Calculate Dynamic Cloud Shadows for the Player
+        float maxShadow = 0.0f;
+        if (world.getPlayer() != null && cosVal > 0.0f) {
+            org.joml.Vector3f playerPos = world.getPlayer().getPosition();
+            float windTime = world.getWindTime();
+            float sinVal = (float) Math.sin(angle);
+            org.joml.Vector3f sunDir = new org.joml.Vector3f(-0.2f, cosVal, -sinVal).normalize();
+            
+            for (com.za.zenith.world.World.CloudInstance c : world.getActiveClouds()) {
+                if (c.isMarkedCollected()) continue;
+                
+                // Центр облака в мировых координатах (с учетом ветра)
+                float cx = c.x + windTime;
+                float cy = c.y;
+                float cz = c.z;
+                
+                // Смещение тени облака на землю в зависимости от угла солнца.
+                // Ограничиваем знаменатель, чтобы тень от облака не улетала за пределы активной зоны (до 200 метров)
+                float angleDivisor = Math.max(0.45f, sunDir.y); 
+                float heightDiff = cy - playerPos.y;
+                float shadowShiftX = sunDir.x * heightDiff / angleDivisor;
+                float shadowShiftZ = sunDir.z * heightDiff / angleDivisor;
+                
+                // Проецируем центр облака на высоту игрока вдоль луча солнца
+                float shadowX = cx - shadowShiftX;
+                float shadowZ = cz - shadowShiftZ;
+                
+                // Горизонтальное расстояние от игрока до центра тени на земле
+                float dx = playerPos.x - shadowX;
+                float dz = playerPos.z - shadowZ;
+                float distSq = dx * dx + dz * dz;
+                
+                // Теневой радиус облака (зависит от его масштаба)
+                float shadowRadius = c.scale * 2.5f; 
+                float shadowRadiusSq = shadowRadius * shadowRadius;
+                
+                if (distSq < shadowRadiusSq) {
+                    float dist = (float) Math.sqrt(distSq);
+                    float shadowFactor = 1.0f - (dist / shadowRadius);
+                    
+                    // Тень зависит от прозрачности облака
+                    float cloudShadow = shadowFactor * c.getAlpha();
+                    if (cloudShadow > maxShadow) {
+                        maxShadow = cloudShadow;
+                    }
+                }
+            }
+        }
+        
+        // Плавное изменение уровня тени игрока (lerp за ~1.5 секунды)
+        currentCloudShadow = currentCloudShadow + (maxShadow - currentCloudShadow) * deltaTime * 2.5f;
+        
+        // Применим тени от облаков к солнцу и окружающему миру
+        float shadowSunMultiplier = 1.0f - (currentCloudShadow * 0.70f); // Затенение солнца до 70%
+        float shadowAmbientMultiplier = 1.0f - (currentCloudShadow * 0.28f); // Затенение окружения до 28%
+        
+        sunColor.mul(shadowSunMultiplier);
+        ambientColor.mul(shadowAmbientMultiplier);
     }
 
     private void computeSkyColor(float cos) {
@@ -205,6 +310,7 @@ public class AtmosphereManager {
     public Vector3f getSunColor() { return sunColor; }
     public Vector3f getAmbientColor() { return ambientColor; }
     public float getWarmth() { return warmth; }
-    public float getHaze() { return haze; }
-    public float getHazeMultiplier() { return 0.5f + 1.0f * haze; }
+    public float getHaze() { return computedHaze; }
+    public float getHazeMultiplier() { return 0.5f + 1.0f * computedHaze; }
+    public float getRainIntensity() { return rainIntensity; }
 }

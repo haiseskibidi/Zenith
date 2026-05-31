@@ -172,6 +172,91 @@ public class InteractionInputHandler {
                 }
             }
 
+            if (!actionConsumed && isNewRightClick) {
+                float windTime = world.getWindTime();
+                Vector3f camPos = camera.getPosition();
+                Vector3f dir = camera.getDirection();
+                
+                World.CloudInstance hitCloud = null;
+                float minT = Float.MAX_VALUE;
+                
+                for (World.CloudInstance c : world.getActiveClouds()) {
+                    if (c.isMarkedCollected()) continue;
+                    
+                    // Визуальное положение облака с учетом плавающего ветра (прямые мировые координаты)
+                    float vx = c.x + windTime;
+                    float vy = c.y;
+                    float vz = c.z;
+                    
+                    Vector3f p = new Vector3f(vx, vy, vz);
+                    float distToCam = camPos.distance(p);
+                    
+                    // Кликабельная дистанция взаимодействия зависит от масштаба (размера) облака
+                    float maxInteractDist = c.scale * 0.8f + 8.0f;
+                    if (distToCam > maxInteractDist) continue;
+                    
+                    Vector3f v = new Vector3f(p).sub(camPos);
+                    float t = v.dot(dir);
+                    if (t < 0) continue; // сзади
+                    
+                    Vector3f proj = new Vector3f(dir).mul(t).add(camPos);
+                    float distToRay = p.distance(proj);
+                    
+                    // Облако считается пораженным, если луч проходит сквозь его объем
+                    float interactRadius = c.scale * 0.7f;
+                    if (distToRay < interactRadius && t < minT) {
+                        minT = t;
+                        hitCloud = c;
+                    }
+                }
+                
+                if (hitCloud != null) {
+                    // 1. Сбор облака!
+                    hitCloud.collect();
+                    
+                    // Вычисляем реальное положение для собранного облака (прямые мировые координаты)
+                    float hitVx = hitCloud.x + windTime;
+                    
+                    // 2. Спавним красивые мультяшные частицы пара прямо в его визуальной точке!
+                    com.za.zenith.engine.graphics.DynamicTextureAtlas atlas = com.za.zenith.engine.core.GameLoop.getInstance().getRenderer().getAtlas();
+                    int textureLayer = 0;
+                    try {
+                        textureLayer = (int)atlas.getLayer("zenith/textures/block/powder_snow.png");
+                    } catch (Exception e) {}
+                    
+                    Vector3f color = new Vector3f(1.0f, 1.0f, 1.0f); // Чисто белый цвет пара
+                    
+                    // Количество частиц пропорционально размеру облака
+                    int particleCount = Math.min(80, Math.max(20, (int)(hitCloud.scale * 4.0f)));
+                    for (int i = 0; i < particleCount; i++) {
+                        Vector3f pPos = new Vector3f(
+                            hitVx + ((float)Math.random() - 0.5f) * hitCloud.scale * 0.8f,
+                            hitCloud.y + ((float)Math.random() - 0.5f) * hitCloud.scale * 0.8f,
+                            hitCloud.z + ((float)Math.random() - 0.5f) * hitCloud.scale * 0.8f
+                        );
+                        
+                        Vector3f vel = new Vector3f(
+                            ((float)Math.random() - 0.5f) * 6.0f,
+                            ((float)Math.random() - 0.2f) * 5.0f,
+                            ((float)Math.random() - 0.5f) * 6.0f
+                        );
+                        
+                        float life = 1.0f + (float)Math.random() * 1.2f;
+                        float pScale = 0.4f + (float)Math.random() * 0.6f;
+                        
+                        com.za.zenith.world.particles.ParticleManager.getInstance().addParticle(
+                            new com.za.zenith.world.particles.ShardParticle(pPos, vel, life, pScale, textureLayer, 0, color)
+                        );
+                    }
+                    
+                    // 3. Выводим красивое уведомление о сборе облака
+                    com.za.zenith.engine.graphics.ui.NotificationManager.getInstance().pushAlert("Cloud Collected!", null, 3.0f);
+                    
+                    actionConsumed = true;
+                    manager.setPlaceDelayTimer(manager.PLACE_COOLDOWN);
+                }
+            }
+
             if (!actionConsumed && raycast.isHit() && isNewRightClick) {
                 BlockPos hitPos = raycast.getBlockPos();
                 int hitBlockType = world.getBlock(hitPos).getType();

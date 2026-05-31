@@ -30,6 +30,12 @@ public class ParticleManager {
         return instance;
     }
 
+    public void addParticle(Particle p) {
+        if (p != null) {
+            pendingAdd.add(p);
+        }
+    }
+
     public void update(float deltaTime, World world) {
         spawnedThisTick = 0;
         if (!pendingAdd.isEmpty()) {

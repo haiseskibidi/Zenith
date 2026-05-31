@@ -29,6 +29,7 @@ import java.util.Map;
 public class World {
     private final Map<Long, Chunk> chunks;
     private final Map<Long, Chunk> stagingChunks = new ConcurrentHashMap<>();
+    private final java.util.List<CloudInstance> activeClouds = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final List<Entity> entities = java.util.Collections.synchronizedList(new ArrayList<>());
     private final Map<com.za.zenith.world.chunks.ChunkPos, List<Entity>> groundEntityMap = new ConcurrentHashMap<>();
     private final Vector3f vPool1 = new Vector3f();
@@ -37,6 +38,9 @@ public class World {
     private final List<ITickable> tickableBlockEntities;
     private final LightEngine lightEngine;
     private float worldTime; // Stored as float for smooth interpolation
+    private float windTime = 0.0f;
+
+    public float getWindTime() { return windTime; }
 
     private final com.za.zenith.utils.PriorityExecutorService chunkGenExecutor = new com.za.zenith.utils.PriorityExecutorService(
         Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() - 2)),
@@ -219,6 +223,7 @@ public class World {
 
                 terrainGenerator.generateTerrain(chunk);
                 chunks.put(pos.pack(), chunk);
+                registerChunkClouds(chunk);
             }
         }
 
@@ -357,6 +362,8 @@ public class World {
                     // CRITICAL FIX: Properly remove the entire chunk from groundEntityMap
                     groundEntityMap.remove(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
 
+                    unregisterChunkClouds(chunk);
+
                     for (java.util.function.Consumer<Chunk> listener : unloadListeners) {
                         listener.accept(chunk);
                     }
@@ -467,6 +474,7 @@ public class World {
                     lightEngine.onChunkReady(chunk);
                     com.za.zenith.world.lighting.LightManager.onChunkLoad(chunk);
                     chunks.put(packedPos, chunk);
+                    registerChunkClouds(chunk);
                 } catch (Exception e) {
                     String errorMsg = "Lighting error in chunk " + chunk.getPosition() + ": " + e.getMessage();
                     com.za.zenith.utils.Logger.error(errorMsg, e);
@@ -526,6 +534,90 @@ public class World {
     public void update(float deltaTime) {
         updateChunks();
         weatherManager.update(deltaTime);
+        windTime += deltaTime * 1.5f; // Облака плавно плывут по небу со скоростью 1.5 блока/сек
+        
+        float px = 0;
+        float playerZ = 0;
+        if (player != null) {
+            px = player.getPosition().x;
+            playerZ = player.getPosition().z;
+        }
+
+        // 1. Обновляем и фильтруем активные облака
+        for (CloudInstance c : activeClouds) {
+            c.update(deltaTime);
+            
+            // Реальные мировые координаты облака с учетом ветра
+            float wx = c.x + windTime;
+            float dx = wx - px;
+            float dz = c.z - playerZ;
+            float distSq = dx * dx + dz * dz;
+            
+            // Удаляем облако, если оно слишком далеко (более 256 метров по горизонтали)
+            // или если оно было собрано (разрушено ПКМ) и полностью растворилось
+            if (distSq > 256.0f * 256.0f) {
+                activeClouds.remove(c);
+            } else if (c.isCollected()) {
+                activeClouds.remove(c);
+            }
+        }
+
+        // 2. Поддерживаем стабильное количество облаков на небе (целевое число: 28 в ясную погоду, до 60 во время дождя)
+        if (player != null) {
+            float rainIntensity = weatherManager.getRainIntensity();
+            int targetClouds = (int)(28 + rainIntensity * 32);
+            
+            if (activeClouds.isEmpty()) {
+                // При инициализации заполняем небо равномерно вокруг игрока в радиусе 200 метров,
+                // чтобы игрок не видел пустое небо при входе
+                for (int i = 0; i < targetClouds; i++) {
+                    float angle = (float) (Math.random() * Math.PI * 2.0);
+                    float dist = 20.0f + (float) Math.random() * 180.0f;
+                    float spawnX = px + (float) Math.cos(angle) * dist;
+                    float spawnZ = playerZ + (float) Math.sin(angle) * dist;
+                    
+                    float worldX = spawnX - windTime; // компенсируем смещение ветра
+                    float worldY = 270.0f + (float) Math.random() * 25.0f;
+                    float scale = (6.0f + (float) Math.random() * 9.0f) * (1.0f + rainIntensity * 0.8f);
+                    float seed = (float) Math.random();
+                    
+                    CloudInstance c = new CloudInstance(worldX, worldY, spawnZ, scale, seed);
+                    c.currentAlpha = 1.0f; // Начальные облака сразу плотные
+                    activeClouds.add(c);
+                }
+            } else if (activeClouds.size() < targetClouds) {
+                float worldY = 270.0f + (float) Math.random() * 25.0f;
+                float scale = (6.0f + (float) Math.random() * 9.0f) * (1.0f + rainIntensity * 0.8f);
+                float seed = (float) Math.random();
+                float spawnX, spawnZ;
+                float initAlpha = 1.0f;
+                
+                if (rainIntensity > 0.0f) {
+                    // Во время дождя спавним тучи по всей зоне видимости вокруг игрока,
+                    // чтобы они плотно затянули небо прямо над головой.
+                    // Но они спавнятся плавно конденсирующимися (initAlpha = 0.0f), чтобы исключить popping!
+                    float angle = (float) (Math.random() * Math.PI * 2.0);
+                    float dist = (float) Math.random() * 220.0f;
+                    spawnX = px + (float) Math.cos(angle) * dist;
+                    spawnZ = playerZ + (float) Math.sin(angle) * dist;
+                    initAlpha = 0.0f; // плавно проявляются прямо на небе за 2.5 секунды
+                } else {
+                    // В ясную погоду спавним облака строго на западном горизонте (наветренная сторона),
+                    // откуда ветер несет их прямо на восток через координату игрока.
+                    // Они спавнятся сразу плотными (initAlpha = 1.0f) за пределами видимости (200-240 метров),
+                    // и бесшовно вплывают в зону видимости.
+                    float dist = 200.0f + (float) Math.random() * 40.0f;
+                    spawnX = px - dist; // с запада (наветренная сторона)
+                    spawnZ = playerZ + ((float) Math.random() - 0.5f) * 360.0f; // широкий фронт
+                    initAlpha = 1.0f;
+                }
+                
+                float worldX = spawnX - windTime; // компенсируем ветер в рендере
+                CloudInstance c = new CloudInstance(worldX, worldY, spawnZ, scale, seed);
+                c.currentAlpha = initAlpha;
+                activeClouds.add(c);
+            }
+        }
 
         // Advance time
         worldTime += deltaTime * WorldSettings.getInstance().dayCycleSpeed * 20.0f; 
@@ -534,10 +626,9 @@ public class World {
         }
 
         // Cache player values for zero-allocation access
-        float px = 0, py = 0, pz = 0;
+        float py = 0, pz = 0;
         boolean inventoryFull = false;
         if (player != null) {
-            px = player.getPosition().x;
             py = player.getPosition().y + player.getHeight() * 0.5f;
             pz = player.getPosition().z;
             inventoryFull = player.getInventory().isFull();
@@ -1143,6 +1234,73 @@ public class World {
         }
 
         return totalNoise;
+    }
+
+    public static class CloudInstance {
+        private static int nextId = 0;
+        public final int id;
+        public float x, y, z;
+        public float scale;
+        public float seed;
+        private boolean collected = false;
+        public float currentAlpha = 1.0f; // По умолчанию сразу плотные
+        
+        public CloudInstance(float x, float y, float z, float scale, float seed) {
+            this.id = nextId++;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.scale = scale;
+            this.seed = seed;
+        }
+        
+        public void resetPosition(float x, float y, float z, float scale, float seed) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.scale = scale;
+            this.seed = seed;
+            this.collected = false;
+            this.currentAlpha = 1.0f;
+        }
+        
+        public boolean isCollected() { 
+            // Облако считается полностью убранным из мира только когда оно полностью растаяло
+            return collected && currentAlpha <= 0.001f; 
+        }
+        
+        public boolean isMarkedCollected() {
+            return collected;
+        }
+        
+        public void collect() { 
+            this.collected = true; 
+        }
+        
+        public float getAlpha() { 
+            return currentAlpha; 
+        }
+        
+        public void update(float deltaTime) {
+            if (collected) {
+                currentAlpha = Math.max(0.0f, currentAlpha - deltaTime * 0.8f); // Растворяется за ~1.2 секунды
+            } else {
+                currentAlpha = Math.min(1.0f, currentAlpha + deltaTime * 0.4f); // Проявляется за ~2.5 секунды
+            }
+        }
+    }
+
+    public java.util.List<CloudInstance> getActiveClouds() {
+        return activeClouds;
+    }
+
+    public void registerChunkClouds(Chunk chunk) {
+        // Отключено: теперь облака генерируются и управляются централизованно в World.update
+        // во избежание внезапного появления облаков перед лицом игрока.
+    }
+
+    public void unregisterChunkClouds(Chunk chunk) {
+        // Отключено: неиспользуемые облака автоматически очищаются по дальности в World.update
     }
 
     public void cleanup() {

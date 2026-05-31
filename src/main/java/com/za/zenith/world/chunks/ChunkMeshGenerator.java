@@ -652,10 +652,10 @@ public class ChunkMeshGenerator {
                         int blockType = rawData >> 8;
                         if (blockType == 0) continue;
 
-                        Block block = chunk.getBlock(x, y, z);
                         BlockDefinition def = BlockRegistry.getBlock(blockType);
                         if (def == null) continue;
 
+                        Block block = chunk.getBlock(x, y, z);
                         float finalBlockType = (float)blockType;
                         if (def.is(BlockDefinition.FLAG_TINTED)) finalBlockType = -(finalBlockType + 1.0f);
 

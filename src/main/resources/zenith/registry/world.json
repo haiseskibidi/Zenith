@@ -21,8 +21,8 @@
   ],
   "weather": {
     "checkIntervalSeconds": 1.0,
-    "clearWeight": 0.0,
-    "rainWeight": 1.0,
+    "clearWeight": 1.0,
+    "rainWeight": 0.0,
     "stormWeight": 0.0,
     "transitionDurationSeconds": 10.0
   }

@@ -7,6 +7,7 @@ out vec4 fragColor;
 uniform vec3 uSkyColor;
 uniform vec3 uSunColor;
 uniform float uWarmth;
+uniform float uRainIntensity;
 
 void main() {
     vec3 viewDir = normalize(fragViewDir);
@@ -38,6 +39,11 @@ void main() {
     // 2. Dynamic Default Horizon (without sunset colors)
     // Warm pale-cream/gold haze during midday to prevent cyan/turquoise coloring completely
     vec3 dayHorizon = vec3(0.96, 0.92, 0.84); 
+    
+    // Во время дождя горизонт затягивается темной свинцово-серой штормовой дымкой
+    vec3 stormHorizon = vec3(0.08, 0.09, 0.12);
+    dayHorizon = mix(dayHorizon, stormHorizon, uRainIntensity);
+
     // Night horizon is slightly illuminated dark blue
     vec3 nightHorizon = uSkyColor * 1.45;
     vec3 defaultHorizon = mix(nightHorizon, dayHorizon, dayFactor);
@@ -50,12 +56,17 @@ void main() {
     float sunGlow = smoothstep(-0.35, 0.95, cosAngle);
     
     // Non-linear blend to aggressively push out the cold blue horizon
-    float sunsetBlend = pow(sunsetFactor, 1.25);
+    float sunsetBlend = pow(sunsetFactor, 1.25) * mix(1.0, 0.05, uRainIntensity);
     vec3 activeHorizon = mix(defaultHorizon, sunsetColor, sunsetBlend * (0.65 + 0.35 * sunGlow));
     
     // 4. Dynamic Middle Layer (Transition)
     // Soft lavender-pink during sunset, pure soft azure blue during midday (no cyan!)
     vec3 dayMiddle = mix(nightHorizon, vec3(0.55, 0.76, 0.98), dayFactor);
+    
+    // Во время дождя средний слой неба становится темно-грозовым
+    vec3 stormMiddle = vec3(0.12, 0.14, 0.19);
+    dayMiddle = mix(dayMiddle, stormMiddle, uRainIntensity);
+
     vec3 lavenderMiddle = mix(vec3(0.80, 0.58, 0.72), vec3(0.88, 0.40, 0.56), uWarmth);
     vec3 activeMiddle = mix(dayMiddle, lavenderMiddle, sunsetBlend * 0.90);
     
@@ -73,6 +84,9 @@ void main() {
         // Exponential wide atmospheric scatter
         float scatterGlow = pow(sunGlowAngle, 8.0) * 0.35 * smoothstep(-0.2, 0.15, sunDir.y);
         scatterGlow += pow(sunGlowAngle, 32.0) * 0.45 * smoothstep(-0.2, 0.15, sunDir.y);
+        
+        // Подавляем прямое солнечное свечение при шторме на 95%
+        scatterGlow *= mix(1.0, 0.05, uRainIntensity);
         
         vec3 glowColor = mix(vec3(1.0, 0.75, 0.45), vec3(1.0, 0.45, 0.20), uWarmth);
         baseSkyColor += glowColor * scatterGlow * (0.3 + 0.7 * sunsetFactor);

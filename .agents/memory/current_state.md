@@ -4,7 +4,7 @@
 - **Uniform Red Weak Spots for Wood Blocks (v1.2)**:
   - **Color Consistency**: Updated all wood-related blocks (`logs`, `stripped logs`, `felling stages`) to use pure red `[1.0, 0.0, 0.0]` for weak spots in `mining_logic`. This ensures a unified visual feedback during timber harvesting.
   - **Surgical JSON Updates**: Applied targeted edits to 15+ JSON files, ensuring that blocks previously lacking a color (like `oak_log` or `felling_stages`) or having non-standard colors (like `birch_log`) now adhere to the standard.
-- **Mathemagical Synchronized Rain & Realistic Wetness (Atmosphere v2.8)**:
+- **Mathemagical Synchronized Rain, Cloud Protection & Smooth Post-Rain Clear-Up (Atmosphere v2.8)**:
   - **Spatiotemporal Synchronized Rain**: Developed a "Mathemagical Sync" algorithm that uses a deterministic 0.5x0.5m global grid to synchronize falling rain streaks with surface effects. Every rain drop is calculated purely on the GPU in `rain_vertex.glsl` based on time and cell ID, while the surface shader (`fragment.glsl`) uses the *exact same* formula to detect impact.
   - **Zero-Allocation GPU-Driven VFX**: The system requires 0 communication between CPU and GPU for individual drops. 3000 rain streaks are rendered in a single draw call using **Instanced Rendering** with custom VAO layouts.
   - **Procedural Surface Splashes & Ripples**:
@@ -14,10 +14,11 @@
   - **Data-Driven Block Wetness (DDD)**:
     - *Wetness Factor*: Added `"wetnessFactor"` to `BlockDefinition` (0.0 to 1.0). Porous blocks (dirt) only darken, while glossy blocks (glass, metal, stone) gain intense **Blinn-Phong Specular Highlights**.
     - *Vertical Droplets*: Side faces render procedural downward-flowing water streaks using UV scrolling and noise on the GPU.
-  - **DDD Weather System**:
+  - **DDD Weather System & Cinematic Post-Rain Clear-Up**:
     - *WeatherManager*: Implemented a state machine (`CLEAR`, `RAIN`, `STORM`) with configurable transition durations.
     - *Dynamic Weights*: Weather probabilities and check intervals are fully configurable via `world.json`.
-    - *Atmospheric Integration*: The sky, sun, and ambient light automatically dim and haze increases during rain via `AtmosphereManager`.
+    - *Atmospheric Integration & Cinematic Clear-Up*: The sky, sun, and ambient light automatically dim and haze increases during rain. When the rain ends, `AtmosphereManager` triggers a gorgeous spatiotemporal clear-up: the fog smoothly dissolves by **98%** over **~8 seconds** to reveal crystal-clear vistas, and then slowly and imperceptibly returns to normal over **~125 seconds** to maintain a highly premium atmosphere.
+    - *Fog-Free Clouds Rendering*: Integrated `glDepthMask(false)` in `CloudRenderSystem.java` to prevent post-processing volumetric fog from applying atmospheric color on top of cloud geometry, allowing clouds to retain their exact, deep-slate storm shades without visual washout.
   - **Hotkey Control**: Added **F4** key to instantly toggle weather states for developer testing.
 - **High-Speed Breaking GPU-Hiding & Remesh Coalescing (v2.7)**:
   - **GPU Hiding for Recently Broken Blocks**: Re-routed recently broken block positions (`recentlyBrokenHoles`) into the GPU `uHiddenPositions` uniform array in `RenderPipeline.java`. This guarantees that mined blocks are collapse-culled at the vertex-shader stage instantly, preventing their top/side faces from flickering for a single frame before the chunk mesh is rebuilt.

@@ -320,6 +320,13 @@ public class Mesh {
         glBindVertexArray(0);
     }
 
+    public void renderInstanced(int instanceCount) {
+        if (vaoId == -1) return;
+        glBindVertexArray(vaoId);
+        org.lwjgl.opengl.GL31.glDrawElementsInstanced(GL_TRIANGLES, vertexCount, GL_UNSIGNED_INT, 0, instanceCount);
+        glBindVertexArray(0);
+    }
+
     /**
      * Renders the mesh and automatically manages the 'uIsCompressed' uniform in the shader.
      */

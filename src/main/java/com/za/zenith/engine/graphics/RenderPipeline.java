@@ -38,6 +38,7 @@ public class RenderPipeline {
     private final PostProcessor postProcessor;
     private final UIRenderer uiRenderer;
     private final SkyRenderer skyRenderer = new SkyRenderer();
+    private final CloudRenderSystem cloudRenderSystem = new CloudRenderSystem();
     private final ParticleRenderer particleRenderer = new ParticleRenderer();
     private final com.za.zenith.engine.graphics.vfx.RainRenderer rainRenderer = new com.za.zenith.engine.graphics.vfx.RainRenderer();
     private final com.za.zenith.world.particles.AmbientParticleManager ambientParticleManager;
@@ -110,6 +111,7 @@ public class RenderPipeline {
         postProcessor.init();
         uiRenderer.init();
         skyRenderer.init();
+        cloudRenderSystem.init();
         particleRenderer.init();
         ambientParticleManager.init();
 
@@ -173,6 +175,9 @@ public class RenderPipeline {
         
         // World
         renderWorld(sceneState, networkClient, highlightedBlock, wrapper);
+        
+        // Clouds (Cel-shaded Borderlands style)
+        cloudRenderSystem.render(camera, world, alpha);
         
         // Particles
         particleRenderer.render(camera, com.za.zenith.world.particles.ParticleManager.getInstance().getActiveParticles(), atlas, alpha, sceneState.getAmbientLight());
@@ -465,7 +470,7 @@ public class RenderPipeline {
     private void updateEnvironment(SceneState state) {
         // Update atmosphere first
         AtmosphereManager atmosphere = AtmosphereManager.getInstance();
-        atmosphere.update(state.getWorld());
+        atmosphere.update(state.getWorld(), state.getDeltaTime());
 
         com.za.zenith.world.WorldSettings settings = com.za.zenith.world.WorldSettings.getInstance();
         float timeRatio = state.getWorld().getWorldTime() / settings.dayLength;
@@ -534,6 +539,7 @@ public class RenderPipeline {
         sunShaftsFramebuffer.cleanup();
         ambientParticleManager.cleanup();
         blockShader.cleanup();
+        cloudRenderSystem.cleanup();
         RenderContext.cleanup();
     }
 
