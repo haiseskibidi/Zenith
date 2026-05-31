@@ -330,6 +330,7 @@ public class AtmosphereManager {
     public Vector3f getSkyColor() { return skyColor; }
     public Vector3f getHorizonColor() { return horizonColor; }
     public Vector3f getSunColor() { return sunColor; }
+    public Vector3f getMoonColor() { return moonLightCol; }
     public Vector3f getAmbientColor() { return ambientColor; }
     public float getWarmth() { return warmth; }
     public float getHaze() { return computedHaze; }

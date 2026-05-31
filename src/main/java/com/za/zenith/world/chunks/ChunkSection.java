@@ -51,6 +51,8 @@ public class ChunkSection {
 
         // 1. Flood fill from each face
         for (int f = 0; f < 6; f++) {
+            visited.clear(); // CRITICAL FIX: Reset visited blocks for each face check
+            
             if (isFaceFull(chunk, sectionIndex, f)) continue; // Optimization: skip if face is solid
             
             int foundFacesMask = 0;
@@ -58,12 +60,12 @@ public class ChunkSection {
             for (int i = 0; i < SECTION_SIZE * SECTION_SIZE; i++) {
                 int x = 0, y = 0, z = 0;
                 switch (f) {
-                    case 0: x = i % 16; y = i / 16; z = 15; break; // +Z (North)
-                    case 1: x = i % 16; y = i / 16; z = 0; break;  // -Z (South)
-                    case 2: x = 15; y = i % 16; z = i / 16; break; // +X (East)
-                    case 3: x = 0; y = i % 16; z = i / 16; break;  // -X (West)
-                    case 4: x = i % 16; y = 15; z = i / 16; break; // +Y (Up)
-                    case 5: x = i % 16; y = 0; z = i / 16; break;  // -Y (Down)
+                    case 0: x = i % 16; y = i / 16; z = 15; break; // NORTH (+Z)
+                    case 1: x = i % 16; y = i / 16; z = 0;  break; // SOUTH (-Z)
+                    case 2: x = 15; y = i % 16; z = i / 16; break; // EAST (+X)
+                    case 3: x = 0;  y = i % 16; z = i / 16; break; // WEST (-X)
+                    case 4: x = i % 16; y = 15; z = i / 16; break; // UP (+Y)
+                    case 5: x = i % 16; y = 0;  z = i / 16; break; // DOWN (-Y)
                 }
 
                 int idx = getIndex(x, y, z);
@@ -117,12 +119,12 @@ public class ChunkSection {
             int y = idx / 256;
 
             // Check if on face
-            if (z == 15) foundFaces |= (1 << 0);
-            if (z == 0)  foundFaces |= (1 << 1);
-            if (x == 15) foundFaces |= (1 << 2);
-            if (x == 0)  foundFaces |= (1 << 3);
-            if (y == 15) foundFaces |= (1 << 4);
-            if (y == 0)  foundFaces |= (1 << 5);
+            if (z == 15) foundFaces |= (1 << 0); // NORTH (+Z)
+            if (z == 0)  foundFaces |= (1 << 1); // SOUTH (-Z)
+            if (x == 15) foundFaces |= (1 << 2); // EAST (+X)
+            if (x == 0)  foundFaces |= (1 << 3); // WEST (-X)
+            if (y == 15) foundFaces |= (1 << 4); // UP (+Y)
+            if (y == 0)  foundFaces |= (1 << 5); // DOWN (-Y)
 
             // Neighbors
             for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {

@@ -48,7 +48,7 @@ public class ChunkMeshGenerator {
         }
     }
 
-    public record RawChunkMeshResult(RawMeshData[] opaque, RawMeshData[] translucent, long version, float firstSpawnTime) {
+    public record RawChunkMeshResult(RawMeshData[] opaque, RawMeshData[] translucent, long version, float firstSpawnTime, long[] visibilityMasks) {
         public ChunkMeshResult upload(MeshPool pool) {
             Mesh[] opaqueMeshes = new Mesh[Chunk.NUM_SECTIONS];
             Mesh[] translucentMeshes = new Mesh[Chunk.NUM_SECTIONS];
@@ -617,6 +617,7 @@ public class ChunkMeshGenerator {
         
         RawMeshData[] opaqueResults = new RawMeshData[Chunk.NUM_SECTIONS];
         RawMeshData[] translucentResults = new RawMeshData[Chunk.NUM_SECTIONS];
+        long[] visibilityMasks = new long[Chunk.NUM_SECTIONS];
 
         ChunkNeighborhood neighborhood = new ChunkNeighborhood(world, chunk.getPosition().x(), chunk.getPosition().z());
         long version = chunk.getDirtyCounter();
@@ -635,10 +636,14 @@ public class ChunkMeshGenerator {
 
         for (int secIdx = 0; secIdx < Chunk.NUM_SECTIONS; secIdx++) {
             ChunkSection section = chunk.getSections()[secIdx];
-            if (section == null || section.isEmpty()) continue;
+            if (section == null || section.isEmpty()) {
+                visibilityMasks[secIdx] = -1L;
+                continue;
+            }
 
             // NEW: Calculate visibility mask for occlusion culling
             section.calculateVisibility(chunk, secIdx);
+            visibilityMasks[secIdx] = section.getVisibilityMask();
 
             chunkOpaque.clear();
             chunkTranslucent.clear();
@@ -778,7 +783,7 @@ public class ChunkMeshGenerator {
             translucentResults[secIdx] = chunkTranslucent.buildRaw();
         }
 
-        return new RawChunkMeshResult(opaqueResults, translucentResults, version, chunk.getFirstSpawnTime());
+        return new RawChunkMeshResult(opaqueResults, translucentResults, version, chunk.getFirstSpawnTime(), visibilityMasks);
     }
 
     private static void addCrossPlane(MeshData data, float ox, float oy, float oz, float x0, float z0, float x1, float z1, float[] uvs, float blockTypeId, float overlayLayer, float weightOffset, ChunkNeighborhood neighborhood, int wx, int wy, int wz) {
