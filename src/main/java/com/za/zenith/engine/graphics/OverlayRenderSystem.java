@@ -48,7 +48,7 @@ public class OverlayRenderSystem {
 
     // Recently broken holes (prevents X-Ray holes during asynchronous chunk meshing)
     public static class RecentlyBrokenHole {
-        public final Mesh mesh;
+        public Mesh mesh;
         public float remainingTime;
         public RecentlyBrokenHole(Mesh mesh, float time) {
             this.mesh = mesh;
@@ -77,6 +77,12 @@ public class OverlayRenderSystem {
         if (block == null) {
             if (this.breakingPos != null && this.breakingProgress >= 0.99f) {
                 if (lastWorld != null && atlas != null) {
+                    // Update all existing hole meshes since their neighbors might have changed
+                    for (Map.Entry<com.za.zenith.world.BlockPos, RecentlyBrokenHole> entry : recentlyBrokenHoles.entrySet()) {
+                        if (entry.getValue().mesh != null) entry.getValue().mesh.cleanup();
+                        entry.getValue().mesh = ChunkMeshGenerator.generateHoleMesh(entry.getKey(), lastWorld, atlas);
+                    }
+                    
                     if (this.holeMesh != null) this.holeMesh.cleanup();
                     this.holeMesh = ChunkMeshGenerator.generateHoleMesh(this.breakingPos, lastWorld, atlas);
                 }
