@@ -75,14 +75,14 @@ public class RainRenderer {
         float startZ = (float)Math.floor(camPos.z / grid) * grid - 32.0f * grid;
         float gridSize = 64.0f * grid; // 32.0m
         
-        // 2. Заполняем массив высот на CPU
+        // 2. Заполняем массив высот на CPU с переводом во всемирные логические координаты (вычитаем LOGICAL_OFFSET_Y)
         for (int z = 0; z < 64; z++) {
             float worldZ = startZ + z * grid;
             int iz = (int)Math.floor(worldZ);
             for (int x = 0; x < 64; x++) {
                 float worldX = startX + x * grid;
                 int ix = (int)Math.floor(worldX);
-                heightData[z * 64 + x] = world.getHighestBlock(ix, iz);
+                heightData[z * 64 + x] = (float) (world.getHighestBlock(ix, iz) - com.za.zenith.world.chunks.Chunk.LOGICAL_OFFSET_Y);
             }
         }
         

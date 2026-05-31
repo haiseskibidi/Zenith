@@ -56,9 +56,9 @@ void main() {
     vec3 baseColor;    
     float alpha = 1.0;
 
-    // Determine if block is exposed to rain (simple heuristic: medium sunlight)
-    bool isExposedToRain = vLight.x > 10.0 && fragPos.y > 0.0;
-    float rainEffect = uRainIntensity * (isExposedToRain ? 1.0 : 0.0);
+    // Determine if block is exposed to rain (smooth step based on sunlight to prevent blocky discrete wetness boundaries)
+    float rainExposure = smoothstep(7.0, 12.0, vLight.x) * (fragPos.y > 0.0 ? 1.0 : 0.0);
+    float rainEffect = uRainIntensity * rainExposure;
 
     if (highlightPass != 0) {
         baseColor = highlightColor;
