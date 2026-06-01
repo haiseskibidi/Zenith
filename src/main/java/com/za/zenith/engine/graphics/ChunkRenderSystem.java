@@ -39,11 +39,33 @@ public class ChunkRenderSystem {
             int[] newIndices = new int[newLength];
             System.arraycopy(visibleSectionIndices, 0, newIndices, 0, visibleSectionIndices.length);
             visibleSectionIndices = newIndices;
+
+            float[] newDist = new float[newLength];
+            System.arraycopy(visibleDistSq, 0, newDist, 0, visibleDistSq.length);
+            visibleDistSq = newDist;
+
+            Integer[] newSort = new Integer[newLength];
+            System.arraycopy(sortIndices, 0, newSort, 0, sortIndices.length);
+            sortIndices = newSort;
         }
     }
-    private final Deque<BFSNode> bfsQueue = new ArrayDeque<>();
-    private final Set<Long> visitedSections = new HashSet<>();
     
+    // Zero-Allocation BFS structures
+    private static final int MAX_QUEUE_SIZE = 131072;
+    private final int[] bfsQueueX = new int[MAX_QUEUE_SIZE];
+    private final int[] bfsQueueZ = new int[MAX_QUEUE_SIZE];
+    private final int[] bfsQueueY = new int[MAX_QUEUE_SIZE];
+    private final byte[] bfsQueueEntry = new byte[MAX_QUEUE_SIZE];
+    
+    // Hyper-fast versioned visited mask (avoids Arrays.fill overhead)
+    private final short[] visitedFast = new short[262144];
+    private short currentVisitId = 0;
+    private Chunk[] localChunkCache = new Chunk[4096];
+    
+    // Data structures for sorting opaque chunks (Front-to-Back for Early-Z)
+    private float[] visibleDistSq = new float[1024];
+    private Integer[] sortIndices = new Integer[1024];
+
     // Performance optimization: Avoid re-sorting if camera hasn't moved much
     private final org.joml.Vector3f lastSortPos = new org.joml.Vector3f(Float.MAX_VALUE);
 
@@ -52,9 +74,7 @@ public class ChunkRenderSystem {
     private int lastCamSecY = Integer.MAX_VALUE;
     private int lastCamSecZ = Integer.MAX_VALUE;
     private int lastPoolVersion = 0;
-
-
-    private record BFSNode(int cx, int cz, int secIdx, com.za.zenith.utils.Direction entryFace) {}
+    private static final com.za.zenith.utils.Direction[] DIRS = com.za.zenith.utils.Direction.values();
 
     public ChunkRenderSystem(MeshPool meshPool) {
         this.meshPool = meshPool;
@@ -84,6 +104,14 @@ public class ChunkRenderSystem {
             chunk.setCurrentMeshResult(null);
         }
     }
+    
+    private int getVisitedIndex(int cx, int cz, int cy, int camCx, int camCz, int renderDist) {
+        int side = renderDist * 2 + 1;
+        int rx = cx - camCx + renderDist;
+        int rz = cz - camCz + renderDist;
+        if (rx < 0 || rx >= side || rz < 0 || rz >= side || cy < 0 || cy >= Chunk.NUM_SECTIONS) return -1;
+        return (rx * side + rz) * Chunk.NUM_SECTIONS + cy;
+    }
 
     public void updateVisibility(SceneState state) {
         World world = state.getWorld();
@@ -91,6 +119,8 @@ public class ChunkRenderSystem {
         int camChunkX = (int) Math.floor(camPos.x / Chunk.CHUNK_SIZE);
         int camChunkZ = (int) Math.floor(camPos.z / Chunk.CHUNK_SIZE);
         int camSecY = (int) Math.floor(camPos.y / ChunkSection.SECTION_SIZE);
+        // Robustness: Handle camera being way above the sky limit
+        int rootSecY = Math.max(0, Math.min(Chunk.NUM_SECTIONS - 1, camSecY));
         int renderDist = world.getRenderDistance();
 
         // Check for pool wrap-around
@@ -99,63 +129,145 @@ public class ChunkRenderSystem {
             lastPoolVersion = meshPool.getVersion();
             Logger.warn("ChunkRenderSystem: MeshPool wrapped! Initiating seamless transition from version " + oldVersion + " to " + lastPoolVersion);
             for (Chunk c : world.getLoadedChunks()) {
-                // НЕ удаляем меш! Просто сбрасываем meshUpdated, чтобы needsMeshUpdate() вернул true,
-                // и чанк перестроился в новый активный буфер.
                 c.setMeshUpdated(-1);
             }
-            lastCamSecX = Integer.MAX_VALUE;
         }
 
         boolean movedSection = camChunkX != lastCamSecX || camSecY != lastCamSecY || camChunkZ != lastCamSecZ;
         org.joml.Matrix4f currentFrustum = state.getFrustumMatrix();
         boolean frustumChanged = !currentFrustum.equals(lastFrustumMatrix);
 
-        if (movedSection || frustumChanged) {
+        if (movedSection || frustumChanged || visibleSectionsCount == 0) {
             lastFrustumMatrix.set(currentFrustum);
+            lastCamSecX = camChunkX; 
+            lastCamSecY = camSecY; 
+            lastCamSecZ = camChunkZ;
+            
             visibleSectionsCount = 0;
             int poolVer = meshPool.getVersion();
-
-            // Zero-Allocation monolithic spiral chunk scan
-            int x = 0, z = 0, dx = 0, dz = -1;
-            int maxChunks = (renderDist * 2 + 1) * (renderDist * 2 + 1);
+            org.joml.FrustumIntersection frustum = state.getFrustum();
             
-            for (int i = 0; i < maxChunks; i++) {
-                if (-renderDist <= x && x <= renderDist && -renderDist <= z && z <= renderDist) {
-                    Chunk chunk = world.getChunk(camChunkX + x, camChunkZ + z);
-                    if (chunk != null && chunk.isReady()) {
-                        ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
-                        if (result != null) {
-                            float cx = (camChunkX + x) * 16;
-                            float cz = (camChunkZ + z) * 16;
-                            
-                            // 1. Hierarchical Frustum Culling: Test the entire chunk column (16x512x16) first to skip all its sections at once!
-                            if (state.getFrustum().testAab(cx, 0.0f, cz, cx + 16.0f, 512.0f, cz + 16.0f)) {
-                                for (int secIdx = 0; secIdx < Chunk.NUM_SECTIONS; secIdx++) {
-                                    ChunkSection section = chunk.getSections()[secIdx];
-                                    if (section == null || section.isEmpty()) continue;
-                                    
-                                    float sy = secIdx * 16;
-                                    // 2. Frustum culling per individual section
-                                    if (state.getFrustum().testAab(cx, sy, cz, cx + 16, sy + 16, cz + 16)) {
-                                        if (isSectionMeshValid(result, secIdx, poolVer)) {
-                                            ensureVisibleSectionsCapacity();
-                                            visibleChunks[visibleSectionsCount] = chunk;
-                                            visibleSectionIndices[visibleSectionsCount] = secIdx;
-                                            visibleSectionsCount++;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            int side = renderDist * 2 + 1;
+            
+            // Hyper-fast chunk cache for the current frame
+            if (localChunkCache.length < side * side) {
+                localChunkCache = new Chunk[side * side * 2];
+            }
+            for (int rX = 0; rX < side; rX++) {
+                for (int rZ = 0; rZ < side; rZ++) {
+                    localChunkCache[rX * side + rZ] = world.getChunk(camChunkX + rX - renderDist, camChunkZ + rZ - renderDist);
+                }
+            }
+
+            // O(1) clear of visited mask
+            currentVisitId++;
+            if (currentVisitId == Short.MAX_VALUE) {
+                Arrays.fill(visitedFast, (short)0);
+                currentVisitId = 1;
+            }
+
+            int head = 0;
+            int tail = 0;
+            
+            // Push root
+            bfsQueueX[tail] = camChunkX;
+            bfsQueueZ[tail] = camChunkZ;
+            bfsQueueY[tail] = rootSecY;
+            bfsQueueEntry[tail] = -1; // -1 means origin (can go anywhere)
+            
+            int rootIdx = getVisitedIndex(camChunkX, camChunkZ, rootSecY, camChunkX, camChunkZ, renderDist);
+            if (rootIdx >= 0) visitedFast[rootIdx] = currentVisitId;
+            tail++;
+
+            while (head < tail && tail < MAX_QUEUE_SIZE - 6) {
+                int cx = bfsQueueX[head];
+                int cz = bfsQueueZ[head];
+                int cy = bfsQueueY[head];
+                int entryFace = bfsQueueEntry[head];
+                head++;
+
+                float worldX = cx * 16.0f;
+                float worldY = cy * 16.0f;
+                float worldZ = cz * 16.0f;
+
+                // CRITICAL: Frustum Check BEFORE expanding (prevents 360-degree occlusion leaking out of tunnels)
+                if (!frustum.testAab(worldX, worldY, worldZ, worldX + 16.0f, worldY + 16.0f, worldZ + 16.0f)) {
+                    continue;
+                }
+
+                int localRx = cx - camChunkX + renderDist;
+                int localRz = cz - camChunkZ + renderDist;
+                Chunk chunk = localChunkCache[localRx * side + localRz];
+                
+                // Stop BFS wave if chunk is unloaded! 
+                if (chunk == null || !chunk.isReady()) {
+                    continue;
+                }
+
+                ChunkSection section = chunk.getSections()[cy];
+                ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
+                
+                if (result != null && section != null && !section.isEmpty()) {
+                    if (isSectionMeshValid(result, cy, poolVer)) {
+                        ensureVisibleSectionsCapacity();
+                        visibleChunks[visibleSectionsCount] = chunk;
+                        visibleSectionIndices[visibleSectionsCount] = cy;
+                        // Calculate distance squared for Early-Z sorting
+                        float dx = worldX + 8.0f - camPos.x;
+                        float dy = worldY + 8.0f - camPos.y;
+                        float dz = worldZ + 8.0f - camPos.z;
+                        visibleDistSq[visibleSectionsCount] = dx*dx + dy*dy + dz*dz;
+                        sortIndices[visibleSectionsCount] = visibleSectionsCount;
+                        visibleSectionsCount++;
                     }
                 }
-                if (x == z || (x < 0 && x == -z) || (x > 0 && x == 1 - z)) {
-                    int temp = dx; dx = -dz; dz = temp;
+
+                // Queue neighbors
+                for (int i = 0; i < 6; i++) {
+                    com.za.zenith.utils.Direction outDir = DIRS[i];
+                    
+                    // PERFORMANCE CRITICAL: Strict Monotonicity Rule
+                    // Prevents "portal leakage" back to ground from sky
+                    int odx = outDir.getDx();
+                    int ody = outDir.getDy();
+                    int odz = outDir.getDz();
+                    if (odx > 0 && cx < camChunkX) continue;
+                    if (odx < 0 && cx > camChunkX) continue;
+                    if (ody > 0 && cy < rootSecY) continue;
+                    if (ody < 0 && cy > rootSecY) continue;
+                    if (odz > 0 && cz < camChunkZ) continue;
+                    if (odz < 0 && cz > camChunkZ) continue;
+
+                    // Occlusion Check: Can we see *through* the current section to the neighbor?
+                    if (entryFace != -1 && section != null && !section.isEmpty()) {
+                        com.za.zenith.utils.Direction inDir = DIRS[entryFace];
+                        if (!section.canSeeThrough(inDir, outDir)) {
+                            continue; // Blocked by this section's geometry!
+                        }
+                    }
+
+                    int ncx = cx + odx;
+                    int ncz = cz + odz;
+                    int ncy = cy + ody;
+
+                    int nIdx = getVisitedIndex(ncx, ncz, ncy, camChunkX, camChunkZ, renderDist);
+                    // Out of bounds or already visited
+                    if (nIdx < 0 || visitedFast[nIdx] == currentVisitId) continue;
+
+                    visitedFast[nIdx] = currentVisitId;
+                    
+                    bfsQueueX[tail] = ncx;
+                    bfsQueueZ[tail] = ncz;
+                    bfsQueueY[tail] = ncy;
+                    bfsQueueEntry[tail] = (byte) outDir.getOpposite().ordinal();
+                    tail++;
                 }
-                x += dx; z += dz;
             }
             
-            lastCamSecX = camChunkX; lastCamSecY = camSecY; lastCamSecZ = camChunkZ;
+            // OPAQUE SORT: Front-to-Back sorting to maximize Early-Z discard on iGPU
+            if (visibleSectionsCount > 0) {
+                Arrays.sort(sortIndices, 0, visibleSectionsCount, (a, b) -> Float.compare(visibleDistSq[a], visibleDistSq[b]));
+            }
         }
     }
 
@@ -169,15 +281,6 @@ public class ChunkRenderSystem {
             return meshVer == poolVer || meshVer == poolVer - 1;
         }
         return false;
-    }
-
-    private void processEmptyNeighbor(BFSNode node, int camChunkX, int camChunkZ, int renderDist) {
-        for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
-            int ncx = node.cx+dir.getDx(), ncz = node.cz+dir.getDz(), nsec = node.secIdx+dir.getDy();
-            if (nsec < 0 || nsec >= Chunk.NUM_SECTIONS) continue;
-            if (Math.abs(ncx-camChunkX) > renderDist || Math.abs(ncz-camChunkZ) > renderDist) continue;
-            if (visitedSections.add(packSectionPos(ncx, ncz, nsec))) bfsQueue.add(new BFSNode(ncx, ncz, nsec, dir.getOpposite()));
-        }
     }
 
     public void updateMeshes(SceneState state, DynamicTextureAtlas atlas) {
@@ -203,12 +306,25 @@ public class ChunkRenderSystem {
             // Sort closer chunks first
             readyUploads.sort(Comparator.comparingDouble(n -> n.distSq));
             
+            int priorityUploads = 0;
+            
             for (ChunkUploadNode node : readyUploads) {
                 try {
                     ChunkMeshGenerator.RawChunkMeshResult raw = node.future.get();
                     Chunk chunk = node.chunk;
                     if (world.getChunk(chunk.getPosition()) == chunk) {
                         ChunkMeshGenerator.ChunkMeshResult res = raw.upload(meshPool);
+                        
+                        // Update visibility masks on the main thread chunks
+                        if (raw.visibilityMasks() != null) {
+                            for (int i = 0; i < Chunk.NUM_SECTIONS; i++) {
+                                ChunkSection sec = chunk.getSections()[i];
+                                if (sec != null) {
+                                    sec.setVisibilityMask(raw.visibilityMasks()[i]);
+                                }
+                            }
+                        }
+                        
                         raw.cleanup();
                         ChunkMeshGenerator.ChunkMeshResult old = chunk.getCurrentMeshResult();
                         if (old != null) old.cleanup();
@@ -219,11 +335,14 @@ public class ChunkRenderSystem {
                     }
                     pendingUpdates.remove(chunk);
                     
-                    // Priority chunks (within 24m) bypass the time limit budget to ensure zero-lag instant breaking!
+                    // Time budget for chunk uploads to prevent main thread stutters
                     if (node.distSq > 24 * 24) {
-                        if (System.nanoTime() - uploadStart > 2_000_000) {
-                            break;
-                        }
+                        // Far chunks get a strict 1.5ms budget
+                        if (System.nanoTime() - uploadStart > 1_500_000) break;
+                    } else {
+                        // Priority chunks (close to player) can upload up to 2 per frame even if over budget
+                        priorityUploads++;
+                        if (priorityUploads >= 2 && System.nanoTime() - uploadStart > 2_500_000) break;
                     }
                 } catch (Exception e) {
                     pendingUpdates.remove(node.chunk);
@@ -295,13 +414,13 @@ public class ChunkRenderSystem {
         batches[0].reset();
         batches[1].reset();
         
-        // Sorting for transparency (already done in updateVisibility for distance)
         int count = visibleSectionsCount;
         if (!opaque) {
-            // Reverse order for translucent
+            // BACK-TO-FRONT for transparency (Reverse sorted)
             for (int i = count - 1; i >= 0; i--) {
-                Chunk chunk = visibleChunks[i];
-                int secIdx = visibleSectionIndices[i];
+                int idx = sortIndices[i];
+                Chunk chunk = visibleChunks[idx];
+                int secIdx = visibleSectionIndices[idx];
                 ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
                 if (res == null) continue;
                 Mesh m = res.translucentSections()[secIdx];
@@ -311,9 +430,11 @@ public class ChunkRenderSystem {
                 addSectionToSpecificBatch(chunk, secIdx, m, batches[bIdx], shader, res.spawnTime());
             }
         } else {
+            // FRONT-TO-BACK for Early-Z discard (Sorted)
             for (int i = 0; i < count; i++) {
-                Chunk chunk = visibleChunks[i];
-                int secIdx = visibleSectionIndices[i];
+                int idx = sortIndices[i];
+                Chunk chunk = visibleChunks[idx];
+                int secIdx = visibleSectionIndices[idx];
                 ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
                 if (res == null) continue;
                 Mesh m = res.opaqueSections()[secIdx];
