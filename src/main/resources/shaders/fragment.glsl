@@ -95,7 +95,15 @@ void main() {
             textureColor = applyGlassConnections(textureColor, fragTexCoord.xy, neighborData, fragTexCoord.z, textureSampler);
         }
 
-        float discardThreshold = (info.isTinted && !info.isGlass) ? 0.45 : 0.1;
+        if (info.isTinted && !info.isGlass) {
+            // FIX: Prevent Alpha-To-Coverage from turning distant leaves into semi-transparent clouds.
+            // Mipmapping reduces alpha to ~0.3 at distance. ATC uses this to discard 70% of samples, 
+            // letting the bright sky bleed through, creating a massive "white noise" effect.
+            // By stepping it, we force the leaf pixel to be fully solid or fully transparent.
+            textureColor.a = step(0.1, textureColor.a);
+        }
+
+        float discardThreshold = (info.isTinted && !info.isGlass) ? 0.5 : 0.1;
         if (textureColor.a < discardThreshold) discard;
 
         baseColor = textureColor.rgb;

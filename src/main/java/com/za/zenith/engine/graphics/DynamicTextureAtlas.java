@@ -94,6 +94,18 @@ public class DynamicTextureAtlas {
                     isStbAllocated = false;
                 }
 
+                // --- BLACK PADDING: MIPMAP BLEEDING FIX ---
+                // Force all fully transparent pixels to black to prevent white fringes during mipmap generation
+                for (int i = 0; i < tileSize * tileSize; i++) {
+                    int a = img.get(i * 4 + 3) & 0xFF;
+                    if (a < 128) {
+                        img.put(i * 4, (byte) 0);
+                        img.put(i * 4 + 1, (byte) 0);
+                        img.put(i * 4 + 2, (byte) 0);
+                        img.put(i * 4 + 3, (byte) 0);
+                    }
+                }
+
                 keyToLayer.put(key, index);
                 glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, index, tileSize, tileSize, 1, GL_RGBA, GL_UNSIGNED_BYTE, img);
                 
