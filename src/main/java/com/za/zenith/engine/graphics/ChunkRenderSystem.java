@@ -199,15 +199,12 @@ public class ChunkRenderSystem {
                 int localRz = cz - camChunkZ + renderDist;
                 Chunk chunk = localChunkCache[localRx * side + localRz];
                 
-                // Stop BFS wave if chunk is unloaded! 
-                if (chunk == null || !chunk.isReady()) {
-                    continue;
-                }
+                boolean chunkReady = chunk != null && chunk.isReady();
 
-                ChunkSection section = chunk.getSections()[cy];
-                ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
+                ChunkSection section = chunkReady ? chunk.getSections()[cy] : null;
+                ChunkMeshGenerator.ChunkMeshResult result = chunkReady ? chunk.getCurrentMeshResult() : null;
                 
-                if (result != null && section != null && !section.isEmpty()) {
+                if (chunkReady && result != null && section != null && !section.isEmpty()) {
                     if (isSectionMeshValid(result, cy, poolVer)) {
                         ensureVisibleSectionsCapacity();
                         visibleChunks[visibleSectionsCount] = chunk;

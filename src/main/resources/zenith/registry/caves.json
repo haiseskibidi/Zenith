@@ -1,0 +1,98 @@
+{
+  "enabled": true,
+  "searchRadius": 4,
+  "chance": 0.14,
+  "minY": -110,
+  "maxY": 220,
+  "tunnel": {
+    "minLength": 150,
+    "maxLength": 350,
+    "minRadius": 1.8,
+    "maxRadius": 3.6,
+    "pitchMod": 0.08,
+    "yawMod": 0.18,
+    "pitchLimit": 0.15,
+    "branchChance": 0.10,
+    "maxBranches": 4
+  },
+  "caveRooms": {
+    "enabled": true,
+    "chance": 0.05,
+    "minRadius": 6.0,
+    "maxRadius": 12.0,
+    "minY": -110,
+    "maxY": 30
+  },
+  "carvableBlocks": [
+    "zenith:stone",
+    "zenith:dirt",
+    "zenith:sand",
+    "zenith:gravel"
+  ],
+  "ores": [
+    {
+      "identifier": "zenith:coal_ore",
+      "minY": -20,
+      "maxY": 250,
+      "weight": 65,
+      "minSize": 12,
+      "maxSize": 25
+    },
+    {
+      "identifier": "zenith:iron_ore",
+      "minY": -60,
+      "maxY": 160,
+      "weight": 35,
+      "minSize": 8,
+      "maxSize": 16
+    },
+    {
+      "identifier": "zenith:copper_ore",
+      "minY": -10,
+      "maxY": 120,
+      "weight": 25,
+      "minSize": 10,
+      "maxSize": 20
+    },
+    {
+      "identifier": "zenith:gold_ore",
+      "minY": -110,
+      "maxY": 35,
+      "weight": 15,
+      "minSize": 4,
+      "maxSize": 10
+    },
+    {
+      "identifier": "zenith:redstone_ore",
+      "minY": -110,
+      "maxY": 15,
+      "weight": 20,
+      "minSize": 4,
+      "maxSize": 10
+    },
+    {
+      "identifier": "zenith:lapis_ore",
+      "minY": -50,
+      "maxY": 40,
+      "weight": 10,
+      "minSize": 3,
+      "maxSize": 8
+    },
+    {
+      "identifier": "zenith:diamond_ore",
+      "minY": -110,
+      "maxY": -10,
+      "weight": 15,
+      "minSize": 2,
+      "maxSize": 5
+    },
+    {
+      "identifier": "zenith:emerald_ore",
+      "minY": 60,
+      "maxY": 250,
+      "weight": 5,
+      "minSize": 1,
+      "maxSize": 2
+    }
+  ]
+}

@@ -1,6 +1,10 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **Symmetric Arch & Portal Placement (v4.5)**:
+  * **Symmetric Arch & Portal Checks**: Реализована 100% симметричная и детерминированная проверка твердости блоков `isBlockSolidDeterministic` в [CaveEdge.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/generation/caves/CaveEdge.java). Это полностью устранило летающие опоры и обрезанные балки на стыках чанков.
+  * **Noise-Router-Based Terrain Checks**: Заменили неточный `getApproximateSurfaceHeight` на точную проверку плотности ландшафта через `NoiseRouter` в `isTerrainSolid` и `checkMountainRoof`. Это гарантирует, что входные порталы и опоры строятся только там, где реально присутствует гора/порода, убирая летающие балки на поверхности.
+  * **Optimization (Pre-generation)**: Переписали [CaveCarver.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/generation/caves/CaveCarver.java) для сбора активных ребер сетей `activeEdges` один раз за проход чанка. Это убрало избыточное пересоздание `CaveNetwork` в PHASE 1 и PHASE 2, оптимизировав CPU и позволив передавать список в методы проверок.
 - **Visual Stacking, Item Attraction & Live Inspector Search (v4.4)**:
   * **ItemEntity Stacking (ItemEntityStacker)**: Создан новый класс [ItemEntityStacker.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/graphics/ItemEntityStacker.java), в который вынесена вся математика визуального стаканья выпадающих блоков и предметов, разгрузив `EntityRenderSystem`.
   * **Minecraft-style Block Stacking & Local Space Items**:

@@ -101,6 +101,7 @@ public class DataLoader {
         new PhysicsSettingsLoader().load("zenith");
         new WorldSettingsLoader().load("zenith");
         new GenerationSettingsLoader().load("zenith");
+        new CaveSettingsLoader().load("zenith");
         new SkySettingsLoader().load("zenith");
         
         Logger.info("DataLoader: All resources loaded successfully.");
