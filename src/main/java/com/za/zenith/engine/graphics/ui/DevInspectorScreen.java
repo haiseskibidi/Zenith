@@ -23,6 +23,8 @@ public class DevInspectorScreen implements Screen {
     private static final Set<String> expandedNodes = new HashSet<>(List.of(""));
     private static float sidebarScroll = 0;
     private static float propertiesScroll = 0;
+    
+    private final UISearchBar searchBar = new UISearchBar("gui.search_placeholder");
 
     private static final Stack<String> undoStack = new Stack<>();
     private static final Stack<String> redoStack = new Stack<>();
@@ -57,7 +59,7 @@ public class DevInspectorScreen implements Screen {
         this.guiLeft = (sw - width) / 2;
         this.guiTop = (sh - height) / 2;
 
-        sidebarScroller.setBounds(guiLeft + 10, guiTop + 90, sidebarWidth, height - 130);
+        sidebarScroller.setBounds(guiLeft + 10, guiTop + 120, sidebarWidth, height - 160);
         propertiesScroller.setBounds(guiLeft + sidebarWidth + 20, guiTop + 90, width - sidebarWidth - 30, height - 130);
 
         renderer.setupUIProjection(sw, sh);
@@ -69,6 +71,10 @@ public class DevInspectorScreen implements Screen {
         renderer.getFontRenderer().drawString("ZENITH JSON INSPECTOR v4.2", guiLeft + 20, guiTop + 12, 18, sw, sh);
 
         renderTabs(renderer, sw, sh);
+
+        // Search Bar
+        searchBar.setBounds(guiLeft + 10, guiTop + 90, sidebarWidth, 22);
+        searchBar.render(renderer, sw, sh);
 
         // Sidebar
         sidebarScroller.begin(sw, sh);
@@ -105,11 +111,13 @@ public class DevInspectorScreen implements Screen {
 
     private void renderSidebar(UIRenderer renderer, int sw, int sh) {
         int x = guiLeft + 15;
-        int y = (int) (guiTop + 100 - sidebarScroller.getOffset());
+        int y = (int) (guiTop + 130 - sidebarScroller.getOffset());
         int h = 25;
         
+        String filter = searchBar.getQuery().toLowerCase();
         List<String> paths = AssetManager.getLoadedPaths().stream()
                 .filter(this::matchesTab)
+                .filter(p -> filter.isEmpty() || p.toLowerCase().contains(filter))
                 .sorted()
                 .collect(Collectors.toList());
 
@@ -121,7 +129,7 @@ public class DevInspectorScreen implements Screen {
             renderer.getFontRenderer().drawString(label, x + 10, y, 12, sw, sh, selected ? 0.0f : 0.8f, selected ? 0.8f : 0.8f, selected ? 1.0f : 0.8f, 1.0f);
             y += h;
         }
-        sidebarScroller.updateContentHeight(y - (int)(guiTop + 100 - sidebarScroller.getOffset()));
+        sidebarScroller.updateContentHeight(y - (int)(guiTop + 130 - sidebarScroller.getOffset()));
     }
 
     @Override
@@ -137,8 +145,12 @@ public class DevInspectorScreen implements Screen {
         this.guiTop = (sh - height) / 2;
 
         // Update scroller bounds for isMouseOver check
-        sidebarScroller.setBounds(guiLeft + 10, guiTop + 90, sidebarWidth, height - 130);
+        sidebarScroller.setBounds(guiLeft + 10, guiTop + 120, sidebarWidth, height - 160);
         propertiesScroller.setBounds(guiLeft + sidebarWidth + 20, guiTop + 90, width - sidebarWidth - 30, height - 130);
+
+        if (searchBar.handleMouseClick(mx, my, button)) {
+            return true;
+        }
 
         // Tabs - Precise Calculation
         int tx = guiLeft + 10;
@@ -164,9 +176,11 @@ public class DevInspectorScreen implements Screen {
         // Sidebar entries
         if (sidebarScroller.isMouseOver(mx, my)) {
             int x = guiLeft + 15;
-            int y = (int) (guiTop + 100 - sidebarScroller.getOffset());
+            int y = (int) (guiTop + 130 - sidebarScroller.getOffset());
+            String filter = searchBar.getQuery().toLowerCase();
             List<String> paths = AssetManager.getLoadedPaths().stream()
                     .filter(this::matchesTab)
+                    .filter(p -> filter.isEmpty() || p.toLowerCase().contains(filter))
                     .sorted()
                     .collect(Collectors.toList());
             for (String path : paths) {
@@ -415,6 +429,10 @@ public class DevInspectorScreen implements Screen {
 
     @Override
     public boolean handleKeyPress(int key) {
+        if (searchBar.handleKeyPress(key)) {
+            return true;
+        }
+
         boolean ctrl = GameLoop.getInstance().getWindow().isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL);
         if (ctrl && key == GLFW.GLFW_KEY_Z) {
             if (!undoStack.isEmpty() && selectedPath != null) {
@@ -451,6 +469,9 @@ public class DevInspectorScreen implements Screen {
 
     @Override
     public boolean handleChar(int codepoint) {
+        if (searchBar.handleChar(codepoint)) {
+            return true;
+        }
         if (editingPath != null) {
             editingValue += (char) codepoint;
             return true;

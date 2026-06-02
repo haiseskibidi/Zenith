@@ -687,6 +687,11 @@ public class World {
                     float distSq = dx*dx + dy*dy + dz*dz;
 
                     float pickupRadius = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemPickupRadius;
+                    com.za.zenith.world.items.component.MagneticComponent magnet = player.getInventory().getActiveComponent(com.za.zenith.world.items.component.MagneticComponent.class);
+                    if (magnet != null) {
+                        pickupRadius = magnet.pickupRadius;
+                    }
+                    
                     boolean isMagnetic = itemEntity.isBeingAttracted();
                     float effectiveRadius = isMagnetic ? pickupRadius * 1.5f : pickupRadius;
 

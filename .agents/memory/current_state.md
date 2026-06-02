@@ -1,6 +1,18 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **Visual Stacking, Item Attraction & Live Inspector Search (v4.4)**:
+  * **ItemEntity Stacking (ItemEntityStacker)**: Создан новый класс [ItemEntityStacker.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/graphics/ItemEntityStacker.java), в который вынесена вся математика визуального стаканья выпадающих блоков и предметов, разгрузив `EntityRenderSystem`.
+  * **Minecraft-style Block Stacking & Local Space Items**:
+    * Блоки рендерятся в виде аккуратной диагональной стопки по фиксированному локальному вектору `(1, 1, 1)` с шагом `scale * 0.12f` для каждой копии. Применяются строгие лимиты количества: 1 модель при count=1, 2 модели при 2-15 шт, 3 модели при count > 15 шт. При этом стопка плавно вращается по оси Y (как в Minecraft), образуя единое динамическое целое.
+    * Плоские предметы (айтемы) рендерятся каскадным веером (до 5 моделей) с увеличенным шагом (`thickness = scale * 0.12f`, `horizontalStep = scale * 0.25f`). Все смещения переведены в локальные координаты (после вращения модели), что гарантирует идеальное фиксированное расстояние между плоскими деталями без слипания "впритык" при любых углах поворота.
+  * **Zero-Allocation Spatial Merging**:
+    * Оптимизирована физика слияния предметов (`tryMerge` в [ItemEntity.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/entities/ItemEntity.java)): слияние проверяет границы соседних чанков (только при нахождении в пределах радиуса слияния 1.2м от стыка), гарантируя стабильное стаканье выброшенных куч блоков. Циклы обхода оптимизированы под Zero-Allocation (без создания итераторов `ArrayList`).
+  * **Default Magnetic Attraction & Collection Flow**:
+    * Внедрено плавное притяжение для предметов по умолчанию (без магнита в инвентаре): с радиусом **2.0 метра**, силой **3.0** и скоростью **3.0 м/с** (настраивается параметрами `"itemAttractionRadius"` и `"itemAttractionForce"` в `physics.json`).
+    * В [World.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/World.java) подбор адаптирован для использования `magnet.pickupRadius` (для Магнетита это 0.6 м) при использовании магнита, иначе берется `"itemPickupRadius"` из `physics.json` (0.75 м).
+    * Трение во время притяжения (`isBeingAttracted`) установлено в **`0.85f`** для гашения инерции, а также исключено прибавление скорости движения игрока, что устраняет эффект "убегания" предметов перед игроком на бегу и обеспечивает мгновенный подбор.
+  * **Live Inspector Search**: В [DevInspectorScreen.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/graphics/ui/DevInspectorScreen.java) интегрирован текстовый поиск `UISearchBar`, фильтрующий файлы боковой панели (включая `physics.json` во вкладке `REGISTRY`) в реальном времени.
 - **Zero-Allocation 3D BFS Occlusion Culling (Phase 2)**:
   - **High-Performance 3D Graph Traversal**: Replaced the legacy spiral chunk scan with a sophisticated 3D Breadth-First Search (BFS) algorithm. The engine now traverses the world as a connectivity graph, using each chunk section's 36-bit `visibilityMask`. This ensures that entire mountains or underground areas are discarded if no line-of-sight path exists through air pockets, drastically reducing draw calls and GPU load.
   - **Strict Monotonicity Rule (Portal Leak Fix)**: Implemented a directional constraint in the BFS wave. A ray from the camera can only propagate forward along each axis. This prevents "portal leakage," where a visibility wave could travel up a vertical shaft, reach the sky, and then "reflect" back down to render the entire surface behind the player.

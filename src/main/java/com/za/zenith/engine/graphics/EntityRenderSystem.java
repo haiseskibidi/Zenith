@@ -175,26 +175,7 @@ public class EntityRenderSystem {
         // Balanced distance: 64 blocks (4096.0f) to avoid rendering too many items
         if (player != null && interpPos.distanceSquared(player.getPosition()) > 4096.0f) return;
 
-        var item = entity.getStack().getItem();
-        Mesh mesh = MeshRegistry.getItemMesh(item, atlas);
-        
-        if (mesh != null) {
-            float age = entity.getAge() + alpha * 0.016f;
-            float scale = item.getDroppedScale() * (item.isBlock() ? 0.25f : 0.45f);
-            float yOff = item.isBlock() ? 0 : scale * 0.5f;
-            var rot = entity.getInterpolatedRotation(alpha);
-            
-            Matrix4f model = RenderContext.getMatrix();
-            model.translate(interpPos.x, interpPos.y + (float)Math.sin(age * 2.5f) * 0.02f + yOff, interpPos.z())
-                 .rotateX(rot.x)
-                 .rotateY(rot.y)
-                 .rotateZ(rot.z)
-                 .scale(scale);
-            
-            shader.setMatrix4f("model", model);
-            shader.setInt("highlightPass", 0);
-            mesh.render(shader);
-        }
+        ItemEntityStacker.render(entity, interpPos, alpha, shader, atlas);
     }
 
     private void renderResourceEntity(com.za.zenith.entities.ResourceEntity resource, Vector3f pos, float alpha, Shader shader, DynamicTextureAtlas atlas) {

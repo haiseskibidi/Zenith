@@ -82,17 +82,25 @@ public class ItemEntity extends Entity {
             if (isLockedOnPlayer || distSq < 100.0f) { 
                 com.za.zenith.world.items.component.MagneticComponent magnet = player.getInventory().getActiveComponent(com.za.zenith.world.items.component.MagneticComponent.class);
                 
-                if (magnet != null && (distSq < magnet.attractionRadius * magnet.attractionRadius || isLockedOnPlayer)) {
+                float attractionRadius = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemAttractionRadius;
+                float attractionForce = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemAttractionForce;
+                float baseSpeed = 3.0f;
+                if (magnet != null) {
+                    attractionRadius = magnet.attractionRadius;
+                    attractionForce = magnet.attractionForce;
+                    baseSpeed = 12.0f;
+                }
+
+                if (distSq < attractionRadius * attractionRadius || isLockedOnPlayer) {
                     isBeingAttracted = true;
                     isLockedOnPlayer = true;
                     isSleeping = false; 
                     
                     float distance = (float)Math.sqrt(distSq);
                     vPool1.set(dx, dy, dz).normalize();
-                    float approachSpeed = 12.0f + (1.0f - Math.min(1.0f, distance / 4.0f)) * (magnet.attractionForce * 0.2f);
+                    float approachSpeed = baseSpeed + (1.0f - Math.min(1.0f, distance / 4.0f)) * (attractionForce * 0.2f);
                     
-                    velocity.set(player.getVelocity());
-                    velocity.add(vPool1.mul(approachSpeed));
+                    velocity.set(vPool1.mul(approachSpeed));
                     onGround = false; 
                 } else {
                     isBeingAttracted = false;
@@ -120,7 +128,7 @@ public class ItemEntity extends Entity {
         
         move(world, velocity.x * deltaTime, velocity.y * deltaTime, velocity.z * deltaTime);
 
-        float friction = isBeingAttracted ? 1.0f : (onGround ? 0.8f : 0.98f);
+        float friction = isBeingAttracted ? 0.85f : (onGround ? 0.8f : 0.98f);
         velocity.mul(friction);
         
         if (onGround && !isBeingAttracted) {
@@ -152,7 +160,11 @@ public class ItemEntity extends Entity {
 
             if (distSq < 100.0f) { // Only check detailed magnet component if player is within 10 blocks
                 com.za.zenith.world.items.component.MagneticComponent magnet = player.getInventory().getActiveComponent(com.za.zenith.world.items.component.MagneticComponent.class);
-                if (magnet != null && distSq < magnet.attractionRadius * magnet.attractionRadius) {
+                float attractionRadius = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemAttractionRadius;
+                if (magnet != null) {
+                    attractionRadius = magnet.attractionRadius;
+                }
+                if (distSq < attractionRadius * attractionRadius) {
                     isSleeping = false;
                     isBeingAttracted = true;
                     isLockedOnPlayer = true;
@@ -211,9 +223,72 @@ public class ItemEntity extends Entity {
         float radius = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemMergeRadius;
         float radiusSq = radius * radius;
 
-        // SPATIAL MERGING: Only check ground entities in the same chunk
-        List<com.za.zenith.entities.Entity> entities = world.getGroundEntitiesInChunk(lastChunkPos);
-        for (com.za.zenith.entities.Entity e : entities) {
+        // 1. Сначала проверяем текущий чанк
+        mergeWithEntities(world.getGroundEntitiesInChunk(lastChunkPos), radiusSq);
+        if (stack.isFull() || this.isRemoved()) return;
+
+        // 2. Проверяем соседние чанки только если мы находимся близко к их границам (в пределах radius)
+        float minX = lastChunkPos.x() * 16.0f;
+        float maxX = minX + 16.0f;
+        float minZ = lastChunkPos.z() * 16.0f;
+        float maxZ = minZ + 16.0f;
+
+        boolean nearLeft = (position.x - minX) < radius;
+        boolean nearRight = (maxX - position.x) < radius;
+        boolean nearFront = (position.z - minZ) < radius;
+        boolean nearBack = (maxZ - position.z) < radius;
+
+        int cx = lastChunkPos.x();
+        int cz = lastChunkPos.z();
+
+        if (nearLeft) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx - 1, cz)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+        if (nearRight) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx + 1, cz)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+        if (nearFront) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx, cz - 1)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+        if (nearBack) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx, cz + 1)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+
+        // Углы
+        if (nearLeft && nearFront) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx - 1, cz - 1)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+        if (nearLeft && nearBack) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx - 1, cz + 1)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+        if (nearRight && nearFront) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx + 1, cz - 1)), radiusSq);
+            if (stack.isFull() || this.isRemoved()) return;
+        }
+        if (nearRight && nearBack) {
+            mergeWithEntities(world.getGroundEntitiesInChunk(new com.za.zenith.world.chunks.ChunkPos(cx + 1, cz + 1)), radiusSq);
+        }
+    }
+
+    private void mergeWithEntities(List<com.za.zenith.entities.Entity> entities, float radiusSq) {
+        if (entities == null || entities.isEmpty()) return;
+        
+        // Используем обычный цикл for-i для предотвращения аллокации итератора ArrayList
+        int size = entities.size();
+        for (int i = 0; i < size; i++) {
+            com.za.zenith.entities.Entity e;
+            try {
+                e = entities.get(i);
+            } catch (IndexOutOfBoundsException ex) {
+                // На случай если список изменился параллельно другим потоком
+                break;
+            }
             if (e instanceof ItemEntity other && other != this && !other.isRemoved()) {
                 if (other.stack.getItem().equals(this.stack.getItem())) {
                     float distSq = position.distanceSquared(other.position);

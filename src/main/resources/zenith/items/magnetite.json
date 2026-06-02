@@ -12,13 +12,21 @@
     },
     "zenith:magnetic": {
       "attractionRadius": 4.0,
-      "pickupRadius": 0.6,
+      "pickupRadius": 0.9,
       "attractionForce": 45.0
     },
     "viewmodel": {
       "socket": "socket_palm",
-      "translation": [0, 0, 0],
-      "rotation": [0, 90, 0],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
       "scale": 0.5,
       "grip": "zenith:auto"
     }
