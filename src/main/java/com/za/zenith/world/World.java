@@ -1131,6 +1131,7 @@ public class World {
                 if (newDef.isFluid()) {
                     scheduleFluidTick(x, y, z);
                 }
+                newDef.onBlockAdded(this, pos);
                 for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
                     BlockPos neighborPos = dir.offset(pos);
                     Block neighborBlock = getBlock(neighborPos);

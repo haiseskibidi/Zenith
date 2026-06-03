@@ -151,6 +151,10 @@ public class BlockDataLoader extends AbstractJsonLoader<BlockDefinition> {
             if (obj.has("requires_support")) def.setRequiresSupport(obj.get("requires_support").getAsBoolean());
             if (obj.has("alwaysRender")) def.setAlwaysRender(obj.get("alwaysRender").getAsBoolean());
             if (obj.has("replaceable")) def.setReplaceable(obj.get("replaceable").getAsBoolean());
+            if (obj.has("falling")) {
+                com.za.zenith.world.blocks.BlockDefinition.FallingSettings fs = com.za.zenith.engine.resources.AssetManager.getGson().fromJson(obj.get("falling"), com.za.zenith.world.blocks.BlockDefinition.FallingSettings.class);
+                def.setFallingSettings(fs);
+            }
             if (obj.has("sway")) def.setSway(obj.get("sway").getAsBoolean());
 
             if (obj.has("upperTexture")) {

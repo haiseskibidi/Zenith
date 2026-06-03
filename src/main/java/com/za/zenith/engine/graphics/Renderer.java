@@ -44,6 +44,10 @@ public class Renderer {
         pipeline.setPreviewBlock(pos, block);
     }
 
+    public void addTemporaryHiddenBlock(com.za.zenith.world.BlockPos pos) {
+        pipeline.addTemporaryHiddenBlock(pos);
+    }
+
     public void cleanup() {
         if (pipeline != null) pipeline.cleanup();
     }

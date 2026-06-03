@@ -202,6 +202,10 @@ public class OverlayRenderSystem {
         carvingRenderer.cleanup();
     }
 
+    public void addTemporaryHiddenBlock(com.za.zenith.world.BlockPos pos) {
+        recentlyBrokenHoles.put(pos, new RecentlyBrokenHole(null, 1.5f));
+    }
+
     // Getters and Setters
     public Map<com.za.zenith.world.BlockPos, RecentlyBrokenHole> getRecentlyBrokenHoles() { return recentlyBrokenHoles; }
     public BlockHighlightRenderer getHighlightRenderer() { return highlightRenderer; }

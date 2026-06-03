@@ -2,6 +2,7 @@ package com.za.zenith.engine.graphics;
 
 import com.za.zenith.entities.ItemEntity;
 import com.za.zenith.entities.Player;
+import com.za.zenith.entities.FallingBlockEntity;
 import com.za.zenith.network.GameClient;
 import com.za.zenith.world.World;
 import com.za.zenith.world.blocks.Block;
@@ -54,7 +55,14 @@ public class EntityRenderSystem {
     }
 
     private void setEntityLight(World world, Vector3f pos, Shader shader) {
+        setEntityLight(world, pos, shader, false);
+    }
+
+    private void setEntityLight(World world, Vector3f pos, Shader shader, boolean offsetLightForLanded) {
         int x = (int) Math.floor(pos.x), y = (int) Math.floor(pos.y), z = (int) Math.floor(pos.z);
+        if (offsetLightForLanded) {
+            y += 1;
+        }
         long packed = com.za.zenith.world.chunks.ChunkPos.pack(x >> 4, z >> 4);
 
         if (packed != lastEntityChunkPacked) {
@@ -69,16 +77,18 @@ public class EntityRenderSystem {
             // Clamp Y for safety during generation spikes
             int clampY = Math.max(0, Math.min(com.za.zenith.world.chunks.Chunk.CHUNK_HEIGHT - 1, y));
 
+            float aoVal = offsetLightForLanded ? 0.9f : 1.0f;
+
             Vector3f light = RenderContext.getVector().set(
                 lastEntityChunk.getSunlight(lx, clampY, lz),
                 lastEntityChunk.getBlockLight(lx, clampY, lz),
-                1.0f
+                aoVal
             );
             shader.setVector3f("uOverrideLight", light);
             shader.setFloat("uChunkSpawnTime", lastEntityChunk.getFirstSpawnTime());
         } else {
             // Fallback for totally unloaded areas
-            shader.setVector3f("uOverrideLight", 15, 15, 1);
+            shader.setVector3f("uOverrideLight", 15, 15, 1.0f);
             shader.setFloat("uChunkSpawnTime", (float)world.getWorldTime());
         }
     }
@@ -97,13 +107,19 @@ public class EntityRenderSystem {
                 Vector3f p = entity.getInterpolatedPosition(state.getAlpha());
                 if (!state.getFrustum().testAab(entity.getBoundingBox().getMin(), entity.getBoundingBox().getMax())) continue;
                 
-                setEntityLight(world, p, blockShader);
+                if (entity instanceof FallingBlockEntity fallingBlock) {
+                    setEntityLight(world, p, blockShader, fallingBlock.isLanded());
+                } else {
+                    setEntityLight(world, p, blockShader, false);
+                }
                 blockShader.setInt("highlightPass", 0);
                 
                 if (entity instanceof com.za.zenith.entities.ScoutEntity scout) {
                     renderScoutEntity(scout, p, entity.getRotation().y, blockShader);
                 } else if (entity instanceof com.za.zenith.entities.DecorationEntity decoration) {
                     renderDecorationEntity(decoration, p, entity.getRotation().y, blockShader, atlas);
+                } else if (entity instanceof FallingBlockEntity fallingBlock) {
+                    renderFallingBlockEntity(fallingBlock, p, blockShader, atlas, world);
                 } else {
                     renderGeneralEntity(p, entity.getRotation().y, blockShader);
                 }
@@ -185,6 +201,25 @@ public class EntityRenderSystem {
             float s = item.getDroppedScale();
             Matrix4f model = RenderContext.getMatrix();
             model.translate(pos.x, pos.y + 0.03125f * s, pos.z).rotateY(resource.getRotation().y).rotateX(1.5708f).scale(s);
+            shader.setMatrix4f("model", model);
+            shader.setInt("highlightPass", 0);
+            mesh.render(shader);
+        }
+    }
+
+    private void renderFallingBlockEntity(FallingBlockEntity entity, Vector3f pos, Shader shader, DynamicTextureAtlas atlas, World world) {
+        if (entity.isLanded()) {
+            int cx = (int) Math.floor(entity.getPosition().x) >> 4;
+            int cz = (int) Math.floor(entity.getPosition().z) >> 4;
+            com.za.zenith.world.chunks.Chunk chunk = world.getChunk(cx, cz);
+            if (chunk == null || !chunk.needsMeshUpdate()) {
+                return; // Chunk mesh is now built and has the block, skip rendering entity to avoid z-fighting
+            }
+        }
+        Mesh mesh = MeshRegistry.getBlockMesh(entity.getBlockType(), atlas);
+        if (mesh != null) {
+            Matrix4f model = RenderContext.getMatrix();
+            model.translate(pos.x, pos.y, pos.z);
             shader.setMatrix4f("model", model);
             shader.setInt("highlightPass", 0);
             mesh.render(shader);

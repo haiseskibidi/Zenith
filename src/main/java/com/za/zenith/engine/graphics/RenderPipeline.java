@@ -576,6 +576,10 @@ public class RenderPipeline {
         overlaySystem.setPreviewBlock(pos, block, atlas);
     }
 
+    public void addTemporaryHiddenBlock(com.za.zenith.world.BlockPos pos) {
+        overlaySystem.addTemporaryHiddenBlock(pos);
+    }
+
     public void onChunkUnload(Chunk chunk) {
         chunkSystem.onChunkUnload(chunk);
     }

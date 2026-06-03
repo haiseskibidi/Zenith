@@ -7,5 +7,10 @@
   "textures": {
     "all": "gravel.png"
   },
-  "requiredTool": "shovel"
+  "requiredTool": "shovel",
+  "falling": {
+    "falls": true,
+    "gravity": -28.0,
+    "terminalVelocity": -50.0
+  }
 }

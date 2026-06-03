@@ -9,5 +9,10 @@
     "all": "sand.png"
   },
   "requiredTool": "shovel",
-  "supportScavenge": true
+  "supportScavenge": true,
+  "falling": {
+    "falls": true,
+    "gravity": -28.0,
+    "terminalVelocity": -50.0
+  }
 }

@@ -525,6 +525,11 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
             }
         }
 
+        // Логика гравитации сыпучих блоков
+        if (hasGravity() && dir == com.za.zenith.utils.Direction.DOWN) {
+            checkFall(world, pos);
+        }
+
         // Логика DOUBLE_PLANT
         if (placementType == PlacementType.DOUBLE_PLANT) {
             Block current = world.getBlock(pos);
@@ -752,6 +757,87 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
             case "lava" -> 3;
             default -> 0;
         };
+    }
+
+    public static class FallingSettings {
+        @SerializedName("falls")
+        private boolean falls = false;
+        @SerializedName("gravity")
+        private float gravity = -28.0f;
+        @SerializedName("terminalVelocity")
+        private float terminalVelocity = -50.0f;
+
+        public FallingSettings() {}
+
+        public FallingSettings(boolean falls, float gravity, float terminalVelocity) {
+            this.falls = falls;
+            this.gravity = gravity;
+            this.terminalVelocity = terminalVelocity;
+        }
+
+        public boolean falls() { return falls; }
+        public float getGravity() { return gravity; }
+        public float getTerminalVelocity() { return terminalVelocity; }
+    }
+
+    @SerializedName("falling")
+    private FallingSettings fallingSettings = null;
+
+    public FallingSettings getFallingSettings() {
+        return fallingSettings;
+    }
+
+    public void setFallingSettings(FallingSettings fallingSettings) {
+        this.fallingSettings = fallingSettings;
+    }
+
+    public boolean hasGravity() {
+        return fallingSettings != null && fallingSettings.falls();
+    }
+
+    public void onBlockAdded(com.za.zenith.world.World world, BlockPos pos) {
+        if (hasGravity()) {
+            checkFall(world, pos);
+        }
+    }
+
+    public void checkFall(com.za.zenith.world.World world, BlockPos pos) {
+        if (world.isGenerating()) return;
+
+        BlockPos belowPos = pos.down();
+        Block belowBlock = world.getBlock(belowPos);
+
+        if (belowBlock.isAir() || belowBlock.isReplaceable() || BlockRegistry.getBlock(belowBlock.getType()).isFluid()) {
+            Block currentBlock = world.getBlock(pos);
+            if (currentBlock.getType() == this.id) {
+                // Cache block properties before replacing with AIR
+                int typeToFall = currentBlock.getType();
+                byte metaToFall = currentBlock.getMetadata();
+
+                // Set current block to air (which notifies neighbors, including the block above)
+                world.setBlock(pos, new Block(Blocks.AIR.getId()));
+
+                // Hide the block at the start position until the chunk mesh updates to prevent visual duplication
+                if (com.za.zenith.engine.core.GameLoop.getInstance() != null) {
+                    com.za.zenith.engine.graphics.Renderer renderer = com.za.zenith.engine.core.GameLoop.getInstance().getRenderer();
+                    if (renderer != null) {
+                        renderer.addTemporaryHiddenBlock(pos);
+                    }
+                }
+
+                float startGravity = fallingSettings != null ? fallingSettings.getGravity() : -28.0f;
+                float startTerminal = fallingSettings != null ? fallingSettings.getTerminalVelocity() : -50.0f;
+
+                com.za.zenith.entities.FallingBlockEntity entity = new com.za.zenith.entities.FallingBlockEntity(
+                    new org.joml.Vector3f(pos.x() + 0.5f, pos.y(), pos.z() + 0.5f),
+                    typeToFall,
+                    metaToFall,
+                    startGravity,
+                    startTerminal
+                );
+                world.spawnEntity(entity);
+            }
+        }
     }
 }
 
