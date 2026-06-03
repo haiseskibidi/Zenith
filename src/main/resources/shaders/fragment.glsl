@@ -79,35 +79,59 @@ void main() {
     if (highlightPass != 0) {
         baseColor = highlightColor;
     } else {
-        vec4 textureColor;
-        if (useMask) {
-            vec2 localUV = fragTexCoord.xy;
-            int bit = int(clamp(localUV.y * 4.0, 0.0, 3.99)) * 4 + int(clamp(localUV.x * 4.0, 0.0, 3.99));
-            if (((faceMask >> bit) & 1) == 0) discard;
-            textureColor = texture(textureSampler, vec3(localUV, overlayLayer));
-        } else {
-            textureColor = texture(textureSampler, fragTexCoord.xyz);
-        }
-
         BlockInfo info = decodeBlockInfo(blockType);
 
-        if (info.isGlass) {
-            textureColor = applyGlassConnections(textureColor, fragTexCoord.xy, neighborData, fragTexCoord.z, textureSampler);
+        if (info.isWater) {
+            // Procedural Water Rendering
+            baseColor = vec3(0.02, 0.28, 0.48);
+            alpha = 0.65;
+
+            // neighborData contains packed flow direction: 0-15 (static if >= 15.0)
+            vec2 flowDir = vec2(0.0);
+            if (neighborData < 14.5) {
+                float angle = neighborData * (2.0 * 3.14159265 / 16.0);
+                flowDir = vec2(cos(angle), sin(angle));
+            }
+
+            vec2 uv1 = fragPos.xz * 0.35 + flowDir * uTime * 0.12 + vec2(uTime * 0.015, uTime * 0.008);
+            vec2 uv2 = fragPos.xz * 0.70 - flowDir * uTime * 0.06 + vec2(-uTime * 0.008, uTime * 0.015);
+
+            float n1 = noise(uv1 * 4.0);
+            float n2 = noise(uv2 * 5.0);
+            float ripple = (n1 + n2) * 0.5;
+
+            float foam = smoothstep(0.68, 0.8, ripple) * 0.30;
+            baseColor = mix(baseColor, vec3(0.4, 0.78, 0.90), ripple * 0.25);
+            baseColor += vec3(foam);
+        } else {
+            vec4 textureColor;
+            if (useMask) {
+                vec2 localUV = fragTexCoord.xy;
+                int bit = int(clamp(localUV.y * 4.0, 0.0, 3.99)) * 4 + int(clamp(localUV.x * 4.0, 0.0, 3.99));
+                if (((faceMask >> bit) & 1) == 0) discard;
+                textureColor = texture(textureSampler, vec3(localUV, overlayLayer));
+            } else {
+                textureColor = texture(textureSampler, fragTexCoord.xyz);
+            }
+
+            if (info.isGlass) {
+                textureColor = applyGlassConnections(textureColor, fragTexCoord.xy, neighborData, fragTexCoord.z, textureSampler);
+            }
+
+            if (info.isTinted && !info.isGlass) {
+                // FIX: Prevent Alpha-To-Coverage from turning distant leaves into semi-transparent clouds.
+                // Mipmapping reduces alpha to ~0.3 at distance. ATC uses this to discard 70% of samples, 
+                // letting the bright sky bleed through, creating a massive "white noise" effect.
+                // By stepping it, we force the leaf pixel to be fully solid or fully transparent.
+                textureColor.a = step(0.1, textureColor.a);
+            }
+
+            float discardThreshold = (info.isTinted && !info.isGlass) ? 0.5 : 0.1;
+            if (textureColor.a < discardThreshold) discard;
+
+            baseColor = textureColor.rgb;
+            alpha = textureColor.a;
         }
-
-        if (info.isTinted && !info.isGlass) {
-            // FIX: Prevent Alpha-To-Coverage from turning distant leaves into semi-transparent clouds.
-            // Mipmapping reduces alpha to ~0.3 at distance. ATC uses this to discard 70% of samples, 
-            // letting the bright sky bleed through, creating a massive "white noise" effect.
-            // By stepping it, we force the leaf pixel to be fully solid or fully transparent.
-            textureColor.a = step(0.1, textureColor.a);
-        }
-
-        float discardThreshold = (info.isTinted && !info.isGlass) ? 0.5 : 0.1;
-        if (textureColor.a < discardThreshold) discard;
-
-        baseColor = textureColor.rgb;
-        alpha = textureColor.a;
 
         if (isHand) {
             baseColor = applyHandConditions(baseColor, vLocalPos, uCondition, uHandPartWeight);
@@ -115,7 +139,7 @@ void main() {
 
         baseColor = brightenTopFace(baseColor, info.type, fragNormal);
 
-        if (info.isTinted) {
+        if (info.isTinted && !info.isWater) {
             if (fragTexCoord.w >= 0.0 && !info.isGlass) {
                 vec4 overlayTex = texture(textureSampler, vec3(fragTexCoord.xy, fragTexCoord.w));
                 if (overlayTex.a > 0.1) {

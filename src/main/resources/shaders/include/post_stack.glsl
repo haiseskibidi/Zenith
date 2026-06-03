@@ -4,6 +4,7 @@
 
 uniform vec3 uSkyColor;
 uniform float uHazeDensity;
+uniform bool uIsUnderwater;
 
 float near = 0.01; 
 float far  = 1000.0; 
@@ -60,6 +61,17 @@ vec3 applyPostProcessing(vec3 color, vec2 fragTexCoord, vec2 texelSize, sampler2
         float fogFactor = 1.0 - exp(-max(0.0, d - 8.0) * baseHaze);
         fogFactor = clamp(fogFactor, 0.0, 1.0);
         color = mix(color, uSkyColor, fogFactor);
+    }
+
+    if (uIsUnderwater) {
+        float d = LinearizeDepth(rawDepth);
+        if (rawDepth > 0.99999) {
+            d = 48.0;
+        }
+        vec3 waterFogColor = vec3(0.02, 0.16, 0.32);
+        float fogFactor = 1.0 - exp(-d * 0.18);
+        fogFactor = clamp(fogFactor, 0.0, 1.0);
+        color = mix(color * vec3(0.5, 0.78, 0.98), waterFogColor, fogFactor);
     }
     
     // 3. Filmic Contrast

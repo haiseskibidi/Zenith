@@ -7,6 +7,7 @@ import com.za.zenith.engine.core.Window;
 import com.za.zenith.engine.graphics.Camera;
 import com.za.zenith.entities.Player;
 import com.za.zenith.world.physics.PhysicsSettings;
+import com.za.zenith.world.World;
 import com.za.zenith.engine.input.InputAction;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
@@ -109,23 +110,90 @@ public class MovementInputHandler {
         
         float baseSpeed = player.isFlying() ? settings.flySpeed : (physicallySneaking ? settings.baseMoveSpeed * settings.sneakSpeedMultiplier : settings.baseMoveSpeed);
         if (sprinting && !physicallySneaking) baseSpeed *= (player.isFlying() ? settings.flySprintMultiplier : settings.sprintMultiplier);
+        
+        if (player.isInWater()) {
+            float dragFactor = 0.5f;
+            World w = GameLoop.getInstance().getWorld();
+            if (w != null) {
+                com.za.zenith.world.blocks.Block b = w.getBlock((int)Math.floor(player.getPosition().x), (int)Math.floor(player.getPosition().y + 0.5f), (int)Math.floor(player.getPosition().z));
+                com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType());
+                if (def != null && def.isFluid()) {
+                    if ("oil".equals(def.getFluidType()) || "lava".equals(def.getFluidType())) {
+                        dragFactor = 0.25f;
+                    }
+                }
+            }
+            baseSpeed *= dragFactor;
+        }
 
         player.setMoving(moveVector.length() > 0);
-        if (moveVector.length() > 0 && !inParkour) {
-            moveVector.normalize();
-            float yaw = -camera.getRotation().y;
-            float moveX = (float)Math.sin(yaw) * moveVector.y + (float)Math.cos(yaw) * moveVector.x;
-            float moveZ = -(float)Math.cos(yaw) * moveVector.y + (float)Math.sin(yaw) * moveVector.x;
-            float targetVx = moveX * baseSpeed;
-            float targetVz = moveZ * baseSpeed;
-            float accelGain = player.getMode() == PlayerMode.DEVELOPER ? 30.0f : (player.isFlying() ? 24.0f : 18.0f);
-            player.applyHorizontalAcceleration((targetVx - player.getVelocity().x) * accelGain * deltaTime, (targetVz - player.getVelocity().z) * accelGain * deltaTime, baseSpeed);
-        } else if (!inParkour) {
-            float decelGain = player.isFlying() ? 20.0f : 15.0f;
-            player.applyHorizontalAcceleration(-player.getVelocity().x * decelGain * deltaTime, -player.getVelocity().z * decelGain * deltaTime, baseSpeed);
+        if (player.isInWater() && !inParkour) {
+            if (moveVector.length() > 0) {
+                moveVector.normalize();
+                float yaw = -camera.getRotation().y;
+                float moveX = (float)Math.sin(yaw) * moveVector.y + (float)Math.cos(yaw) * moveVector.x;
+                float moveZ = -(float)Math.cos(yaw) * moveVector.y + (float)Math.sin(yaw) * moveVector.x;
+                
+                float waterAccel = 2.4f; // Сила гребка в воде
+                player.getVelocity().x += moveX * waterAccel * deltaTime;
+                player.getVelocity().z += moveZ * waterAccel * deltaTime;
+            }
+            // В воде торможение ввода не требуется, трение воды плавно остановит игрока самостоятельно
+        } else {
+            if (moveVector.length() > 0 && !inParkour) {
+                moveVector.normalize();
+                float yaw = -camera.getRotation().y;
+                float moveX = (float)Math.sin(yaw) * moveVector.y + (float)Math.cos(yaw) * moveVector.x;
+                float moveZ = -(float)Math.cos(yaw) * moveVector.y + (float)Math.sin(yaw) * moveVector.x;
+                float targetVx = moveX * baseSpeed;
+                float targetVz = moveZ * baseSpeed;
+                float accelGain = player.getMode() == PlayerMode.DEVELOPER ? 30.0f : (player.isFlying() ? 24.0f : 18.0f);
+                player.applyHorizontalAcceleration((targetVx - player.getVelocity().x) * accelGain * deltaTime, (targetVz - player.getVelocity().z) * accelGain * deltaTime, baseSpeed);
+            } else if (!inParkour) {
+                float decelGain = player.isFlying() ? 20.0f : 15.0f;
+                player.applyHorizontalAcceleration(-player.getVelocity().x * decelGain * deltaTime, -player.getVelocity().z * decelGain * deltaTime, baseSpeed);
+            }
         }
         
-        if (player.isFlying() && !inParkour) {
+        if (player.isInWater() && !inParkour) {
+            float swimSpeed = 2.4f;
+            World w = GameLoop.getInstance().getWorld();
+            if (w != null) {
+                com.za.zenith.world.blocks.Block b = player.getFluidBlock();
+                if (b != null) {
+                    com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType());
+                    if (def != null && def.isFluid()) {
+                        if ("oil".equals(def.getFluidType()) || "lava".equals(def.getFluidType())) {
+                            swimSpeed = 1.2f;
+                        }
+                    }
+                }
+            }
+
+            float swimUpForce = 0.0f;
+            if (moveY > 0) {
+                float submersion = player.getSubmersionRatio(w);
+                float baseForce = player.isMoving() ? 45.0f : 36.0f;
+                swimUpForce = baseForce * submersion;
+            } else if (moveY < 0) {
+                swimUpForce = -12.0f;
+            }
+
+            if (moveY != 0) {
+                float limit = (moveY > 0) ? swimSpeed : -swimSpeed;
+                if (moveY > 0) {
+                    if (player.getVelocity().y < limit) {
+                        player.getVelocity().y += swimUpForce * deltaTime;
+                        if (player.getVelocity().y > limit) player.getVelocity().y = limit;
+                    }
+                } else {
+                    if (player.getVelocity().y > limit) {
+                        player.getVelocity().y += swimUpForce * deltaTime;
+                        if (player.getVelocity().y < limit) player.getVelocity().y = limit;
+                    }
+                }
+            }
+        } else if (player.isFlying() && !inParkour) {
             player.addVelocity(0, (moveY * baseSpeed - player.getVelocity().y) * 25.0f * deltaTime, 0);
         }
         
@@ -137,7 +205,7 @@ public class MovementInputHandler {
                 if (parkour.isHanging()) {
                     parkour.startClimb(player);
                 } else if (!parkour.isClimbing()) {
-                    if (player.isOnGround()) {
+                    if (player.isOnGround() || player.isInWater()) {
                         player.jump();
                     } else {
                         parkour.tryLedgeGrab(player, GameLoop.getInstance().getWorld(), lookDir);

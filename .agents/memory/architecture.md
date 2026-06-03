@@ -1,7 +1,7 @@
  # Архитектура проекта "Zenith"
 
 ### Core Graphics Systems
-1.  **Unified Coloring System (v1.0)**:
+1.  **Unified Coloring System**:
     - **Single Source of Truth**: Класс `ColorProvider` централизованно хранит цвета биома (трава, листва).
     - **Smart Overlays**: Вместо проверки пикселей шейдер использует 4-ю текстурную координату (`OverlayLayer`) для наложения окрашиваемых масок поверх базовых текстур.
     - **Cross-System Consistency**: Единые шейдеры для мира, viewmodel, инвентаря и частиц гарантируют идентичное отображение цветов.
@@ -15,23 +15,23 @@
         - **EntityRenderSystem**: Оптимизированная отрисовка динамических сущностей и вьюмоделей.
         - **OverlayRenderSystem**: Подсветка блоков, превью установки и эффекты разрушения.
     - **Global Data UBO (std140)**: Все глобальные шейдерные данные (матрицы Projection/View, позиция камеры, направление солнца, цвета эмбиента и травы, время) синхронизируются через единый Uniform Buffer Object. Это устраняет сотни вызовов `glUniform` за кадр.
-    - **Unified Mesh Pooling (Phase 2.5)**: `MeshRegistry.rebuild()` централизованно обновляет все кэши мешей. `RenderPipeline` использует единый `MeshPool` для всех систем, минимизируя фрагментацию VRAM.
+    - **Unified Mesh Pooling**: `MeshRegistry.rebuild()` централизованно обновляет все кэши мешей. `RenderPipeline` использует единый `MeshPool` для всех систем, минимизируя фрагментацию VRAM.
     - **Zero-Allocation Rendering Strategy**: Внедрена система `RenderContext.resetBlockShader()` для централизованной инициализации состояний шейдеров. Использование пулов объектов JOML в `RenderContext` исключает аллокации в горячем цикле отрисовки.
     - **Resource Scanning Engine**: `ResourceScanner` обеспечивает унифицированный поиск ресурсов (JSON, текстуры) как в файловой системе (IDE), так и внутри JAR-архива, используя `.index` файлы как fallback.
-    - **MultiDraw Batching (Phase 2)**: Фундаментальный сдвиг от классической отрисовки к GPU-Driven подходу. Вместо сотен цикличных вызовов `glDrawElements`, мир отрисовывается через **2-4 системных вызова** `glMultiDrawElementsIndirect`. Это минимизирует накладные расходы на переключение контекста CPU-GPU.
+    - **MultiDraw Batching**: Фундаментальный сдвиг от классической отрисовки к GPU-Driven подходу. Вместо сотен цикличных вызовов `glDrawElements`, мир отрисовывается через **2-4 системных вызова** `glMultiDrawElementsIndirect`. Это минимизирует накладные расходы на переключение контекста CPU-GPU.
     - **Centralized Mesh Pooling**: Весь мир хранится в гигантском `MeshPool` (1.5 ГБ VRAM). Это устраняет тысячи операций создания/удаления VBO и переключений `glBindBuffer` за кадр.
     - **Pool Versioning & Safety**: Каждое переполнение (Wrap-around) буфера инкрементирует глобальную версию пула. Рендерер автоматически инвалидирует и пересобирает меши старых поколений, предотвращая визуальную "кашу" и порчу координат.
     - **Instance Data Attribute**: Позиция чанка и время спавна (`uChunkSpawnTime`) теперь передаются через атрибут инстансинга (`location = 5`) с делителем `glVertexAttribDivisor(5, 1)`. Это убирает тысячи вызовов `glUniform` для матриц моделей.
-    - **Vertex Compression Engine (v1.1)**:
+    - **Vertex Compression Engine**:
         - **Bit-Packed Layout**: Размер вершины сокращен до 28 байт.
         - **Shader-side Unpacking**: Распаковка данных в `vertex.glsl` через `floatBitsToUint`.
-    - **Occlusion Culling (Phase 2)**:
+    - **Occlusion Culling**:
         - **3D BFS Graph Traversal**: Legacy spiral scan replaced with a connectivity-based 3D Breadth-First Search. The engine traverses the world section by section (16x16x16) using pre-calculated 36-bit `visibilityMask` flags. If a section has no line-of-sight path from the entry face to any other face, the traversal stops, effectively discarding massive obscured terrain (mountains, underground caves).
         - **Strict Monotonicity Rule**: To prevent "portal leakage" (where visibility waves exit through a vertical shaft to the sky and loop back to the ground), the BFS is constrained by the player's position. Rays can only move forward relative to each axis, ensuring 100% correct occlusion in complex tunnels.
         - **Zero-Allocation Execution**: Traversal uses fixed primitive arrays and O(1) versioned visited checks, executing in sub-0.5ms on CPU.
         - **Front-to-Back Opaque Sorting**: All visible opaque sections are sorted by distance before rendering. This leverages hardware **Early-Z discard** on iGPUs, significantly reducing overdraw and boosting FPS.
     - **Encapsulated State Management**: Логика отрисовки инкапсулирована в `MultiDrawBatch`, который управляет собственным VAO и связками с `MeshPool`.
-    - **Virtual Coordinate Origin (v1.0 NEW)**: 
+    - **Virtual Coordinate Origin**: 
         - **Internal Stability**: Весь движок (хранение, свет, физика, рендер) работает в строго положительном диапазоне `[0, 512)`. Это исключает баги знакового расширения и повреждения битовых масок.
         - **Logical Mapping**: Введен `LOGICAL_OFFSET_Y = 128`. Формула отображения: `LogicalY = InternalY - 128`.
         - **Boundaries**: Бедрок (Internal 0) соответствует логическому -128. Морской уровень (Logical 0) соответствует Internal 128.
@@ -41,32 +41,32 @@
         - **Coordinate-Space Functions**: Специализированные узлы (Spline, Terrace) позволяют трансформировать плотность в зависимости от макро-параметров климата или высоты. Поддерживают расширенный диапазон `[-128, 384]`.
         - **Ridged Noise Math**: Реализация острых хребтов через `Square(1.0 - Abs(Noise))`.
         - **Density Context**: Использование неизменяемого рекорда `DensityContext` для передачи координат и климата по всему дереву вычислений, что упрощает масштабирование.
-        - **Deterministic Two-Phase Carving**: Разделение генерации пещер и шахт на фазу карвинга туннелей (Phase 1 - вырезание пустот) и фазу декорирования (Phase 2 - расстановка опорных арок и руды). Решение об установке арок и порталов принимается через 100% симметричную математическую проверку `isBlockSolidDeterministic` на основе `NoiseRouter` плотности. Это полностью предотвращает обрезание и летающие опоры на стыках чанков и на поверхности.
+        - **Deterministic Two-Phase Carving**: Разделение генерации пещер и шахт на фазу карвинга туннелей и фазу декорирования. Решение об установке арок и порталов принимается через 100% симметричную математическую проверку `isBlockSolidDeterministic` на основе `NoiseRouter` плотности. Это полностью предотвращает обрезание и летающие опоры на стыках чанков и на поверхности.
     - **Asynchronous Multi-Noise Pipeline (Naturalism Update)**: 
         - **5D Climate Space**: Выбор биома в 5D пространстве (Temp, Hum, Cont, Eros, Weir).
         - **Fractal Sampling**: Все слои климата используют фрактальный шум (4+ октавы), что устраняет геометрическую повторяемость ландшафта.
         - **Domain Warping**: Искажение координат X/Z перед расчетом климата. Это создает естественные извилистые границы биомов вместо прямых линий.
     - **Radial Spiral Priority**: Алгоритм спирали обеспечивает приоритетную загрузку и мешинг чанков от центра (игрока) к краям, исключая визуальные дыры.
-    - **Threaded Mesh Generation (v1.1 UPDATED)**: Процесс построения геометрии полностью асинхронен. Внедрены жесткие лимиты потоков и динамическая пересортировка задач по дистанции до игрока.
+    - **Threaded Mesh Generation**: Процесс построения геометрии полностью асинхронен. Внедрены жесткие лимиты потоков и динамическая пересортировка задач по дистанции до игрока.
     - **Spatial Item Merging (Zenith v1.0 NEW)**: Система слияния предметов (`ItemEntity.tryMerge`) переведена на пространственное хэширование через `itemSpatialMap` в `World`. Вместо перебора всех сущностей ($O(N^2)$), предметы проверяют только соседей в своем чанке ($O(1)$), что исключает падение FPS при длительном копании.
     - **Zero-Allocation Entity Pipeline**: Полное устранение создания объектов (векторов, позиций) в циклах `update` мира и сущностей. Использование пулов и кэшированных данных игрока минимизирует нагрузку на GC.
     - **Frustum Culling for Entities**: Реализована отсечка отрисовки сущностей, находящихся вне пирамиды видимости игрока, что значительно сокращает количество Draw Calls.
     - **Lock-Free Chunk Integrity**: Синхронизированная запись в палитру чанка и lock-free чтение данных обеспечивают целостность мира без блокировок главного потока.
     - **Procedural Wind System**: Модульная система анимации (`foliage_animation.glsl`), использующая веса вершин для создания эффекта качания на ветру без деформации основания блоков.
     - **Additive Weighting**: Поддержка многоблочных растений через смещение весов (`weightOffset`), обеспечивающая бесшовную анимацию высоких объектов (0.0 -> 1.0 -> 2.0).
-    - **Zero-Allocation Block Access (NEW)**: Прямое чтение данных блоков через `int getRawBlockData()` исключает выделение миллионов объектов `Block` и `BlockPos` в горячих циклах генерации мешей.
-    - **Shader Uniform Caching (NEW)**: Кэширование локаций переменных в `Shader.java` устраняет избыточные JNI-вызовы к драйверу OpenGL, стабилизируя FPS при большом количестве чанков.
-    - **VRAM Garbage Collection (NEW)**: Автоматическая очистка мешей выгруженных чанков в `Renderer` предотвращает утечки видеопамяти.
-    - **L1 Cache Layer (v1.1 UPDATED)**: `Renderer` и `World` хранят ссылку на последний чанк, используя примитивные координаты X/Z для поиска без аллокаций `ChunkPos`.
-2.  **Input & Frame Synchronization (NEW)**:
+    - **Zero-Allocation Block Access**: Прямое чтение данных блоков через `int getRawBlockData()` исключает выделение миллионов объектов `Block` и `BlockPos` в горячих циклах генерации мешей.
+    - **Shader Uniform Caching**: Кэширование локаций переменных в `Shader.java` устраняет избыточные JNI-вызовы к драйверу OpenGL, стабилизируя FPS при большом количестве чанков.
+    - **VRAM Garbage Collection**: Автоматическая очистка мешей выгруженных чанков в `Renderer` предотвращает утечки видеопамяти.
+    - **L1 Cache Layer**: `Renderer` и `World` хранят ссылку на последний чанк, используя примитивные координаты X/Z для поиска без аллокаций `ChunkPos`.
+2.  **Input & Frame Synchronization**:
     - **Event Consumption**: Для предотвращения рассинхронизации GLFW-коллбэков и опроса (polling) в игровом цикле, `InputManager` отслеживает `lastHandledFrame` через `Timer.frames`.
     - **Handled-State Logic**: Если клавиша помечена как "обработанная" в коллбэке, `InputManager.isKeyHandled` блокирует повторную реакцию в основном цикле в течение 1 кадра. Это решает проблему двойных срабатываний (например, при выходе из редактора).
-3.  **Matrix Crosshair System (v2.0)**:
+3.  **Matrix Crosshair System**:
     - **Data-Driven Shapes**: Прицел определяется сеткой 1/0 в JSON (`matrix`).
     - **State-Based Logic**: `CrosshairManager` анализирует контекст. Приоритет всегда у активного действия (Mining).
     - **Data-Driven Animations**: Поддержка параметров `recoilScale` (отдача при ударе) и `spreadScale` (разлет элементов при прогрессе) прямо в JSON прицела.
     - **Surgical Rendering**: Прицел отрисовывается через выделенный `crosshairShader`, гарантируя сохранение формы из JSON независимо от внешних эффектов.
-2.  **Mining Heat VFX System (NEW)**:
+2.  **Mining Heat VFX System**:
     - **Natural Energy Simulation**: Инструмент или руки игрока постепенно раскаляются при работе. Жар остывает плавно (~2 сек), сохраняясь при смене предметов.
     - **Localized Emission**: Использование масок (Y-coord для предметов, веса костей для рук) для раскаления только рабочих частей (лезвия, костяшки кулака).
     - **Integrity Logic**: `MiningVFXManager` обеспечивает сброс прогресса добычи при смене/выбрасывании предмета, связывая визуальный эффект с механикой.
@@ -75,24 +75,24 @@
     - **Skeletal Animation**: Иерархия костей (Shoulder -> Forearm -> Hand) для органичных движений.
     - **Spring Physics**: Инерция рук и предметов на основе пружинного симулятора.
 
-4.  **Minimap (Radar) System (v1.0 NEW)**:
+4.  **Minimap (Radar) System**:
     - **Fast Voxel Sampling**: Прямое чтение `Chunk.blockData` позволяет сканировать ландшафт (128x128) за <0.5ms без аллокации Java-объектов.
     - **Dynamic Texture Pipeline**: Система обновляет `ByteBuffer` и передает его в GPU через `glTexSubImage2D`, минуя пересоздание текстуры.
     - **SDF Post-Processing**: Круговая маска, виньетка и эффект сканирования (электронные помехи) вынесены в специализированный `minimap_fragment.glsl`.
     - **Coordinate Mapping**: Трансформация мировых координат в пространство радара учитывает позицию и поворот (Yaw) игрока для реализации режима "вращающейся карты".
 
-5.  **Contextual Interaction System (v2.0 NEW)**:
+5.  **Contextual Interaction System**:
     - **Rule-Based Engine**: Менеджер взаимодействий (`InteractionManager`) подбирает подсказки на основе условий: предмет в руках, теги, состояние блока и клавиши-модификаторы (Shift).
     - **Dynamic Prefix Generation**: HUD автоматически формирует строку управления (например, `[Shift + ПКМ]`), анализируя правила из `interactions.json`.
     - **Provider Interface**: Блоки через `BlockInfoProvider` передают динамические данные (прогресс, статус) для отображения в реальном времени.
 
-6.  **AAA Graphics & Anti-Aliasing (v1.0 NEW)**:
+6.  **AAA Graphics & Anti-Aliasing**:
     - **Hardware MSAA 4x**: Рендеринг сцены происходит в промежуточный `MSAA Framebuffer`. Использование 4 сэмплов на пиксель аппаратно сглаживает края полигонов.
     - **Alpha-to-Coverage**: Режим `GL_SAMPLE_ALPHA_TO_COVERAGE` позволяет использовать MSAA-сэмплы для сглаживания прозрачных краев (листва, трава), создавая мягкие переходы без использования тяжелого полупрозрачного рендеринга.
     - **MSAA Resolve Step**: Финальный этап рендеринга перед пост-обработкой — операция `Resolve` (`glBlitFramebuffer`), которая объединяет мультисэмплы в обычную текстуру.
     - **High-Fidelity Filtering**: Принудительное включение **8x Anisotropic Filtering** и `LINEAR_MIPMAP_LINEAR` фильтрации для всех текстурных атласов, что устраняет мерцание (moiré) и размытие текстур под углом.
 
-7.  **Mathemagical Weather & Wetness (v1.0 NEW)**:
+7.  **Mathemagical Weather & Wetness**:
     - **Spatiotemporal Synchronization**: Система "Mathemagical Sync" обеспечивает идеальную синхронизацию между падающими каплями дождя и брызгами на блоках без коммуникации между CPU и GPU. Обе системы используют детерминированную формулу на основе мировых координат сетки (0.5м) и глобального времени `uTime`.
     - **Zero-Allocation GPU VFX**: Весь визуальный ряд дождя (3000+ капель) и процедурных кругов/всплесков на поверхности генерируется на 100% на GPU. Java-код (`WeatherManager`) управляет только глобальной интенсивностью.
     - **Procedural Surface Dynamics**: Фрагментный шейдер генерирует:
@@ -101,40 +101,40 @@
         - *Flowing Droplets*: Стекающие потеки на стенах через UV-скроллинг шума.
     - **Blinn-Phong Wet Specular**: Блоки приобретают глянцевый блеск, интенсивность которого настраивается через `"wetnessFactor"` в JSON блока.
 
-### Core Engine Systems (NEW)
+### Core Engine Systems
 1. **Settings & Input Architecture**:
     - **SettingsManager (SSOT)**: Централизованный синглтон для `options.json`. Хранит FOV, Sensitivity, VSync, DevMode и бинды (Map<String, Integer>).
     - **Dynamic Evaluation**: Камера и мышь считывают настройки (FOV, Sens) **каждый кадр** напрямую из `SettingsManager`, что позволяет применять изменения мгновенно без перезапуска подсистем.
     - **Abstract Action Mapping**: `InputManager` оперирует логическими экшенами (`isActionPressed("move_forward")`), а не физическими кодами GLFW, сверяясь с мапой биндов.
 
-### Data-Driven Development (v3.5 UPDATED)
+### Data-Driven Development
 1.  **JSON Schema**: Все игровые параметры (блоки, предметы, анимации, рецепты) загружаются из ресурсов.
-2.  **Identifier-First Dynamic ID System (NEW)**:
+2.  **Identifier-First Dynamic ID System**:
     - **Load Sequencing**: Жёсткая последовательность загрузки: 1. Блоки -> 2. Резервация ID в `ItemRegistry` -> 3. JSON-предметы. Это гарантирует консистентность связей Block <-> Item и предотвращает коллизии текстур.
     - **Dynamic Registration**: Отказ от статических `id` в JSON. Движок автоматически назначает числовые ID при загрузке на основе `Identifier`.
     - **Persistence**: Порядок регистрации (через `.index` файлы) гарантирует стабильность ID.
     - **Collision Safety**: `NumericalRegistry` корректно обрабатывает повторную регистрацию того же `Identifier`, предотвращая сдвиги индексов при перезаписи контента.
 3.  **Interaction Tuning**: Поле `interaction_cooldown` в JSON позволяет переопределять глобальный интервал добычи для конкретных объектов.
 
-### Mining & Interaction System (v2.1 UPDATED)
+### Mining & Interaction System
 1.  **Mining Strategy**: Поддерживаются стратегии `instant` (трава) и `weak_spots` (дерево). 
 2.  **Weak Spot Logic**: Точки генерируются на плоскости, перпендикулярной нормали удара. Система отслеживает смену грани в реальном времени — если игрок переходит на другую сторону блока, слабая точка мгновенно перегенерируется на новой грани.
 3.  **Animation Scaling**: Длительность анимации рук динамически вычисляется как `1.0 / duration`. Это гарантирует визуальное завершение движения руки к моменту отката физического таймера.
 
-### Entity Physics & Collision System (v5.7 UPDATED)
+### Entity Physics & Collision System
 1.  **Spatial Partitioning**: Для статических сущностей (предметы на земле, ресурсы) используется `groundEntityMap` (ConcurrentHashMap). Это позволяет рендереру и рейкастингу проверять объекты только в радиусе 1-4 чанков, исключая проход по глобальному списку сущностей ($O(1)$ lookup complexity per chunk).
 2.  **Interpolation Engine**: Движок использует разделение физического тика (Fixed Update) и рендеринга. Каждая сущность хранит состояние текущего и предыдущего тика (`prevPosition`, `prevRotation`). Рендерер вычисляет промежуточное состояние через коэффициент `alpha`, обеспечивая плавность 144Hz+ на 20Hz физике.
 3.  **AABB Collision Strategy**: Используется скользящая коллизия с epsilon-отступами. Внедрена логика **Unstuck** (поэтапное выталкивание вверх) для предотвращения проваливания объектов сквозь террейн при лагах или некорректном спавне.
 4.  **Aggressive Lifecycle Culling**: Активные сущности симулируются в радиусе 320м (20 чанков). Статические ресурсы имеют жесткий лимит 128м, после которого они полностью удаляются из памяти. При выгрузке чанка его записи в `groundEntityMap` очищаются для предотвращения Entity Leaks.
 5.  **Ground Locking**: Для оптимизации и стабильности визуализации, при нахождении на земле (`onGround`) вертикальная скорость обнуляется, а гравитация временно отключается, предотвращая микро-колебания объекта "внутри" поверхности блока.
 
-### Rendering Pipeline (v5.3 UPDATED)
+### Rendering Pipeline
 1.  **RGBA Framebuffer**: Supports alpha-channel masking for post-processing effects.
-2.  **Unified Shader Block Info (NEW)**:
+2.  **Unified Shader Block Info**:
     - Унифицированная функция `decodeBlockInfo` в `block_features.glsl`.
     - Использует флаги в `blockType` (например, -2000 для стекла) для передачи свойств во все шейдеры.
     - Это гарантирует корректный рендеринг (CTM, биомный тинт) независимо от динамического ID.
-3.  **Zenith Graphic Blueprints (v1.0 NEW)**:
+3.  **Zenith Graphic Blueprints**:
     - **Hybrid Engine**: Система рисования, объединяющая ASCII-матрицы и процедурные векторные фигуры (SDF).
     - **Procedural SDF Rendering**: Использование Signed Distance Fields для отрисовки идеально четких колец, сонаров и линий без текстур.
     - **Shader Animations**: Поддержка 4 слотов триггеров (`uTrigger0..3`) для управления анимацией слоев прямо в GPU.
@@ -144,18 +144,18 @@
 3.  **Depth-Sampling Architecture**:
     - **Depth Texture**: `Framebuffer` now provides a full depth texture for screen-space effects.
     - **Crease AO**: Post-processor analyzes depth derivatives to darken crevices.
-3. **Dynamic VoxelShape Highlight (NEW)**:
+3. **Dynamic VoxelShape Highlight**:
     - **Algorithmic Wireframes**: Выделение блока генерируется динамически на основе `AABB` боксов из `VoxelShape`. Алгоритм "сшивает" грани, удаляя внутренние линии на стыках (например, у ступенек), создавая идеальный цельный контур. Меши кэшируются.
     - **Cinematic Animation Sync**: Выделение синхронизировано с анимацией Impact Wobble. Линии сетки передаются в `vertex.glsl` с флагом `uIsProxy` и параметрами тряски/сжатия, что заставляет контур идеально повторять физический отклик блока при ударе.
 4. **Stylized AAA Post-Stack**:
     - **FXAA + Stylized effects**: Combined anti-aliasing with Vignette, Fog, and Vibrance in a single pass.
     - **Viewmodel Depth Mapping**: Uses `glDepthRange` to overlay hands into the depth-aware post-stack without clearing buffer.
-5. **Notification & UI Overlay Pipeline (NEW)**:
+5. **Notification & UI Overlay Pipeline**:
     - **Buffer Reset**: Принудительный вызов `glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)` перед отрисовкой HUD и экранов. Это гарантирует отсутствие артефактов накопления кадров ("шлейфов") на прозрачных оверлеях.
     - **Projection Isolation**: Метод `setupUIProjection` сбрасывает стейт шейдера (`isSlot = 0`, `uvScale = 1.0`), предотвращая утечку состояний между разными типами UI-элементов (шрифт, иконки, SDF-фигуры).
     - **Data-Driven Positioning**: Координаты уведомлений рассчитываются динамически через `HUDRenderer.calculateElementPos` на основе конфигурации из `hud.json`.
 
-### Classic Voxel Particle System (v2.0 NEW)
+### Classic Voxel Particle System
 1. **Billboard Quad Primitive**:
     - Система переведена на использование плоских квадратов (Quads), которые всегда ориентированы лицом к камере (GPU Billboarding). Это классический воксельный стиль, обеспечивающий идеальную читаемость частиц при любых углах обзора.
 2. **No-Collision Visual Physics**:
@@ -170,7 +170,7 @@
 6. **Instanced Rendering Pipeline**:
     - Высокая производительность за счет `glDrawElementsInstanced`. Данные инстанса включают Pos, Roll (2D вращение), Scale, Alpha, TexLayer и SnippetOffset.
 
-### Locomotion & Animation Engine (v4.0 UPDATED)
+### Locomotion & Animation Engine
 1. **Hybrid Update Architecture**:
     - **Fixed Physical Locomotion (170Hz)**: Физические таймеры анимаций и `movementAlpha` обновляются на фиксированной частоте в `Player.update()`. Это гарантирует консистентную скорость покачивания головы и рук независимо от FPS.
     - **Visual Render Pass (Variable FPS)**: Финальные визуальные оффсеты, наклоны (lean) и импульсы вычисляются в `Player.updateAnimations()` непосредственно перед рендерингом. Это обеспечивает идеальную плавность при любых настройках графики.
@@ -184,7 +184,7 @@
 4. **Spawn Settle Mechanism**:
     - Специальный фильтр первого кадра, который предотвращает "прыжки" камеры и ложные импульсы при появлении игрока в мире путем мгновенной синхронизации физического и визуального состояний.
 
-### Рендеринг и Визуализация (v4.0 UPDATED)
+### Рендеринг и Визуализация
 1.  **Texture Array (GL_TEXTURE_2D_ARRAY)**: Движок полностью переведен с 2D-атласа на массивы текстур. Это физически устраняет артефакты "швов" (edge bleeding) и мерцание (shimmering) при движении, так как мип-мапы каждого слоя изолированы.
 2.  **3D Texture Coordinates (UVW)**: Все меши (Chunk, Item, Carving) используют `vec3` для текстурных координат, где третья компонента (W) — индекс слоя в массиве.
 3.  **Anisotropic Filtering & LOD**: Включена анизотропная фильтрация (4x) и настроен `LOD_BIAS (-0.5)` для обеспечения максимальной четкости удаленных поверхностей.
@@ -200,7 +200,7 @@
     - В JSON-описании блока поддерживается поле `upperTexture`, которое автоматически подставляется рендерером для сегмента с метаданными `1`.
 9.  **Raycast**: Алгоритм выбора блоков и сущностей учитывает каждый `AABB` внутри формы, позволяя взаимодействовать с объектами сквозь их пустые части.
 10.  **Коллизии**: Метод `Entity.move` итерируется по всем боксам формы блока, обеспечивая точное перемещение по плитам и лестницам.
-11. **Ledge Grab Snapping (NEW)**: В `ParkourHandler` внедрена логика "примагничивания" к граням блоков. При зацепе персонаж автоматически выравнивается параллельно стене, что исключает прохождение сквозь текстуры при диагональном взгляде.
+11. **Ledge Grab Snapping**: В `ParkourHandler` внедрена логика "примагничивания" к граням блоков. При зацепе персонаж автоматически выравнивается параллельно стене, что исключает прохождение сквозь текстуры при диагональном взгляде.
 12.  **Visual Fallbacks**: Система `Texture` автоматически генерирует пурпурно-черную шахматку при сбое загрузки ассета.
 12.  **Shader-Based Masking**: Универсальная система динамического "вырезания" текстур на основе 16-битной маски (`faceMask`).
 13. **Dual-Sampler UI**: `UIRenderer` и `ui_fragment.glsl` поддерживают переключение между `sampler2D` (для текста, GUI и обычных предметов) и `sampler2DArray` (для иконок блоков в инвентаре).
@@ -209,7 +209,7 @@
     - **Variable FPS Rendering**: Рендерер вычисляет `alpha = accumulator / interval` и интерполирует позиции камер и объектов между `prevPosition` и `currentPosition`.
     - **Sub-frame Animation**: Анимации обновляются в проходе `render` на максимально возможной частоте кадров, обеспечивая идеальную плавность движений рук и камеры независимо от частоты тиков физики.
 
-### Взаимодействие с миром и Оптимизация (v2.2 UPDATED)
+### Взаимодействие с миром и Оптимизация
 1.  **World Damage & Persistent Scars System**:
     *   **Damage Map (Vector4f)**: `World.java` хранит карту `Map<BlockPos, BlockDamageInstance>`. Вся система переведена на `Vector4f`, где `w` компонента хранит интенсивность (прозрачность) шрама.
     *   **Persistent Decal Pass**: `Renderer.renderPersistentScars` отрисовывает повреждения для всех блоков в мире. Используется `glPolygonOffset(-1.0, -1.0)` для наложения декалей поверх чанков без Z-fighting.
@@ -222,28 +222,28 @@
     *   **Procedural Chipping (vec4)**: Модуль `breaking_patterns.glsl` теперь принимает `vec4` для каждого шрама, используя `w` как множитель прозрачности эффекта.
     *   **Proxy Rendering**: При активном ударе рендерер создает временный "прокси-меш" блока для анимации тряски.
 
-### Player Systems (v1.0 NEW)
+### Player Systems
 1.  **Data-Driven Action System**:
     *   **Centralized Logic**: Все физические затраты (стамина, голод) и побочные эффекты (шум) вынесены из Java-кода в JSON (`resources/zenith/actions/`).
     *   **Action Definitions**: `ActionDefinition` описывает стоимость действия за секунду или за использование. 
     *   **Continuous vs Discrete**: Система поддерживает как длительные действия (бег, лазание), так и мгновенные (прыжок, удар).
 2.  **Stamina Integration**: Стамина расходуется при выполнении паркур-действий (`HANGING`, `CLIMBING`). При достижении нулевой отметки игрок автоматически срывается с уступа.
 
-### Interaction & Input Pipeline (v5.6 NEW)
+### Interaction & Input Pipeline
 1. **InputManager**: Отвечает исключительно за перехват кликов, мыши и кнопок клавиатуры, Raycast и управление инвентарем. Не содержит логики майнинга.
 2. **MiningController**: Независимый контроллер. Обрабатывает урон по блокам, кулдауны инструментов (`attackInterval`), историю ударов (`hitHistory`) и логику слабых точек (`Weak Spots`). Передает актуальное состояние разрушаемого блока в `Renderer`. Автоматически синхронизирует визуальный прогресс (зарубки) с физическим разрушением.
 
-### Physical Viewmodel & Skeletal Animation (v5.6 UPDATED)
+### Physical Viewmodel & Skeletal Animation
 1. **Skeletal Hierarchy**:
     - **Bone-Based Architecture**: Отрисовка рук переведена на полноценный скелет (`Shoulder -> Forearm -> Hand`). Это позволяет создавать сложные сочленения и реалистичную анатомию.
     - **Per-Bone Animation Tracks**: Движок `ViewmodelController` поддерживает индивидуальные треки анимации для каждой кости (например, `forearm_r:pitch`, `hand_r:roll`), позволяя создавать сложную кинематику ударов (сгибание локтей, поворот кисти) прямо из JSON без хардкода в Java.
     - **Joint Distribution**: Вращение распределяется по иерархии (Shoulder: 10%, Forearm: 20%, Hand: 70%). Это создает эффект "гибкой руки" при поворотах без использования шейдерного скиннинга.
     - **Overlap Geometry**: Геометрия костей в JSON описана с нахлестом воксельных кубов, что предотвращает появление "дыр" в суставах при экстремальных изгибах.
-2. **Automatic Orientation & PCA Engine (NEW)**:
+2. **Automatic Orientation & PCA Engine**:
     - **Texture Analysis**: `ItemMeshGenerator` анализирует текстуру каждого предмета методом главных компонент (PCA).
     - **Auto-Correction**: Система вычисляет главную ось предмета и автоматически поворачивает его меш вертикально. Это позволяет корректно отображать в руке как диагональные (кирки), так и вертикальные (мешочки) текстуры без хардкода.
     - **Smart Grasping**: Алгоритм находит оптимальную точку хвата (центр нижней границы или конец рукоятки), совмещая её с нулем меша.
-3. **HeldItemRenderer (NEW)**:
+3. **HeldItemRenderer**:
     - **Unified Transformation**: Специализированный класс, делегирующий отрисовку предметов и блоков относительно костей кисти.
     - **Dynamic Block Anchoring**: Для блоков рассчитывается **Bounding Box**. Рендерер динамически смещает блок так, чтобы его задняя грань всегда касалась ладони, независимо от размера модели (полный блок, сосуд или трава).
 4. **2nd-Order Spring Physics (Inertia Engine)**:
@@ -251,14 +251,14 @@
     - **Weight & Mass**: Каждый предмет имеет параметр `weight`, который влияет на частоту колебаний и затухание пружины. Тяжелые предметы (блоки) ощущаются инертными и медленнее догоняют взгляд.
     - **Inertial Sway**: Движения камеры генерируют внешние силы в пространстве вида (View-Space), заставляя руки естественно отставать (lag) или проскакивать (overshoot) при резких фликах.
     - **Physics Reset**: Для предотвращения взрывных импульсов при смене предметов или спавне используется метод `reset()`, мгновенно синхронизирующий пружину с целью.
-5. **3D Item Tumbling (NEW)**:
+5. **3D Item Tumbling**:
     - **Angular Velocity**: Выброшенные предметы используют `angularVelocity` для реалистичного вращения во всех трех плоскостях при полете.
 6. **Tactical World Collisions**:
     - **Hybrid Detection**: Система сочетает точный рейкаст из центра экрана и "Simple Voxel Probe" (пробник) прямо перед игроком для детекции препятствий.
     - **Target-Shift Response**: При коллизии физический движок не просто останавливает руку, а смещает **целевую точку (Target)** пружины.
     - **Tactical Tuck**: Предметы плавно прижимаются к плечу и задираются вверх (-75 градусов) при упоре в стены, имитируя тактическое удержание оружия в стесненном пространстве.
 
-## Survivor's Tablet (Journal System) (NEW)
+## Survivor's Tablet (Journal System)
 Модульная система обучения и документации игрового процесса.
 
 ### 1. UI Core
@@ -275,13 +275,13 @@
 - **Stump (In-World) Rendering**: Автоматически формирует схему из ингредиентов и инструмента. Добавляет стрелку и количество ударов.
 - **Napping Rendering**: Рисует 5x5 сетку паттерна. Поддерживает анимацию циклической смены иконок, если для рецепта подходит несколько типов материалов (например, камень и кремень).
 
-### 4. Rendering & Tinting (v2.6 UPDATED)
+### 4. Rendering & Tinting
 - **Universal Tinting**: Механика наложения биомного тинта на блоки (трава, листва).
 - **Implementation**:
     - `BlockDefinition` содержит флаг `tinted` (загружается через тег `zenith:tinted`) и список `tinted_faces`.
     - **Per-Face Control**: Поддержка массива `tinted_faces` (north, south, east, west, up, down) в JSON позволяет окрашивать только нужные грани (например, у блока земли окрашиваются только верх и бока, низ остается чистым).
     - `ChunkMeshGenerator` использует `def.isFaceTinted(face)` и передает отрицательный ID (`-(id + 1)`) только для тех граней, которые должны быть окрашены.
-- **Transparency/Translucency Split (NEW)**:
+- **Transparency/Translucency Split**:
     - **Transparent (Culling)**: Флаг `FLAG_TRANSPARENT` (JSON `transparent: true`). Используется исключительно для оптимизации геометрии чанков (соседи рисуют грани). Применяется для неполных блоков (плиты, стадии дерева).
     - **Translucent (Rendering)**: Флаг `FLAG_TRANSLUCENT` (JSON `translucent: true`). Управляет попаданием в прозрачный пас рендеринга (Blending Pass).
     - **Depth Writing**: Блоки только с флагом `transparent` рисуются в **Opaque Pass** и записывают глубину в Z-буфер. Блоки с флагом `translucent` (стекло, вода) рисуются без записи в Z-буфер для корректного смешивания цветов. Это устраняет X-ray артефакты окантовок.
@@ -298,13 +298,13 @@
 - **LiveReloadable**: Интерфейс для объектов, способных сохранять путь к своему исходному JSON файлу.
 - **Reflection-based Sync**: При перезагрузке определений предметов (`ItemRegistry.registerItem`) движок автоматически обновляет ссылки во всех активных `ItemStack` (инвентарь игрока, мир) через рефлексию, предотвращая использование устаревших данных.
 
-## Универсальная UI и Система Инвентаря v4 (UPDATED)
+## Универсальная UI и Система Инвентаря v4
 Система полностью отделяет данные (хранилища) от представления (GUI), обеспечивая максимальную гибкость для моддинга.
 
 ### 1. Слой UI и Экранов
 - **Screen Interface**: Универсальный контракт для всех игровых окон (`init`, `render`, `handleMouseClick`, `handleMouseRelease`, `handleKeyPress`, `handleScroll`).
 - **Input Logic**: Событие `handleMouseRelease` (с экранными координатами) используется для активации кнопок, что предотвращает "сквозные" клики в игровой мир при закрытии интерфейса.
-- **Pause Menu (v1.0 NEW)**: Реализовано как Data-Driven оверлей (`PauseScreen`). Состав кнопок и действия (resume, settings, exit) описываются в `pause_menu.json`. Мир на фоне остается видимым и затеняется через `renderDarkenedBackground`.
+- **Pause Menu**: Реализовано как Data-Driven оверлей (`PauseScreen`). Состав кнопок и действия (resume, settings, exit) описываются в `pause_menu.json`. Мир на фоне остается видимым и затеняется через `renderDarkenedBackground`.
 - **ScrollPanel**: Модульный компонент для прокрутки. Использует `glScissor` для чистого отсечения контента, выходящего за границы отведенной области.
 - **UIRenderer**: Отвечает за финальную отрисовку всех элементов. Гарантирует правильный Z-order (Held Stack и Tooltips рисуются последними).
 - **Journal System**:
@@ -322,7 +322,7 @@
 - **SlotUI**: Связывает объект `Slot` с экранными координатами. Отвечает за проверку наведения мыши (`isMouseOver`).
 - **InventoryScreen**: Абстрактный базовый класс для всех окон. Содержит список `SlotUI` и логику отрисовки.
 
-### 3. Слой Вёрстки и Лейаута (v4.2 UPDATED)
+### 3. Слой Вёрстки и Лейаута
 - **GUIConfig**: Конфигурация окна (JSON). Поддерживает якоря (`anchor`), выравнивание (`alignX/Y`) и относительное позиционирование (`relativeTo`). Добавлена поддержка `buttons` для создания произвольных анимированных кнопок.
 - **Recursive Layout Engine**: `InventoryLayout` вычисляет позиции групп с использованием рекурсивного дерева зависимостей. Это гарантирует правильное размещение блоков даже при сложной иерархии в JSON.
 - **Adaptive Flex Backgrounds**: 
@@ -335,7 +335,7 @@
 - **PlayerInventoryScreen**: Реализация, которая строит интерфейс игрока, используя `InventoryLayout`.
 - **ChestScreen**: Пример универсального окна для контейнеров 9xN.
 
-### 3. Data-Driven Layout System (UPDATED)
+### 3. Data-Driven Layout System
 - **GUIConfig**: POJO-класс для маппинга JSON-конфигураций (`zenith/gui/*.json`).
 - **InventoryLayout**: Двухпроходный двигатель верстки. 
 - **Layout Features**:
@@ -347,13 +347,13 @@
 ### 4. Управление и Взаимодействие
 - **ScreenManager**: Синглтон, хранящий активный `InventoryScreen`. Делегирует события ввода и вызовы отрисовки от `InputManager` и `UIRenderer`.
 - **GUIRegistry**: Центральное хранилище всех загруженных `GUIConfig`, наполняемое через `DataLoader`.
-- **Developer Panel (Creative Menu) (v2.0)**:
+- **Developer Panel (Creative Menu)**:
     - Использует `RegistryInventory` для доступа ко всем зарегистрированным предметам.
     - Скроллинг реализован через `ScrollPanel` (около 14 видимых рядов).
     - Логика возврата: Клик по уже удерживаемому предмету возвращает его в панель (очищает курсор).
     - Рендерится в `UIRenderer.renderDeveloperPanel` с поддержкой `glScissor`.
 
-### 6. Block Component System (v1.0 NEW)
+### 6. Block Component System
 Архитектура блоков переведена с жесткого наследования на композиционную модель. Блок — это легкий контейнер для набора компонентов.
 
 - **BlockComponent**: Базовый абстрактный класс для логики. Примеры: `ContainerComponent`, `CraftingSurfaceComponent`, `CarvableComponent`.
@@ -365,7 +365,7 @@
     - **Grid-Aware Raycast**: Трассировщик лучей умеет "заглядывать" в соседние воксели для корректного обнаружения предметов, выступающих над поверхностью блока.
 - **Data-Driven Definitions**: Компоненты описываются прямо в JSON блока (`stump.json`, `chest.json`), обеспечивая 100% декларативный подход к контенту.
 
-### 7. Advanced In-World Interaction (NEW)
+### 7. Advanced In-World Interaction
 Унифицированная логика взаимодействия с предметами на поверхностях (пни, верстаки):
 - **ПКМ пустой рукой**: Забрать предмет из конкретного слота под прицелом.
 - **ПКМ с предметом**: Положить 1 шт, забрать в стак (если типы совпадают) или обменять.
@@ -378,20 +378,20 @@
 ### 1. Алгоритм Felling (BFS)
 - **Обнаружение дерева**: При разрушении блока с тегом `treecapitator` подходящим инструментом (топор), запускается поиск в ширину (BFS).
 - **Фильтрация блоков**: Алгоритм учитывает только блоки с тегом `treecapitator`, имеющие флаг `BIT_NATURAL` (метаданные `0x80`).
-- **Drop Resolution (NEW)**: При падении дерева сервис проверяет метаданные блоков стадий срубания и превращает их обратно в оригинальные бревна (`WoodTypeRegistry`), исключая выпадение технических блоков в инвентарь.
+- **Drop Resolution**: При падении дерева сервис проверяет метаданные блоков стадий срубания и превращает их обратно в оригинальные бревна (`WoodTypeRegistry`), исключая выпадение технических блоков в инвентарь.
 
 ### 2. WoodTypeRegistry и Метаданные
 - **Data-Driven Реестр**: Список всех пород деревьев хранится в `wood_types.json`.
-- **Dynamic Stages (NEW)**: Количество стадий срубания теперь динамическое. `TreecapitatorService.countLogsAbove()` вычисляет высоту дерева, и стадии пропускаются для маленьких деревьев, чтобы ускорить процесс.
+- **Dynamic Stages**: Количество стадий срубания теперь динамическое. `TreecapitatorService.countLogsAbove()` вычисляет высоту дерева, и стадии пропускаются для маленьких деревьев, чтобы ускорить процесс.
 - **Metadata Preservation**: При переходе между стадиями флаг `BIT_NATURAL` и `woodIndex` переносятся в новый блок через побитовые операции.
 
 ### 3. Динамический рендеринг (BlockTextureMapper)
 - **Metadata Masking (FIXED)**: При чтении `woodIndex` используется маска `& 0x7F`. Это исправляет баг, когда из-за флага `BIT_NATURAL` индекс считывался неверно и подставлялась текстура дуба по умолчанию. Теперь каждое дерево (береза, джунгли и т.д.) сохраняет свой вид при срубании.
 
-### Parkour & Cinematic Camera System (UPDATED)
+### Parkour & Cinematic Camera System
 Система обеспечивает высококачественное физическое взаимодействие игрока с окружением и реалистичную обратную связь через камеру.
 
-#### 1. Modular Animation Engine (v3.0)
+#### 1. Modular Animation Engine
 Система полностью абстрагирована от конкретных механик (паркур, ходьба) и работает как универсальный проигрыватель профилей.
 - **Multi-File Storage**: Анимации хранятся как отдельные JSON-файлы в `/animations/`. Идентификатором служит имя файла (или префикс до `_`).
 - **Animation Groups**: Поддержка вариативности — реестр автоматически выбирает случайный профиль из группы при запросе (например, разные виды бега).
@@ -404,14 +404,14 @@
 - **Ledge Detection**: Использует многоступенчатый рейкаст для поиска подходящего края блока.
 - **State Machine**: Управляет переходами между состояниями `NONE`, `GRABBING`, `HANGING` и `CLIMBING`.
 
-#### 3. Кинематографическая камера (UPDATED)
+#### 3. Кинематографическая камера
 - **Unified Evaluation**: Все параметры камеры вычисляются через `AnimationRegistry` на основе текущего прогресса состояния.
 - **Multi-axis Feedback**: Камера поддерживает офсеты по Pitch, Roll и FOV.
 
 #### 4. Data-Driven Physics
 - Все физические константы вынесены в `physics.json`.
 
-## Работа с метаданными и Оптимизация (UPDATED)
+## Работа с метаданными и Оптимизация
 1. **Эффективные Чанки**: 
    - Вместо хранения миллионов объектов `Block`, чанки используют одномерный массив примитивов `int[] blockData` (упаковка Type + Metadata).
 2. **Универсальные технические блоки (Universal Stages)**:
@@ -424,11 +424,11 @@
    - При расчете текстур и коллизий всегда используется маска `& 0x07` для выделения направления, игнорируя функциональные флаги вроде `BIT_NATURAL`.
 5. **Resource Entity**: 
    - Для мелких ресурсов на земле (палки, камни) используются легкие статичные сущности вместо блоков.
-3. **Visual Scaling (NEW)**:
+3. **Visual Scaling**:
    - Масштаб предметов в мире (`visualScale`) вынесен в JSON. Рендерер динамически применяет трансформации, что позволяет гибко настраивать визуал без правки кода.
 4. **Расширенные ID**: Весь движок работает с 32-битными идентификаторами.
 
-## Моддинг и Расширяемость (UPDATED)
+## Моддинг и Расширяемость
 1. **Identifier**: Единый стандарт именования `namespace:path`. Используется для поиска ресурсов.
 2. **Data-Driven Реестры**:
    - **Registry<T> / NumericalRegistry<T>**: Универсальные контейнеры для сопоставления `Identifier` <-> `int` <-> `T`.
@@ -443,7 +443,7 @@
 - **com.za.zenith.engine**: Ядро движка (core, graphics, input).
 - **com.za.zenith.world**: Система мира.
   - **blocks**: Определения блоков и их текстур.
-  - **items (NEW)**: Система предметов. `Item` - базовый класс с поддержкой Data Components, `ItemStack` - контейнер для инвентаря. `ItemRegistry` связывает блоки и предметы.
+  - **items**: Система предметов. `Item` - базовый класс с поддержкой Data Components, `ItemStack` - контейнер для инвентаря. `ItemRegistry` связывает блоки и предметы.
   - **chunks**: Управление чанками.
   - **generation**: Генерация ландшафта.
   - **physics**: Коллизии и Raycast.
@@ -461,16 +461,16 @@
 5. **Добыча**: Скорость разрушения блока рассчитывается как `ToolEfficiency / BlockHardness`.
 6. **Прочность**: `ItemStack` хранит текущую прочность. Инструмент удаляется из инвентаря при достижении нулевого значения прочности.
 7. **Выживание**: Параметры `hunger` и `saturation` обновляются в `Player.update`. Потребление еды восстанавливает эти значения через `Player.eat(Item)` с проверкой наличия `FoodComponent`.
-9. **Шум (NEW)**: Механика `noiseLevel` (0.0 - 1.0) в `Player`. Накапливается при действиях в `InputManager` и затухает со временем. Служит базой для системы обнаружения мобами.
-10. **Система Сущностей (NEW)**:
+9. **Шум**: Механика `noiseLevel` (0.0 - 1.0) в `Player`. Накапливается при действиях в `InputManager` и затухает со временем. Служит базой для системы обнаружения мобами.
+10. **Система Сущностей**:
     - **Entity**: Базовый класс для всех объектов с физикой (`position`, `velocity`, `aabb`, `move()`).
     - **LivingEntity**: Наследуется от `Entity`, добавляет `health` и `maxHealth`.
     - **Player**: Основная сущность под управлением игрока.
     - **ScoutEntity**: Первый враждебный моб (зараженный-скаут).
-11. **Система ИИ (NEW)**:
+11. **Система ИИ**:
     - **AIState**: Перечисление состояний (`WANDER`, `SEARCH`, `CHASE`).
     - **Hearing (Слух)**: Расчет вероятности обнаружения на основе `world.getNoiseLevelAt(position)`.
-12. **Индустриальная система (UPDATED)**:
+12. **Индустриальная система**:
     - **BlockEntity**: Базовый класс для блоков с состоянием. Хранятся в `World` в `Map<BlockPos, BlockEntity>`.
     - **ITickable**: Интерфейс для сущностей блоков, требующих логики каждый кадр.
     - **IEnergyStorage**: Интерфейс для управления энергией. Использует методы `receiveEnergy` и `extractEnergy`.
@@ -478,11 +478,11 @@
     - **GeneratorBlockEntity**: Источник (только отдает).
     - **LampBlockEntity**: Потребитель (только принимает).
     - **BatteryBlockEntity**: Аккумулятор (накопитель большой емкости, пассивный узел).
-- **Глобальный шум (NEW)**:
+- **Глобальный шум**:
     - Метод `World.getNoiseLevelAt(pos)` агрегирует шум от всех игроков и активных `BlockEntity` в радиусе.
     - Позволяет мобам отвлекаться на работающую технику или искать игрока по звуку его действий.
 
-## Стандарты и Утилиты (NEW)
+## Стандарты и Утилиты
 1. **Поиск соседей (Neighbor Searching)**:
    - Единый стандарт для всех систем (рендеринг, кабели, ИИ) — использование `com.za.zenith.utils.Direction`.
    - ЗАПРЕЩЕНО хардкодить массивы смещений типа `int[][] offsets`.
@@ -490,13 +490,13 @@
    - Это обеспечивает консистентность логики соединения блоков и упрощает поддержку.
 
 
-3. **Рендеринг (UPDATED)**:
+3. **Рендеринг**:
    - **Chunk Neighbors**: При `setBlock` мир уведомляет соседние чанки (`setNeedsMeshUpdate`), что исправляет прозрачность граней на стыках.
    - **Culling**: Только стекло (`GLASS`) использует CTM-отсечение. Прочие прозрачные блоки рисуют грани друг против друга.
-4. **Добыча (UPDATED)**:
+4. **Добыча**:
    - **Mining Speed API**: Метод `Item.getMiningSpeed(blockType)` определяет скорость. Уход от хардкода в `InputManager`.
    - **Breaking Cooldown**: Глобальное ограничение (20 блоков/сек) через `breakDelayTimer` в `InputManager`.
-5. **Интерактивность (NEW)**: Приоритет ПКМ: Блоки-интерактивы -> Использование предмета (еда) -> Установка блоков. Еда теперь работает без Raycast.
+5. **Интерактивность**: Приоритет ПКМ: Блоки-интерактивы -> Использование предмета (еда) -> Установка блоков. Еда теперь работает без Raycast.
 
 - **FontRenderer**: Отвечает за отрисовку текста на базе одной ASCII-текстуры (сейчас `textures/default.png`).
 - **Прогресс разрушения**: Логика разрушения обрабатывается в `InputManager`, накапливая `breakingProgress`.
@@ -517,7 +517,7 @@
 5. **MultiblockRegistry**: Система распознавания и валидации многоблочных структур (например, Доменных печей 3x3x4).
 6. **Полная Компонентизация Предметов**: Отказ от наследования (`ToolItem`, `FoodItem`) в пользу композиции (`Item` + `ItemComponent`). Все предметы — это объекты `Item`, а их поведение определяется компонентами. Старые классы упраздняются.
 
-## V3.0: High-Tech Graphics & Optimization (NEW)
+## V3.0: High-Tech Graphics & Optimization
 
 ### 1. Zenith Graphic Blueprints
 - **Hybrid Drawing Engine**: Система, объединяющая ASCII-матрицы и процедурные векторные фигуры (SDF).
@@ -535,7 +535,7 @@
 - **Entity Physics Sleeping**: Система "сна" для предметов на земле, отключающая расчеты коллизий до момента изменения окружающих блоков.
 - **Proxy Mesh Caching**: Кэширование мешей поврежденных блоков (шрамов) для предотвращения лагов при массовой добыче.
 
-## Документация и Память (NEW)
+## Документация и Память
 1. **Статическая память**: `.gemini/memory/*.md` (структура, лор, текущее состояние).
 2. **Динамическая память (Knowledge Graph)**: MCP `memory`. Хранит сложные связи между классами, интерфейсами и системами, которые трудно визуализировать в тексте.
 3. **Обновление**: При любом изменении архитектуры (добавление нового интерфейса, изменение зависимостей между подсистемами) необходимо обновить и MD-файлы, и граф знаний через соответствующие MCP-инструменты.

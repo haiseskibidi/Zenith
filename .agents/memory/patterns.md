@@ -307,7 +307,7 @@ if (oldObject != null && oldObject != newObject) {
 
 ---
 
-## 14. Safety Contracts & Regression Prevention (v2.5 UPDATED)
+## 14. Safety Contracts & Regression Prevention
 ...
 Чтобы избежать регрессий при изменении смежных систем (например, WorldGen и Mechanics), необходимо следовать контрактам:
 

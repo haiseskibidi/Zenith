@@ -167,7 +167,8 @@ public class World {
         if ((z & 0x2000000L) != 0) z |= 0xFFFFFFFFFF000000L;
         return (int) z;
     }
-    
+    private final com.za.zenith.world.fluid.FluidSimulator fluidSimulator = new com.za.zenith.world.fluid.FluidSimulator(this);
+
     private Player player;
     private final TerrainGenerator terrainGenerator;
     private final com.za.zenith.world.generation.BiomeGenerator biomeGenerator;
@@ -535,6 +536,8 @@ public class World {
         updateChunks();
         weatherManager.update(deltaTime);
         windTime += deltaTime * 1.5f; // Облака плавно плывут по небу со скоростью 1.5 блока/сек
+        
+        fluidSimulator.tick(deltaTime);
         
         float px = 0;
         float playerZ = 0;
@@ -913,6 +916,101 @@ public class World {
         return getBlock(pos.x(), pos.y(), pos.z());
     }
 
+    public Vector3f getInterpolatedFluidFlowVector(float px, float py, float pz, int fluidId) {
+        int y = (int) Math.floor(py);
+        if (y < 0 || y >= 256) return new Vector3f(0, 0, 0);
+        
+        // Сетка центров вокселей смещена на 0.5f относительно начала блока
+        int x0 = (int) Math.floor(px - 0.5f);
+        int z0 = (int) Math.floor(pz - 0.5f);
+        int x1 = x0 + 1;
+        int z1 = z0 + 1;
+        
+        float tx = px - (x0 + 0.5f);
+        float tz = pz - (z0 + 0.5f);
+        
+        tx = Math.max(0.0f, Math.min(1.0f, tx));
+        tz = Math.max(0.0f, Math.min(1.0f, tz));
+        
+        Vector3f v00 = getFluidFlowVectorAt(x0, y, z0, fluidId);
+        Vector3f v10 = getFluidFlowVectorAt(x1, y, z0, fluidId);
+        Vector3f v01 = getFluidFlowVectorAt(x0, y, z1, fluidId);
+        Vector3f v11 = getFluidFlowVectorAt(x1, y, z1, fluidId);
+        
+        Vector3f flow = new Vector3f();
+        flow.x = (v00.x * (1.0f - tx) + v10.x * tx) * (1.0f - tz) + (v01.x * (1.0f - tx) + v11.x * tx) * tz;
+        flow.z = (v00.z * (1.0f - tx) + v10.z * tx) * (1.0f - tz) + (v01.z * (1.0f - tx) + v11.z * tx) * tz;
+        flow.y = (v00.y * (1.0f - tx) + v10.y * tx) * (1.0f - tz) + (v01.y * (1.0f - tx) + v11.y * tx) * tz;
+        
+        return flow;
+    }
+    
+    private Vector3f getFluidFlowVectorAt(int x, int y, int z, int fluidId) {
+        Block block = getBlock(x, y, z);
+        if (block.getType() != fluidId) {
+            return new Vector3f(0, 0, 0);
+        }
+        int fluidLevel = block.getMetadata() & 0xFF;
+        return getFluidFlowVector(x, y, z, fluidId, fluidLevel);
+    }
+
+    public Vector3f getFluidFlowVector(int x, int y, int z, int fluidId, int currentLevel) {
+        Vector3f flow = new Vector3f(0, 0, 0);
+        
+        // Если сверху течет та же жидкость, течение преимущественно направлено вниз
+        if (y < 255) {
+            Block above = getBlock(x, y + 1, z);
+            if (above.getType() == fluidId) {
+                flow.y = -1.0f; // Увлекает вниз
+            }
+        }
+        
+        int currentHeight = (currentLevel == 8) ? 8 : (8 - currentLevel);
+        
+        // Высоты соседей
+        int hNorth = getFluidHeightForFlow(x, y, z + 1, fluidId, currentHeight);
+        int hSouth = getFluidHeightForFlow(x, y, z - 1, fluidId, currentHeight);
+        int hEast  = getFluidHeightForFlow(x + 1, y, z,     fluidId, currentHeight);
+        int hWest  = getFluidHeightForFlow(x - 1, y, z,     fluidId, currentHeight);
+        
+        flow.x = hWest - hEast;
+        flow.z = hSouth - hNorth;
+        
+        // Нормализуем горизонтальный вектор, если он ненулевой
+        float lenSq = flow.x * flow.x + flow.z * flow.z;
+        if (lenSq > 0.0001f) {
+            float len = (float) Math.sqrt(lenSq);
+            flow.x /= len;
+            flow.z /= len;
+        }
+        
+        return flow;
+    }
+    
+    private int getFluidHeightForFlow(int x, int y, int z, int fluidId, int currentHeight) {
+        if (y < 0 || y >= 256) return currentHeight;
+        Block block = getBlock(x, y, z);
+        if (block.getType() != fluidId) {
+            if (block.isSolid()) {
+                return currentHeight; // Твердые блоки ведут себя как текущий уровень (нет течения от/к ним)
+            }
+            // Воздух или replaceable блок
+            if (y > 0) {
+                Block below = getBlock(x, y - 1, z);
+                if (below.isAir() || below.isReplaceable()) {
+                    return currentHeight - 4; // Обрыв сильно притягивает воду
+                }
+            }
+            return currentHeight - 1; // Обычный сухой блок притягивает воду с силой 1
+        }
+        
+        int level = block.getMetadata() & 0xFF;
+        if (level == 8) {
+            return 8; // Падающий столб
+        }
+        return 8 - level; // 0 -> 8, 7 -> 1
+    }
+
     public Block getBlock(int x, int y, int z) {
         if (!blockDamageMap.isEmpty()) {
             BlockDamageInstance damageInstance = blockDamageMap.get(packBlockPos(x, y, z));
@@ -983,6 +1081,34 @@ public class World {
     }
 
     public void setBlock(int x, int y, int z, Block block, boolean notifyAndLight) {
+        long packed = ChunkPos.pack(x >> 4, z >> 4);
+        Chunk chunk = chunks.get(packed);
+
+        if (chunk != null) {
+            Block oldBlock = chunk.getBlock(x & 15, y, z & 15);
+            if (oldBlock.getType() == block.getType()) {
+                if (oldBlock.getMetadata() == block.getMetadata()) return;
+
+                chunk.setBlock(x & 15, y, z & 15, block);
+                chunk.setNeedsMeshUpdate(true);
+
+                com.za.zenith.world.blocks.BlockDefinition newDef = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+                if (newDef.isFluid() && !generating) {
+                    scheduleFluidTick(x, y, z);
+                    for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
+                        int nx = x + dir.getDx();
+                        int ny = y + dir.getDy();
+                        int nz = z + dir.getDz();
+                        Block neighbor = getBlock(nx, ny, nz);
+                        if (com.za.zenith.world.blocks.BlockRegistry.getBlock(neighbor.getType()).isFluid()) {
+                            scheduleFluidTick(nx, ny, nz);
+                        }
+                    }
+                }
+                return;
+            }
+        }
+
         BlockPos pos = new BlockPos(x, y, z);
 
         // Remove old block entity if it exists
@@ -991,18 +1117,28 @@ public class World {
         // IMPORTANT: Clear any damage/proxy data at this position immediately
         long packedPos = packBlockPos(x, y, z);
         if (blockDamageMap.remove(packedPos) != null) {
-            Chunk chunk = chunks.get(ChunkPos.pack(x >> 4, z >> 4));
             if (chunk != null) {
                 chunk.removeLocalBlockDamage(packedPos);
             }
         }
 
-        long packed = ChunkPos.pack(x >> 4, z >> 4);
-        Chunk chunk = chunks.get(packed);
-
         if (chunk != null) {
             chunk.setBlock(x & 15, y, z & 15, block);
             chunk.setNeedsMeshUpdate(true);
+
+            if (!generating) {
+                com.za.zenith.world.blocks.BlockDefinition newDef = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+                if (newDef.isFluid()) {
+                    scheduleFluidTick(x, y, z);
+                }
+                for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
+                    BlockPos neighborPos = dir.offset(pos);
+                    Block neighborBlock = getBlock(neighborPos);
+                    if (com.za.zenith.world.blocks.BlockRegistry.getBlock(neighborBlock.getType()).isFluid()) {
+                        scheduleFluidTick(neighborPos.x(), neighborPos.y(), neighborPos.z());
+                    }
+                }
+            }
 
             // Wake up nearby sleeping items when a block is changed/destroyed (skip during gen)
             if (!generating) {
@@ -1306,6 +1442,12 @@ public class World {
 
     public void unregisterChunkClouds(Chunk chunk) {
         // Отключено: неиспользуемые облака автоматически очищаются по дальности в World.update
+    }
+
+    public void scheduleFluidTick(int x, int y, int z) {
+        if (!generating && y >= 0 && y < 256) {
+            fluidSimulator.scheduleTick(x, y, z);
+        }
     }
 
     public void cleanup() {

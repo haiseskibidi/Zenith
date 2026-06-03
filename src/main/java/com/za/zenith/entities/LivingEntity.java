@@ -60,7 +60,37 @@ public abstract class LivingEntity extends Entity {
 
     @Override
     protected void onUpdate(float deltaTime, com.za.zenith.world.World world) {
-        applyGravity(deltaTime);
+        float submersion = getSubmersionRatio(world);
+        if (submersion > 0.0f) {
+            float fluidGravity = GRAVITY * (1.0f - submersion * 0.8f);
+            velocity.y = Math.max(velocity.y + fluidGravity * deltaTime, -4.0f);
+            float fluidDrag = 0.8f * submersion;
+            velocity.x *= (1.0f - fluidDrag * deltaTime);
+            velocity.z *= (1.0f - fluidDrag * deltaTime);
+            velocity.y *= (1.0f - fluidDrag * deltaTime);
+            
+            // Применяем снос течением
+            com.za.zenith.world.blocks.Block b = getFluidBlock();
+            if (b != null) {
+                com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType());
+                float flowForce = 1.4f;
+                if (def != null && def.isFluid()) {
+                    String fluidType = def.getFluidType();
+                    if ("oil".equals(fluidType) || "lava".equals(fluidType)) {
+                        flowForce = 0.5f;
+                    }
+                }
+                org.joml.Vector3f flowVec = world.getInterpolatedFluidFlowVector(position.x, position.y + 0.5f, position.z, b.getType());
+
+                velocity.x += flowVec.x * flowForce * submersion * deltaTime;
+                velocity.z += flowVec.z * flowForce * submersion * deltaTime;
+                if (flowVec.y < 0) {
+                    velocity.y = Math.max(velocity.y + flowVec.y * flowForce * submersion * deltaTime * 2.0f, -6.0f);
+                }
+            }
+        } else {
+            applyGravity(deltaTime);
+        }
         move(world, velocity.x * deltaTime, velocity.y * deltaTime, velocity.z * deltaTime);
     }
 }

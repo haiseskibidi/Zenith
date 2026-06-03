@@ -5,7 +5,7 @@
 ---
 
 ## 1. Animation System v2.0 (Quaternion Engine)
-- **Dual-State ModelNode**: Гибридные узлы. Сохраняют старое поле `animRotation` (Euler) для 100% обратной совместимости (V1) и добавляют `animRotationQuat` (Quaternion) для новой системы (V2). Вычисляются аддитивно.
+- **Dual-State ModelNode**: Гибридные узлы. Сохраняют старое поле `animRotation` (Euler) для 100% обратной совместимости и добавляют `animRotationQuat` (Quaternion) для новой системы. Вычисляются аддитивно.
 - **Modular Additive Controller**: `ViewmodelController` парсит `version` из JSON. V1 треки пишутся напрямую в Euler, V2 треки конвертируются в `Quaternionf` и накладываются через сферическую интерполяцию (slerp).
 - **Transition Buffer (Cross-fade)**: `ViewmodelController` делает "снимок" позы (`saveSnapshotRecursive`) при смене предметов и плавно сглаживает (lerp/slerp) предыдущий кадр с новым. Логика перенесена в конец кадра (после Инерции и Хвата).
 
@@ -21,12 +21,12 @@
 
 ### 3. Visual Effects (VFX)
 
-### 3.1. Unified Coloring System (v2.0)
+### 3.1. Unified Coloring System
 - **Single Source of Truth**: Класс `ColorProvider` централизованно хранит цвета биома (трава, листва).
 - **Smart Overlays**: Вместо проверки пикселей шейдер использует 4-ю текстурную координату (`OverlayLayer`) для наложения окрашиваемых масок поверх базовых текстур.
 - **Cross-System Consistency**: Единые шейдеры для мира, viewmodel, инвентаря и частиц гарантируют идентичное отображение цветов.
 
-### 3.2. Foliage Animation (v1.0)
+### 3.2. Foliage Animation
 - **JSON Property**: `"sway": true` включает анимацию для блока. По умолчанию `false`.
 - **Vertex Weights**: Автоматическое назначение весов: `0.0` (корень) и `1.0` (верх). Для `DOUBLE_PLANT` веса `1.0` -> `2.0`.
 - **Selection Sync**: Хитбокс автоматически следует за анимацией благодаря юниформе `uSwayOverride`.
@@ -43,24 +43,24 @@
 
 ---
 
-## 4. Classic Voxel Particle System (v2.0)
+## 4. Classic Voxel Particle System
 - **Billboard Quads**: Плоские квадраты, ориентированные на камеру (GPU Billboarding).
 - **Snippet UV Mapping**: Частица берет участок 4x4 пикселя из 16x16 текстуры блока.
 - **No-Collision**: Частицы не имеют физических коллизий. Движутся по параболе и исчезают.
 - **Context-Aware**: При ударе по Weak Spot частицы берут текстуру той грани, по которой нанесен удар.
 
 ---
-## 5. Rendering Pipeline (v2.5 UPDATED)
+## 5. Rendering Pipeline
 - **Transparency/Translucency Pass Split**:
     - **Opaque Pass**: Отрисовка с `glDepthMask(true)`. Включает обычные блоки и блоки с флагом `transparent: true` (плиты, стадии дерева), которые не являются стеклом. Это гарантирует корректную запись в Z-буфер и перекрытие оверлеев.
     - **Translucent Pass**: Отрисовка с `glDepthMask(false)` и блендингом. Только для блоков с флагом `translucent: true` (стекло, вода).
 - **MSAA 4x & Resolve**: Движок отрисовывает сцену в мультисэмпл-буфер для сглаживания краев.
-- **Palette Corruption Guard (NEW)**: `Chunk.getSnapshot` проверяет валидность индексов в палитре. При обнаружении выхода за границы ( corruption), индекс автоматически сбрасывается в `AIR` (0), а лог выводит предупреждение. Это предотвращает критические вылеты при чтении битых данных мира.
+- **Palette Corruption Guard**: `Chunk.getSnapshot` проверяет валидность индексов в палитре. При обнаружении выхода за границы ( corruption), индекс автоматически сбрасывается в `AIR` (0), а лог выводит предупреждение. Это предотвращает критические вылеты при чтении битых данных мира.
 - **UTF-8 Stream**: Консольный вывод принудительно переведен на UTF-8 для корректного отображения кириллицы в именах предметов и логах на Windows.
 
 ---
 
-## 6. Zero-Allocation Occlusion Culling (Phase 2)
+## 6. Zero-Allocation Occlusion Culling
 Высокопроизводительная система отсечения невидимой геометрии на основе графа связности мира.
 
 ### 6.1. 3D BFS Traversal
@@ -75,7 +75,7 @@
 
 ---
 
-## 7. Динамические прицелы (Crosshairs) (v2.0)
+## 7. Динамические прицелы (Crosshairs)
 ...
 Отрисовываются через матрицы 1/0 в JSON. 
 - **Анимации**: Настраиваются через `recoilScale` (отдача при ударе) и `spreadScale` (разлет при прогрессе добычи).
@@ -83,7 +83,7 @@
 
 ---
 
-## 8. Minimap & Radar System (v1.0 NEW)
+## 8. Minimap & Radar System
 Система тактического радара объединяет динамическое сэмплирование мира и процедурную графику.
 
 - **Fast Voxel Sampling**: Метод `world.getFastSurfaceColor(x, z)` напрямую читает `blockData` чанка, находя верхний твердый блок за 1 проход по вертикали.
@@ -95,7 +95,7 @@
 
 ---
 
-## 9. Mathemagical Weather & Realistic Wetness (v1.0 NEW)
+## 9. Mathemagical Weather & Realistic Wetness
 Комплексная система погодных условий и процедурных эффектов намокания.
 
 ### 9.1. Spatiotemporal Synchronization & Block Occlusion

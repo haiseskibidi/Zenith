@@ -1,11 +1,24 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
-- **Symmetric Arch & Portal Placement (v4.5)**:
+- **Fluid Physics & Polished Water Exit Mechanics**:
+  * **Smooth Wall Climb (Step-Up Grace)**: Разработана система "грации" для выхода из воды на берег. Введены `waterExitGraceTimer` и `waterExitBoostTimer` в `Player.java`. Теперь, даже если персонаж технически вынырнул (камера над блоком), система продолжает толкать его вверх еще `0.4с`, предотвращая застревание на краю блока при выходе из воды.
+  * **Horizontal Wall Collision Detection**: Значительно снижен порог срабатывания флага `horizontalCollision` с `0.001f` до `0.00001f` в `Entity.java`. Это позволяет физическому движку регистрировать непрерывное микро-трение о берег во время плавания, обеспечивая стабильную работу `velocity.y` буста без прерываний.
+  * **Forward Vault Boost**: При успешном подтягивании на берег игроку выдается кратковременный форсированный импульс вперед в направлении взгляда (`lookDir`), что физически помогает перевалиться через край твердого блока и гарантирует монолитное, AAA-качество выхода на сушу без рывков.
+  * **No-Jump Water Swim**: Полностью вырезана возможность "спамить" пробелом (прыгать) находясь в воде. Пробел теперь используется исключительно для плавного всплытия (`swimUpForce`), устранив неестественные подбрасывания персонажа при попадании в воду.
+- **Fluid Simulation & Unbreakable Fluids**:
+  * **Unbreakable Liquids**: Жидкости (вода, нефть, лава) сделаны неразрушимыми путем добавления `"hardness": -1.0` в JSON-определения и блокирования процесса `startMining`/`mine` на них в [InteractionInputHandler.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/input/handlers/InteractionInputHandler.java). При левом клике на жидкость проигрывается только стандартная анимация взмаха руки.
+  * **Raycast Ignore (No Highlight)**: В [Raycast.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/physics/Raycast.java) внедрен пропуск вокселей жидкостей (`def.isFluid() == true`). Это убрало визуальный хайлайт (выделение белой рамкой) и позволило игроку взаимодействовать с твердыми блоками сквозь воду.
+  * **Minecraft-style Fluid Flow Simulation (BFS)**: Реализована полноценная симуляция течения жидкостей в [World.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/World.java) с использованием Zero-Allocation планирования тиков на `pendingFluidTicks` и `nextFluidTicks` (координаты упакованы в `long`).
+  * **Fluid Flow Rules & Plain Spreading Fix**: Реализовано стекание вертикальными столбами (`level = 8`) и горизонтальное растекание (`level = 1..7`) с учетом уклонов. Разрешено одновременное течение вниз и растекание по горизонтали для текущей воды (уровни 1..7) на краях уступов, что позволило воде растекаться вширь перед падением и убрало резкий обрыв «квадратного воротника». Падающая вода (`level = 8`) на твердой поверхности теперь корректно признается бесконечным источником питания для своих горизонтальных соседей с уровнем 1, что позволило воде растекаться по плоской равнине монолитным слоем, убрав ошибку «пирамидки». При исчезновении источника вода плавно и последовательно высыхает.
+  * **Zero-Lag State Update Optimization**: Внедрен «быстрый путь» (fast path) в `setBlock(...)`: если тип изменяемого блока совпадает со старым (смена уровня метаданных жидкости), мы обновляем его в чанке напрямую и мгновенно выходим без запуска пересчета освещения `lightEngine`, пересоздания BlockEntity и рассылки тяжелых `notifyNeighbors`. Это снизило нагрузку от течения воды на CPU до нуля.
+  * **Infinite Water Sources**: Воссоздано классическое поведение Minecraft: два горизонтальных источника воды (`level = 0`), текущие на твердый грунт, создают новый источник воды в месте их слияния.
+  * **Smooth Water Slopes & Drop Smoothing**: В [ChunkMeshGenerator.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/chunks/ChunkMeshGenerator.java) переработан расчет высоты углов вокселей `getCornerWaterHeight`. Максимальная высота источника (`level = 0`) ограничена до `0.875f` (14/16 блока). Добавлена логика обрывов: если соседняя ячейка угла — воздух/replaceable и под ней также пустота (обрыв), ей присваивается высота `0.0f`, сглаживая край воды плавно вниз и убирая эффект квадратного «стеклянного» воротника.
+- **Symmetric Arch & Portal Placement**:
   * **Symmetric Arch & Portal Checks**: Реализована 100% симметричная и детерминированная проверка твердости блоков `isBlockSolidDeterministic` в [CaveEdge.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/generation/caves/CaveEdge.java). Это полностью устранило летающие опоры и обрезанные балки на стыках чанков.
   * **Noise-Router-Based Terrain Checks**: Заменили неточный `getApproximateSurfaceHeight` на точную проверку плотности ландшафта через `NoiseRouter` в `isTerrainSolid` и `checkMountainRoof`. Это гарантирует, что входные порталы и опоры строятся только там, где реально присутствует гора/порода, убирая летающие балки на поверхности.
   * **Optimization (Pre-generation)**: Переписали [CaveCarver.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/generation/caves/CaveCarver.java) для сбора активных ребер сетей `activeEdges` один раз за проход чанка. Это убрало избыточное пересоздание `CaveNetwork` в PHASE 1 и PHASE 2, оптимизировав CPU и позволив передавать список в методы проверок.
-- **Visual Stacking, Item Attraction & Live Inspector Search (v4.4)**:
+- **Visual Stacking, Item Attraction & Live Inspector Search**:
   * **ItemEntity Stacking (ItemEntityStacker)**: Создан новый класс [ItemEntityStacker.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/graphics/ItemEntityStacker.java), в который вынесена вся математика визуального стаканья выпадающих блоков и предметов, разгрузив `EntityRenderSystem`.
   * **Minecraft-style Block Stacking & Local Space Items**:
     * Блоки рендерятся в виде аккуратной диагональной стопки по фиксированному локальному вектору `(1, 1, 1)` с шагом `scale * 0.12f` для каждой копии. Применяются строгие лимиты количества: 1 модель при count=1, 2 модели при 2-15 шт, 3 модели при count > 15 шт. При этом стопка плавно вращается по оси Y (как в Minecraft), образуя единое динамическое целое.
@@ -17,20 +30,20 @@
     * В [World.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/World.java) подбор адаптирован для использования `magnet.pickupRadius` (для Магнетита это 0.6 м) при использовании магнита, иначе берется `"itemPickupRadius"` из `physics.json` (0.75 м).
     * Трение во время притяжения (`isBeingAttracted`) установлено в **`0.85f`** для гашения инерции, а также исключено прибавление скорости движения игрока, что устраняет эффект "убегания" предметов перед игроком на бегу и обеспечивает мгновенный подбор.
   * **Live Inspector Search**: В [DevInspectorScreen.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/graphics/ui/DevInspectorScreen.java) интегрирован текстовый поиск `UISearchBar`, фильтрующий файлы боковой панели (включая `physics.json` во вкладке `REGISTRY`) в реальном времени.
-- **Zero-Allocation 3D BFS Occlusion Culling (Phase 2)**:
+- **Zero-Allocation 3D BFS Occlusion Culling**:
   - **High-Performance 3D Graph Traversal**: Replaced the legacy spiral chunk scan with a sophisticated 3D Breadth-First Search (BFS) algorithm. The engine now traverses the world as a connectivity graph, using each chunk section's 36-bit `visibilityMask`. This ensures that entire mountains or underground areas are discarded if no line-of-sight path exists through air pockets, drastically reducing draw calls and GPU load.
   - **Strict Monotonicity Rule (Portal Leak Fix)**: Implemented a directional constraint in the BFS wave. A ray from the camera can only propagate forward along each axis. This prevents "portal leakage," where a visibility wave could travel up a vertical shaft, reach the sky, and then "reflect" back down to render the entire surface behind the player.
   - **Zero-Allocation Data Structures**: The entire BFS traversal uses pre-allocated primitive arrays (`bfsQueueX/Y/Z`, `bfsQueueEntry`) and a versioned `short[] visitedFast` array for $O(1)$ state resets. This eliminated all GC pressure, reducing the CPU time for visibility determination from **8-12ms** to **sub-0.5ms** per frame.
   - **Front-to-Back Opaque Sorting (Early-Z)**: Opaque chunk sections are now sorted by distance from the camera (nearest first) before rendering. This maximizes the hardware **Early-Z discard** efficiency of the Radeon iGPU, preventing it from wasting fillrate on pixels that are eventually covered by closer blocks.
   - **Corrected Flood-Fill Logic**: Fixed two critical bugs in `ChunkSection.calculateVisibility()`: added a mandatory state reset between face checks and aligned bitmask indices with the global `Direction` enum. This ensures 100% accurate connectivity data for the graph traversal.
-- **Data-Driven Block Tinting & Grass Fix (v1.3)**:
+- **Data-Driven Block Tinting & Grass Fix**:
   - **Per-Face Tinting Control**: Introduced `"tinted_faces"` JSON property in `BlockDefinition` to precisely control which faces of a block receive procedural tinting (e.g., grass color). This system is fully data-driven and removes the need for block-specific hardcoding in the mesh generator.
   - **Grass Block Logic Correction**: Updated `grass_block.json` to only tint the `top` and `side` faces, resolving a long-standing bug where the bottom face of grass blocks would incorrectly appear green during block breaking or when viewed from below.
   - **Loader & Generator Synchronization**: Updated `BlockDataLoader` to support the new property and refactored `ChunkMeshGenerator` to use `def.isFaceTinted(face)` across all mesh generation paths (standard, breaking, and holes).
-- **Uniform Red Weak Spots for Wood Blocks (v1.2)**:
+- **Uniform Red Weak Spots for Wood Blocks**:
   - **Color Consistency**: Updated all wood-related blocks (`logs`, `stripped logs`, `felling stages`) to use pure red `[1.0, 0.0, 0.0]` for weak spots in `mining_logic`. This ensures a unified visual feedback during timber harvesting.
   - **Surgical JSON Updates**: Applied targeted edits to 15+ JSON files, ensuring that blocks previously lacking a color (like `oak_log` or `felling_stages`) or having non-standard colors (like `birch_log`) now adhere to the standard.
-- **Mathemagical Synchronized Rain & Precise Heightmap Occlusion (Atmosphere v2.9)**:
+- **Mathemagical Synchronized Rain & Precise Heightmap Occlusion**:
   - **Dual-Phase Heightmap Synchronization**: Upgraded the rain system to use a real-time **GPU heightmap** for both falling drops and surface splashes. Split `RainRenderer` into `update()` and `render()` phases, ensuring the heightmap is populated before the world is rendered. Impact splashes and ripples in `fragment.glsl` now perform a precise height check `fragPos.y >= groundHeight - 0.2` against the heightmap. This ensures 100% correct occlusion: splashes no longer appear under ceilings or inside caves, even if sunlight leaks in.
   - **Coordinate Alignment & Pit Support**: Fixed a coordinate mismatch by switching from logical to absolute Y in the heightmap. Removed legacy hardcoded checks like `fragPos.y > 0.0`, allowing rain to fall into deep pits and underground caverns if they are exposed to the sky.
   - **Soft Sunlight Filtering**: Maintained the `smoothstep(7.0, 12.0, vLight.x)` filter as a secondary atmospheric mask for soft wetness transitions, while the heightmap provides hard geometric occlusion.
@@ -48,10 +61,10 @@
     - *Atmospheric Integration & Cinematic Clear-Up*: The sky, sun, and ambient light automatically dim and haze increases during rain. When the rain ends, `AtmosphereManager` triggers a gorgeous spatiotemporal clear-up: the fog smoothly dissolves by **98%** over **~8 seconds** to reveal crystal-clear vistas, and then slowly and imperceptibly returns to normal over **~125 seconds** to maintain a highly premium atmosphere.
     - *Fog-Free Clouds Rendering*: Integrated `glDepthMask(false)` in `CloudRenderSystem.java` to prevent post-processing volumetric fog from applying atmospheric color on top of cloud geometry, allowing clouds to retain their exact, deep-slate storm shades without visual washout.
   - **Hotkey Control**: Added **F4** key to instantly toggle weather states for developer testing.
-- **High-Speed Breaking GPU-Hiding & Remesh Coalescing (v2.7)**:
+- **High-Speed Breaking GPU-Hiding & Remesh Coalescing**:
   - **GPU Hiding for Recently Broken Blocks**: Re-routed recently broken block positions (`recentlyBrokenHoles`) into the GPU `uHiddenPositions` uniform array in `RenderPipeline.java`. This guarantees that mined blocks are collapse-culled at the vertex-shader stage instantly, preventing their top/side faces from flickering for a single frame before the chunk mesh is rebuilt.
   - **Adaptive Chunk Remesh Rate-Limiting**: Implemented an adaptive coalescing & rate-limiting mechanism (`lastRemeshTimestamps` + `dirtyChunksCoalesceMap` with an `80ms` threshold) in `ChunkRenderSystem.java` for already built chunks. Single block breaks update the mesh **instantly with zero delay** (ensuring immediate light updates and adjacent face generation), while fast rapid mining (20+ blocks/sec) is automatically throttled and coalesced, maintaining a flat **165+ FPS** and zero lag.
-- **ItemEntity & Lighting Subsystem Stabilization (v2.6)**:
+- **ItemEntity & Lighting Subsystem Stabilization**:
   - **ItemEntity Physics & Spatial Hovering Fixes**:
     - *Pickup delay wake up*: Moved the `pickupDelay` decrement statement to the very beginning of the `onUpdate()` method in `ItemEntity.java`, ensuring that sleeping items can still tick down their pickup timers and be cleanly picked up by the player.
     - *Non-solid block wake up*: Upgraded `processSleeping()` in `ItemEntity.java` to check for `!isSolid()` instead of `.isAir()`, allowing sleeping items to correctly wake up and fall when their supporting block is replaced by non-solid decorations (grass, flowers, water).
@@ -62,17 +75,17 @@
     - *NPE emission guard*: Implemented a robust null-guard in `LightManager.createSource` and added dynamic generation of `LightData` based on block `emission` intensity inside `onBlockChange()` and `onChunkLoad()` when a light-emitting block lacks a JSON `"light"` section, completely resolving the NullPointerException.
   - **Notification Banner Simplification**:
     - *Plaque background removal*: Completely removed the translucent black plaque background and red accent lines from the alert banners in `NotificationManager.java`, transitioning to a clean, modern floating text overlay with blueprint icons.
-- **Procedural 3D Moon Phases & Dynamic Night Sky Atmosphere (Atmosphere v2.5)**:
+- **Procedural 3D Moon Phases & Dynamic Night Sky Atmosphere**:
   - **Procedural 3D Lunar Phases**: Implemented a mathematically flawless 3D sphere normal reconstruction algorithm for the Moon disk (`0.182` radius). The terminator line is modeled using a virtual light source phase angle vector `L = vec3(sin(angle), 0.0, cos(angle))` linked to an 8-day lunar cycle (`uMoonPhase`), producing stunning waxes/wanes (crescents, gibbous, half, full).
   - **Realistic Earthshine & Velvet Corona Glow**: Embedded a faint, navy-blue Earthshine / Da Vinci glow (`0.01, 0.02, 0.04`) on the unilluminated side of the Moon, allowing the full sphere to remain subtly visible against stars. Added a soft silver velvet corona edge glow (`exp(-dist * 14.0) * 0.15`) for realistic atmospheric dispersion.
   - **Silver Volumetric Moon Shafts (Moonlight)**: Enhanced the screen-space crepuscular rays pipeline at night. Decoupled exposure (`* 0.40f`) and weight (`* 0.45f`) for cool moonlight, projecting beautiful silver-indigo volumetric shafts (`ws.moonLightColor`) seeping through foliage and tree canopies.
   - **Night Sky dome Reconstruction**: Resolved a critical celestial inversion bug where the sky dome's atmospheric gradients and colors acted as if it was day because `sceneState.getLightDirection()` was inverted for block lighting. Added `isNight` flag to GlobalData UBO (`gAmbientColor.w`). The sky dome fragment shader now uses `realSunDir` to reconstruct correct dark indigo night sky gradients, disable warm solar scatter, and reveal soft night horizon glow.
   - **Zero-Allocation Environment Updates**: RenderContext and RenderPipeline update cycles maintain 100% Zero-Allocation, avoiding any garbage collection pressure in the rendering path.
-- **Foliage-seeping Volumetric Sun Shafts & CPU-smoothed Glare (Atmosphere v2.4)**:
+- **Foliage-seeping Volumetric Sun Shafts & CPU-smoothed Glare**:
   - **Decoupled Shaft Occlusion**: Volumetric crepuscular rays are no longer multiplied by the global sun visibility value. Instead, rays propagate from any bright sky area (`depth > 0.98`), beautifully seeping through foliage gaps, tree trunks, and canopy voids. Occlusion is handled naturally along each ray's screen path in the raymarching loop with distance-aware decay.
   - **CPU-side Raycast Visibility**: Implemented a highly optimized world raycast in `RenderPipeline` (up to 48 meters, executing in sub-0.005ms) to determine the smooth visibility of the sun disk. Leaves filter light gently (`* 0.85`), transparent blocks filter by `0.90`, and solid blocks occlude fully.
   - **Temporal EMA Smoothing**: The CPU-calculated visibility is smoothed over frames using an exponential moving average (`smoothSunVisibility`) based on `deltaTime` to eliminate all frame-to-frame pops and flickering, providing a gorgeous, natural eye-adaptation lens flare transition.
-- **Realistic Atmosphere & Monolith Sun Glare (Atmosphere v2.3)**:
+- **Realistic Atmosphere & Monolith Sun Glare**:
   - **Perfect Vector Sun Disk & Atmospheric Glow**: РџРѕР»РЅРѕСЃС‚СЊСЋ РїРµСЂРµРїРёСЃР°РЅ СЂРµРЅРґРµСЂРёРЅРі РЅРµР±РµСЃРЅС‹С… СЃРІРµС‚РёР» РІ [SkyRenderer.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/engine/graphics/SkyRenderer.java) Рё [sky_fragment.glsl](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/resources/shaders/sky_fragment.glsl). РЎРѕР»РЅС†Рµ РїРѕР»СѓС‡РёР»Рѕ РёРґРµР°Р»СЊРЅРѕ РєСЂСѓРіР»С‹Р№, РІРµРєС‚РѕСЂРЅС‹Р№ РґРёСЃРє РЅР° С€РµР№РґРµСЂРµ СЃ С€РёСЂРѕРєРёРј, СЂРѕСЃРєРѕС€РЅС‹Рј Р°С‚РјРѕСЃС„РµСЂРЅС‹Рј Р·РѕР»РѕС‚РёСЃС‚С‹Рј СЃРІРµС‡РµРЅРёРµРј exp(-dist * 4.5) * 0.85 РёР·РЅР°С‡Р°Р»СЊРЅРѕ РІ РЅРµР±Рµ.
   - **Moon with Detailed Lunar Seas**: РџСЂРѕС†РµРґСѓСЂРЅР°СЏ Р›СѓРЅР° С‚РµРїРµСЂСЊ СЂРµРЅРґРµСЂРёС‚СЃСЏ РєР°Рє Р±РµР·СѓРїСЂРµС‡РЅС‹Р№ СЃРµСЂРµР±СЂРёСЃС‚С‹Р№ РєСЂСѓРіР»С‹Р№ РґРёСЃРє СЃ РјСЏРіРєРёРјРё, СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹РјРё РЅР° С€РµР№РґРµСЂРµ РєСЂР°С‚РµСЂР°РјРё Рё Р»СѓРЅРЅС‹РјРё РјРѕСЂСЏРјРё РЅР° РѕСЃРЅРѕРІРµ РіР°СЂРјРѕРЅРёРє СЃРёРЅСѓСЃРѕРІ/РєРѕСЃРёРЅСѓСЃРѕРІ, Рё С‚РѕРЅРєРѕР№, РµРґРІР° Р·Р°РјРµС‚РЅРѕР№ РєР°Р№РјРѕР№ РґР»СЏ СЃРіР»Р°Р¶РёРІР°РЅРёСЏ РєСЂР°РµРІ Р±РµР· РЅРµРѕРЅРѕРІРѕРіРѕ СЃРІРµС‡РµРЅРёСЏ.
   - **Dynamic Blinding & Lens Bleed (Eye-Adaptation)**: Р РµР°Р»РёР·РѕРІР°РЅРѕ С‚РѕС‡РµС‡РЅРѕРµ РґРёРЅР°РјРёС‡РµСЃРєРѕРµ РѕСЃР»РµРїР»РµРЅРёРµ РїСЂРё РїСЂСЏРјРѕРј РІР·РіР»СЏРґРµ РЅР° СЃРѕР»РЅС†Рµ РЅР° РѕСЃРЅРѕРІРµ cosAngle^16.0. Р­РєСЃРїРѕР·РёС†РёСЏ Р»СѓС‡РµР№ РІСЃРїС‹С…РёРІР°РµС‚ РґРѕ 1.9x, Р° РІРµСЃ вЂ” РґРѕ 1.6x РїСЂРё РїСЂСЏРјРѕРј РІР·РіР»СЏРґРµ, СЃ РјСЏРіРєРёРј lens bleed СЂР°СЃС€РёСЂРµРЅРёРµРј СЂР°РґРёСѓСЃР° СЂР°Р·РјС‹С‚РёСЏ РЅР°  .025 СЌРєСЂР°РЅР°, СЃРёРјСѓР»РёСЂСѓСЏ С…СЂСѓСЃС‚Р°Р»РёРє РіР»Р°Р·Р° Р±РµР· РІС‹Р¶РёРіР°РЅРёСЏ СЃРѕР»РЅС†Р° РІ СЃРїР»РѕС€РЅРѕР№ Р±РµР»С‹Р№ С€Р°СЂ.
@@ -81,16 +94,16 @@
   - **Seamless Viewmodel Transparency**: Р’РЅРµРґСЂРµРЅР° РїСЂРѕРІРµСЂРєР° РґРёР°РїР°Р·РѕРЅР° РіР»СѓР±РёРЅ СЂСѓРєРё РёРіСЂРѕРєР° (depth <= 0.05, glDepthRange(0.0, 0.05)). Р СѓРєР° РёРіСЂРѕРєР° Рё РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹ Р±РѕР»СЊС€Рµ РЅРµ РїРµСЂРµРєСЂС‹РІР°СЋС‚ СЃРѕР»РЅС†Рµ РґР»СЏ СЂР°СЃС‡РµС‚РѕРІ РІРёРґРёРјРѕСЃС‚Рё Рё РЅРµ РіР°СЃСЏС‚ РѕСЃР»РµРїР»РµРЅРёРµ Рё Р»СѓС‡Рё.
   - **Golden Hour & Blue Hour Systems**: Р РµР°Р»РёР·РѕРІР°РЅС‹ РїР»Р°РІРЅС‹Рµ, С„РёР·РёС‡РµСЃРєРё РґРѕСЃС‚РѕРІРµСЂРЅС‹Рµ РїРµСЂРµС…РѕРґС‹ РІСЂРµРјРµРЅРё СЃСѓС‚РѕРє РЅР° CPU СЃРѕ 100% Zero-Allocation:
     - *Р—РѕР»РѕС‚РѕР№ С‡Р°СЃ:* РЎРѕР»РЅРµС‡РЅС‹Р№ СЃРІРµС‚ РѕРєСЂР°С€РёРІР°РµС‚СЃСЏ РІ РіСѓСЃС‚РѕР№ Р·РѕР»РѕС‚РёСЃС‚Рѕ-РѕСЂР°РЅР¶РµРІС‹Р№ (1.0, 0.58, 0.12), Р° РЅРµР±Рѕ РёР· РЅРµР¶РЅРѕ-РіРѕР»СѓР±РѕРіРѕ РјСЏРіРєРѕ РїРµСЂРµС…РѕРґРёС‚ РІ РѕСЂР°РЅР¶РµРІРѕ-СЂРѕР·РѕРІРѕ-Р·РѕР»РѕС‚РѕР№ СЂР°СЃСЃРІРµС‚РЅС‹Р№ С‚РѕРЅ.
-    - *РЎРёРЅРёР№ С‡Р°СЃ:* Р’ СЃСѓРјРµСЂРєР°С… РЅРµР±Рѕ СЃС‚Р°РЅРѕРІРёС‚СЃСЏ РіР»СѓР±РѕРєРёРј РёРЅРґРёРіРѕ/СѓР»СЊС‚СЂР°РјР°СЂРёРЅРѕРІС‹Рј (0.04, 0.06, 0.22), Р° РѕРєСЂСѓР¶Р°СЋС‰РёРµ С‚РµРЅРё (ambient) РѕРєСЂР°С€РёРІР°СЋС‚СЃСЏ РІ С…РѕР»РѕРґРЅС‹Р№ СЃРёРЅРµ-С„РёРѕР»РµС‚РѕРІС‹Р№ (0.08, 0.10, 0.24).- **Discrete Block-Breaking & Shadow Fix (Stabilization)**:
+    - *РЎРёРЅРёР№ С‡Р°СЃ:* Р’ СЃСѓРјРµСЂРєР°С… РЅРµР±Рѕ СЃС‚Р°РЅРѕРІРёС‚СЃСЏ РіР»СѓР±РѕРєРёРј РёРЅРґРёРіРѕ/СѓР»СЊС‚СЂР°РјР°СЂРёРЅРѕРІС‹Рј (0.04, 0.06, 0.22), Р° РѕРєСЂСѓР¶Р°СЋС‰РёРµ С‚РµРЅРё (ambient) РѕРєСЂР°С€РёРІР°СЋС‚СЃСЏ РІ С…РѕР»РѕРґРЅС‹Р№ СЃРёРЅРµ-С„РёРѕР»РµС‚РѕРІС‹Р№ (0.08, 0.10, 0.24).- **Discrete Block-Breaking & Shadow Fix**:
   - **Исправление тени под травой/фолиажем при наведении**: Устранена проблема появления ложной тени (z-fighting копии смежной грани земли) под травой при наведении прицела. `BreakingRenderPass` и `RenderPipeline` теперь полностью пропускают скрытие в чанке и рендеринг `HoleMesh`/`Proxy` для блоков с `breakingProgress <= 0.0f` (которые еще не получили первого удара и не начали анимацию wobble).
   - **Сброс копания при отпускании ЛКМ**: В `InteractionInputHandler.java` добавлена принудительная остановка копания (`miningController.stopMining()`) в момент отпускания левой кнопки мыши, что полностью ликвидировало любые висящие оверлеи и "залипшие" скрытия при сохранении прицела на блоке.
   - **Верификация дискретной системы разрушения**: Проведен полный аудит конвейера разрушения блоков. Из кодовой базы полностью исключена старая continuous-система (постепенное накопление урона каждый кадр). Урон наносится строго дискретными порциями (`currentDamage += miningDamage`) в момент прохождения интервала атаки (`hitCooldownTimer <= 0.0f`). Каждое нанесение урона монолитно связано с 1 анимацией удара руки и 1 wobble-анимацией блока.
-- **Shader & Overdraw GPU-driven Optimization (Step 2 Optimization)**:
+- **Shader & Overdraw GPU-driven Optimization**:
   - **Vertex-Stage Geometry Hiding (Zero-Alloc Hiding)**: Тяжелый discard-цикл скрытых блоков удален из фрагментного шейдера `fragment.glsl`, что полностью вернуло аппаратный Early-Z Culling на GPU. Скрытие разрушаемых блоков перенесено на стадию вершинного шейдера `vertex.glsl`: вершины скрываемого блока схлопываются в `(0,0,0)` в Clip Space, благодаря чему GPU отсекает их до стадии фрагментного сэмплинга, давая колоссальный буст производительности GPU.
   - **Битовая распаковка вершин**: Медленные операции деления `%` и `/` в вершинном шейдере заменены на сверхбыстрые побитовые операции `&` и `>>` для декодирования координат вокселей из сжатого `packedPos`.
   - **Оптимизация Connected Glass**: Процедурный Connected Glass в `block_features.glsl` избавлен от дорогого повторного сэмплирования текстуры в центре сэмплером `textureSampler` внутри динамического ветвления. Теперь скрытые рамки заменяются на `vec4(0.0)` напрямую.
   - **Оптимизация нормалей**: Вычисление квадратного корня в `lighting.glsl` через `length(normal)` заменено на сверхбыструю проверку скалярного произведения `dot(normal, normal) < 0.0001`.
-- **Zero-Alloc Physics & Chunk Cache (Step 1 Optimization)**:
+- **Zero-Alloc Physics & Chunk Cache**:
   - **Chunk Cache Window**: Реализована легковесная структура локального кэша `ChunkCache.java` (размером 2x2/3x3 чанка вокруг Broadphase AABB движения сущности). Выборка блоков переведена из дорогой ConcurrentHashMap в World в прямую индексацию кэшированных чанков в L1/L2 кэше CPU за $O(1)$ суб-микросекундное время, полностью ликвидировав CPU bottleneck.
   - **Zero-Alloc Narrowphase**: Реализован статический метод проверок коллизий `AABB.intersects(...)` с передачей смещений примитивами `float` вместо создания сдвинутых Vector3f/AABB объектов. Это полностью убрало аллокации в физическом тике движения сущностей на куче (100% Zero-Alloc).
   - **Оптимизация VoxelShape**: Метод `isFullCube()` в `VoxelShape.java` переведен на примитивные геттеры `minX()/maxX()` вместо выделения векторов `Vector3f` на куче.
@@ -151,7 +164,7 @@
   - Внедрены события `PlayerAttackEntityEvent`, `PlayerPickupEvent` и `BlockLeftClickEvent` с поддержкой consumption-логики для управления жизненным циклом действий.
   - Создан новый слой контроллеров (`CombatController`, `InteractionController`), куда перенесена вся тяжелая игровая логика (нанесение урона, эффекты крови, подбор лута, кулдауны).
   - Слой ввода `InteractionInputHandler` полностью избавлен от геймплейного кода и переведен на трансляцию нажатий в события шины. Контроллеры инициализируются в `InputManager`, исключая утечки памяти подписчиков.
-- **Zero-Alloc Input-Action Layer (Phase 2)**:
+- **Zero-Alloc Input-Action Layer**:
   - Реализован полноценный абстрактный слой действий на основе перечисления `InputAction`, полностью избавивший хэндлеры от жесткой привязки к физическим GLFW-константам.
   - Состояния фаз нажатий (`isPressed`, `wasJustPressed`, `wasJustReleased`) теперь централизованно отслеживаются в `InputManager` с использованием плоских массивов состояний, что гарантирует абсолютное отсутствие runtime-аллокаций (**Zero-Allocation**).
   - Успешно отрефакторены все пять хэндлеров ввода (`SystemInputHandler`, `MovementInputHandler`, `HotbarInputHandler`, `InventoryInputHandler`, `InteractionInputHandler`) и главный игровой цикл `GameLoop`. Это позволило полностью удалить локальное отслеживание состояний кнопок (`spaceKeyPressed`, `fKeyPressed`, `ePressed`, `jPressed` и др.), сократив кодовую базу и превратив хэндлеры в чистые функциональные компоненты.
@@ -167,7 +180,7 @@
   - **Transparency/Translucency Split**: Разделена логика куллинга (`transparent`) и отрисовки в прозрачном слое (`translucent`). Исправлен X-ray баг окантовок.
   - **Palette Corruption Guard**: Добавлена защита от повреждения палитры чанка в `Chunk.java`, автоматическое восстановление поврежденных индексов блоков.
   - **UTF-8 Console**: Принудительная установка кодировки UTF-8 для `System.out` для корректного отображения кириллицы в логах Windows.
-- **Hybrid Entity Component System (Phase 3 — ECS Lite)**:
+- **Hybrid Entity Component System**:
   - Внедрена гибридная компонентная архитектура для сущностей движка. Создан маркерный интерфейс `EntityComponent` и три специализированных компонента: `HealthComponent` (здоровье, урон, защита, характеристики), `InventoryComponent` (унифицированная обертка инвентаря) и `AIComponent` (высокоуровневая логика ИИ, состояний и восприятия).
   - Базовый класс `Entity` расширен поддержкой Zero-Alloc мапы компонентов и автоматическим вызовом `update()` для всех активных компонентов в основном тике.
   - Успешно отрефакторены `LivingEntity`, `Player` и `ScoutEntity`. Наследники переведены на делегирование логики в компоненты с сохранением 100% обратной совместимости API и сигнатур.
@@ -198,22 +211,22 @@
 
 ## Реализованные фичи (Архив)
 
-- **Foliage Animation (v1.0)**:
+- **Foliage Animation**:
   - **Vertex-Weight Driven Swaying**: Реализована процедурная анимация ветра через веса вершин (0.0 - корень, 1.0 - верхушка).
   - **High-Plant Support**: Бесшовная анимация `DOUBLE_PLANT` через аддитивные веса (0.0 -> 1.0 -> 2.0).
   - **Smart Selection Sync**: Хитбокс автоматически следует за анимацией блока благодаря управлению интенсивностью через юниформу `uSwayOverride`.
   - **Data-Driven Control**: Включение/выключение анимации для любого блока через поле `sway` в JSON.
-- **Unified Coloring System (v2.0)**:
+- **Unified Coloring System**:
   - **ColorProvider Implementation**: Единый источник правды для цветов биома.
   - **Quad-Component UVs**: Расширение формата вершин (`vec4`) для передачи индекса оверлея.
   - **Intelligent Blending**: Шейдеры мира, рук и инвентаря теперь корректно смешивают базовую текстуру с окрашенным оверлеем (фикс "зеленой земли" и "серой травы").
   - **Particle Overlay Support**: Частицы теперь поддерживают оверлеи и правильное окрашивание.
-- **Identifier-First Dynamic ID System (v1.1 UPDATED)**:
+- **Identifier-First Dynamic ID System**:
   - **Auto-Assignment**: Полный переход от ручного управления `id` в JSON к динамической регистрации на основе `Identifier`.
   - **Collision Safety**: `NumericalRegistry` теперь корректно обрабатывает повторную регистрацию того же `Identifier` (сохраняя ID), что предотвращает сдвиги при перезаписи контента.
   - **Load Order Fix**: Изменен порядок инициализации в `DataLoader`: сначала регистрируются блоки (`BlockRegistry`), затем создаются их предметы-холдеры (`ItemRegistry.init`), и только в конце загружаются предметы из JSON. Это устранило баг с "бревнами-лопатами".
   - **Shader Integration**: Шейдеры используют унифицированное декодирование `decodeBlockInfo` (через флаги в ID), что гарантирует корректную работу Connected Textures и Tinting для всех типов блоков независимо от их динамического номера.
-- **Classic Voxel Particle System (v2.0 NEW)**:
+- **Classic Voxel Particle System**:
   - **Billboard Quads**: Полный переход на квадратные билборды, ориентированные на камеру (GPU-based). Это обеспечивает стабильную видимость частиц со всех ракурсов и избавляет от визуального шума "тонких граней".
   - **No-Collision Stability**: Частицы теперь являются "призрачными" (не имеют коллизий с блоками). Это навсегда устранило баги с застреванием, мерцанием и подергиваниями в узких пространствах.
   - **Snippet UV Mapping**: Реализовано текстурирование через случайные "вырезки" (4x4 пикселя) из текстур блоков. Это создает эффект реальной материальной крошки (щепки, пыль) вместо уменьшенных копий блоков.
@@ -223,7 +236,7 @@
   - **Performance**: Система оптимизирована для рендеринга тысяч частиц через инстансинг без потери FPS.
 - **Dynamic Item Scaling Fix**:
   - Исправлена проблема гигантских выпадающих блоков (листвы). Теперь масштаб `ItemEntity` зависит от **реального физического объема** хитбокса: полноразмерные блоки (в т.ч. листва) — маленькие (0.25), крошечные объекты (сосуды) — крупные (0.7) для видимости.
-- **Advanced Developer Panel & UI Components (v1.1 UPDATED)**:
+- **Advanced Developer Panel & UI Components**:
   - **UISearchBar Component**: Универсальный UI-элемент с поддержкой **курсора**, **выделения текста**, **системного буфера обмена (Ctrl+C/V)** и **Key Repeat**.
   - **Input Sync**: Логика выбора предметов в `InputManager` синхронизирована с визуальным фильтром поиска.
   - **Smart Filtering**: Реализован `ItemSearchEngine` для мгновенного поиска по русскому названию, английскому ID или пути.
@@ -234,11 +247,11 @@
   - **True Block Output**: По завершении обжига яма превращается в блок `FIRED_VESSEL` вместо выпадения предметом, что сохранило правильный размер модели.
 - **Scrap Metal Era Progression (Tier 1)**:
   - Реализована механика `drop_on_hit` для получения `scrap_metal`, `rusty_pipe` и `duct_tape` при ударах по машинам.
-  - **Durability Penalty (v1.1)**: Внедрена система балансировки дропа через коэффициенты урона блоку при выпадении ресурсов.
+  - **Durability Penalty**: Внедрена система балансировки дропа через коэффициенты урона блоку при выпадении ресурсов.
   - **UI Branding**: Интегрирован логотип Zenith в HUD через Data-Driven конфиг.
   - Добавлены новые блоки: Покрышка, Покрышка с доской и Стол мусорщика с In-World сборкой.
   - Внедрены первые кустарные инструменты: топор, кирка и заточка.
-- **Data-Driven Container System (NEW)**:
+- **Data-Driven Container System**:
   - **Dynamic GUI Engine**: Реализован `ChestScreen`, полностью управляемый через JSON. Никакого хардкода: размеры, количество слотов и их расположение (например, 9x3 сундук) задаются в `chest.json`.
   - **Multi-Inventory Support**: `InventoryLayout` теперь поддерживает одновременную работу с несколькими источниками данных (Инвентарь игрока + Контейнер).
   - **Modular RPG Interface**: В окне сундука теперь отображаются не только карманы, но и слоты брони/сумок, позволяя переодеваться "на лету".
@@ -266,44 +279,44 @@
   - Интеграция со Stamina Bar на HUD.
 - **Modular UI Renderer (Refactoring)**:
   - `UIRenderer` разделен на 5 специализированных под-рендереров (`HUDRenderer`, `SlotRenderer` и т.д.) для улучшения модульности.
-- **Universal IK System (FABRIK) (v1.5)**:
+- **Universal IK System (FABRIK)**:
   - **Multi-Chain Solver**: Реализована поддержка FABRIK IK для нескольких цепей одновременно (обе руки и ноги). Конечности "примагничиваются" к мировым целям, позволяя анимировать тело (Root) независимо.
   - **Pole Targets**: Добавлены цели притяжения для локтей и коленей, предотвращающие неестественные сгибы суставов.
   - **Editor Integration**: IK полностью интегрирован в Animation Studio: автоматическая настройка цепей (`autoSetup`), визуализация целей и Pole Targets, а также "запекание" (Baking) IK-поз в стандартные Euler-ключи для экспорта в JSON.
-- **Landing & Falling Restoration (v2.0)**:
+- **Landing & Falling Restoration**:
   - **Physical Impulse**: Исправлен расчет приземления. Импульс теперь подается напрямую в пружинную физику `ViewmodelPhysics`, минуя плавное сглаживание, что возвращает "ударный" тактильный отклик.
   - **Procedural Wind Shake**: Добавлена высокочастотная тряска (45Hz) рук при падении, интенсивность которой зависит от вертикальной скорости.
   - **Data-Driven Evaluation**: Исправлен загрузчик анимаций (`DataLoader`), теперь корректно обрабатывающий обертку `keyframes` в треках.
-- **Mining Heat VFX (NEW)**:
+- **Mining Heat VFX**:
   - **Tool Incandescence**: Реализован эффект раскаления инструментов и рук при добыче. Жар накапливается пропорционально прогрессу и остывает плавно (2 сек), сохраняясь даже при смене предметов или подборе ресурсов.
   - **Localized Glowing**: Раскаление локализовано: у инструментов краснеет верхняя "рабочая" часть (маска Y), у рук — только костяшки кулака (маска весов костей). Использован насыщенный красный цвет с мягкой пульсацией.
   - **Universal Reset Logic**: `MiningVFXManager` отслеживает хэш предмета и слот. При любой смене или выбрасывании инструмента прогресс на блоке мгновенно обнуляется, предотвращая "читерство".
-- **Advanced Data-Driven Crosshairs (v2.0)**:
+- **Advanced Data-Driven Crosshairs**:
   - **Animation Scales**: В JSON прицела добавлены параметры `recoilScale` (прыжок при ударе) и `spreadScale` (разлет элементов при прогрессе добычи).
   - **Surgical Rendering**: Прицел больше не меняет цвет/форму сам по себе, вся индикация прогресса перенесена на VFX инструмента. Прицел отрисовывается строго по матрице из JSON через выделенный `crosshairShader`.
 - **Viewmodel Rendering Isolation**: Отрисовка рук и предметов вынесена в специализированные шейдеры `viewmodel_vertex/fragment.glsl`, что очистило основной шейдер мира и позволило реализовать точечные эффекты жара.
-- **Organic Hand Splatters (v2.0)**:
+- **Organic Hand Splatters**:
   - Переработан шейдер `hand_conditions.glsl`. Использование `splatterNoise` позволило заменить ровный шум на реалистичные кляксы и пятна грязи/крови разного размера.
 - **Block Placement Animations**: Добавлены 3D-анимации рук при установке блоков и предметов (`block_place`, `item_place`, `hand_place`), улучшающие тактильный отклик.
 - **Tools & Balance**: Добавлены деревянная и каменная лопаты. Блок травы (`grass_block`) теперь требует лопату для эффективной добычи.
 - **Interaction Fixes**: Устранено дублирование установки блоков при клике на интерактивные объекты (Пни, Костры) через принудительный cooldown после `onUse`.
-- **Refactoring (Phase 1)**: Выделен `MiningController` из `InputManager`. Вся логика разрушения блоков, кулдаунов и Weak Spots теперь изолирована, что разгрузило InputManager более чем на 300 строк.
-- **Physical Viewmodel System (v5.6)**:
+- **Refactoring**: Выделен `MiningController` из `InputManager`. Вся логика разрушения блоков, кулдаунов и Weak Spots теперь изолирована, что разгрузило InputManager более чем на 300 строк.
+- **Physical Viewmodel System**:
   - **Skeletal Viewmodel Engine**: Переход от простой отрисовки предметов к иерархической скелетной системе (Shoulder -> Forearm -> Hand).
   - **Data-Driven Kinematics**: Реализована детальная кинематика ударов через управление отдельными костями прямо из JSON анимаций.
   - **Fast Interactions System**: Разделены анимации удара (`swing`) и быстрого подбора/сбора (`interact`). Реализованы новые типы анимаций `hand_pickup` и `item_pickup`.
   - **Automatic Orientation & PCA**: Система автоматически выравнивает предметы вертикально на основе анализа текстуры.
 - **Advanced Entity Interpolation**: Внедрена поддержка `prevPosition` и `prevRotation` для всех сущностей, обеспечивающая плавность 144Hz+.
 - **Dynamic VoxelShape Highlighting**: Обводка блока строится на основе его реального коллайдера (AABB), поддерживая сложные формы (ступени, плиты).
-- **Hytale-style Hit-based Block Breaking (v2.1)**:
+- **Hytale-style Hit-based Block Breaking**:
     - **Weak Spot System**: Реализованы процедурные точки попадания для деревянных блоков.
     - **Progressive Chipping**: Удачные удары оставляют визуальные "шрамы" на поверхности блока.
-- **Universal In-World Crafting API (v2)**: Реализован интерфейс `ICraftingSurface` (например, пень `StumpBlockEntity`). Поддержка крафта и обтёсывания (Napping) прямо в мире без GUI.
+- **Universal In-World Crafting API**: Реализован интерфейс `ICraftingSurface` (например, пень `StumpBlockEntity`). Поддержка крафта и обтёсывания (Napping) прямо в мире без GUI.
 - **Industrial Tier 1 Blocks**: Реализована базовая система передачи энергии (`IEnergyStorage`) с поддержкой генераторов (`GeneratorBlockEntity`), батарей, ламп и передающих кабелей (`CableBlockEntity`).
 - **Entity AI & Global Noise**: Внедрена система глобального шума. Реализован базовый `ScoutEntity` с простейшим ИИ (`AIState`: WANDER, SEARCH, CHASE), реагирующий на шум игрока.
 - **Survivor's Tablet (Journal System)**: Модульная система обучения с современным карточным UI и поддержкой динамических рецептов.
 - **Modular Inventory System v4**: Полный переход на Data-Driven GUI, абстракцию хранилищ (`IInventory`) и CSS-подобную систему верстки.
-- **Animation Studio (v2.1 Stable)**:
+- **Animation Studio**:
     - **Modular Architecture**: Полное разделение на `State`, `Renderer`, `InputHandler`, `UI` и `Exporter`.
     - **Clean FK Core**: Полностью удалена старая нестабильная реализация IK. Редактор переведен на чистую прямую кинематику (FK) для обеспечения стабильности и предсказуемости анимаций.
     - **Synchronous 3D Gizmos**: Реализованы стрелки перемещения и кольца вращения (Pitch, Yaw, Roll) с поддержкой handle-offset.
@@ -319,14 +332,14 @@
 - **Modular UI Renderer (Refactoring)**:
   - Громоздкий `UIRenderer` (~800 строк) разделен на 5 специализированных суб-рендереров: `UIPrimitives`, `SlotRenderer`, `HUDRenderer`, `InventoryScreenRenderer` и `MenuRenderer`.
   - Улучшена архитектура и тестируемость UI-кода, `UIRenderer` теперь работает как Facade.
-- **Texture Array Graphics Engine (v4.0)**: Полное устранение мерцания текстур через переход на `GL_TEXTURE_2D_ARRAY`.
-- **RPG System Core (v1.1)**:
+- **Texture Array Graphics Engine**: Полное устранение мерцания текстур через переход на `GL_TEXTURE_2D_ARRAY`.
+- **RPG System Core**:
   - **Data-Driven Stats**: Все характеристики (Сила удара, Эргономика, Пробитие и т.д.) вынесены в JSON-регистры.
   - **Affix Engine**: Система динамических аффиксов с поддержкой гендерного склонения.
   - **Expanded Affix Pool**: Добавлены новые аффиксы (Легкий, Зазубренный, Тактический, Укрепленный, Зверский, Сбалансированный) для разнообразия дропа.
   - **Rarity System**: Редкость предметов напрямую влияет на количество слотов аффиксов и визуализацию.
   - **Lootbox Mechanics**: Реализовано открытие кейсов по удержанию ПКМ с прогресс-баром и динамическим дропом.
-- **Data-Driven HUD & UI (v1.0)**:
+- **Data-Driven HUD & UI**:
   - **HUD JSON Configuration**: Параметры Голода, Стамины, Шума и Названий предметов полностью вынесены в `hud.json`.
   - **Dynamic Font Scaling**: Реализовано автоматическое уменьшение шрифта для длинных названий предметов (чтобы они не вылезали за границы HUD).
   - **Smart Tooltips**: Сборка тултипов с переносом строк (max 280px) и цветовой индикацией разницы статов (зеленый/красный).

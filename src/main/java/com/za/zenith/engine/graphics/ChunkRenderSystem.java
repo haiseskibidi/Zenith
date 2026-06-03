@@ -21,6 +21,7 @@ public class ChunkRenderSystem {
     private final MeshPool meshPool;
     private final MultiDrawBatch[] opaqueBatches = new MultiDrawBatch[2];
     private final MultiDrawBatch[] translucentBatches = new MultiDrawBatch[2];
+    private final MultiDrawBatch[] waterBatches = new MultiDrawBatch[2];
     
     private final Map<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>> pendingUpdates = new ConcurrentHashMap<>();
     private final com.za.zenith.utils.PriorityExecutorService meshExecutor;
@@ -82,6 +83,8 @@ public class ChunkRenderSystem {
         this.opaqueBatches[1] = new MultiDrawBatch(meshPool, 1);
         this.translucentBatches[0] = new MultiDrawBatch(meshPool, 0);
         this.translucentBatches[1] = new MultiDrawBatch(meshPool, 1);
+        this.waterBatches[0] = new MultiDrawBatch(meshPool, 0);
+        this.waterBatches[1] = new MultiDrawBatch(meshPool, 1);
         
         this.meshExecutor = new com.za.zenith.utils.PriorityExecutorService(
             Math.min(2, Math.max(1, Runtime.getRuntime().availableProcessors() / 2)),
@@ -271,8 +274,9 @@ public class ChunkRenderSystem {
     private boolean isSectionMeshValid(ChunkMeshGenerator.ChunkMeshResult result, int secIdx, int poolVer) {
         Mesh mO = result.opaqueSections()[secIdx];
         Mesh mT = result.translucentSections()[secIdx];
-        if (mO != null || mT != null) {
-            Mesh valid = (mO != null) ? mO : mT;
+        Mesh mW = result.waterSections()[secIdx];
+        if (mO != null || mT != null || mW != null) {
+            Mesh valid = (mO != null) ? mO : ((mT != null) ? mT : mW);
             if (valid.getPool() == null) return true;
             int meshVer = valid.getPoolVersion();
             return meshVer == poolVer || meshVer == poolVer - 1;
@@ -446,6 +450,28 @@ public class ChunkRenderSystem {
         batches[1].render();
     }
 
+    public void renderWater(SceneState state, Shader shader) {
+        waterBatches[0].reset();
+        waterBatches[1].reset();
+        
+        int count = visibleSectionsCount;
+        for (int i = count - 1; i >= 0; i--) {
+            int idx = sortIndices[i];
+            Chunk chunk = visibleChunks[idx];
+            int secIdx = visibleSectionIndices[idx];
+            ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
+            if (res == null) continue;
+            Mesh m = res.waterSections()[secIdx];
+            if (m == null) continue;
+            
+            int bIdx = m.getPoolVersion() % 2;
+            addSectionToSpecificBatch(chunk, secIdx, m, waterBatches[bIdx], shader, res.spawnTime());
+        }
+        
+        waterBatches[0].render();
+        waterBatches[1].render();
+    }
+
     private void addSectionToSpecificBatch(Chunk chunk, int secIdx, Mesh m, MultiDrawBatch batch, Shader shader, float spawnTime) {
         if (m.getPool() != null) {
             batch.addMesh(m, chunk.getPosition().x() * 16, 0, chunk.getPosition().z() * 16, spawnTime);
@@ -479,6 +505,8 @@ public class ChunkRenderSystem {
         opaqueBatches[1].cleanup();
         translucentBatches[0].cleanup();
         translucentBatches[1].cleanup();
+        waterBatches[0].cleanup();
+        waterBatches[1].cleanup();
         com.za.zenith.utils.NioBufferPool.clearPools();
     }
 

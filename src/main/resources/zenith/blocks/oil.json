@@ -1,10 +1,10 @@
 {
-  "identifier": "zenith:water",
-  "translationKey": "block.zenith.water",
+  "identifier": "zenith:oil",
+  "translationKey": "block.zenith.oil",
   "solid": false,
   "transparent": true,
   "translucent": true,
   "replaceable": true,
-  "fluid_type": "water",
+  "fluid_type": "oil",
   "hardness": -1.0
 }

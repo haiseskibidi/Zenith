@@ -92,6 +92,8 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
     private boolean solid;
     private boolean transparent;
     private boolean translucent;
+    @SerializedName("fluid_type")
+    private String fluidType = null;
     private float hardness = 1.0f; // Default hardness
     private float wetnessFactor = 0.5f; // How shiny the block gets when wet (0.0 = absorbs, 1.0 = glossy)
     private String requiredTool = "none"; // pickaxe, shovel, axe, crowbar, knife
@@ -728,6 +730,28 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
      */
     public boolean onBlockBreak(com.za.zenith.world.World world, BlockPos pos, Block block, com.za.zenith.entities.Player player) {
         return true;
+    }
+
+    public boolean isFluid() {
+        return fluidType != null && !fluidType.equalsIgnoreCase("none");
+    }
+
+    public String getFluidType() {
+        return fluidType;
+    }
+
+    public void setFluidType(String fluidType) {
+        this.fluidType = fluidType;
+    }
+
+    public int getFluidIndex() {
+        if (fluidType == null) return 0;
+        return switch (fluidType.toLowerCase()) {
+            case "water" -> 1;
+            case "oil" -> 2;
+            case "lava" -> 3;
+            default -> 0;
+        };
     }
 }
 

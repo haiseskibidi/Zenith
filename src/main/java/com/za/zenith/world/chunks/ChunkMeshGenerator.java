@@ -27,10 +27,11 @@ public class ChunkMeshGenerator {
     };
     private static final int[] FACE_INDICES = {0,1,2, 2,3,0};
     
-    public record ChunkMeshResult(long version, Mesh[] opaqueSections, Mesh[] translucentSections, float spawnTime) {
+    public record ChunkMeshResult(long version, Mesh[] opaqueSections, Mesh[] translucentSections, Mesh[] waterSections, float spawnTime) {
         public void cleanup() {
             if (opaqueSections != null) for (Mesh m : opaqueSections) if (m != null) m.cleanup();
             if (translucentSections != null) for (Mesh m : translucentSections) if (m != null) m.cleanup();
+            if (waterSections != null) for (Mesh m : waterSections) if (m != null) m.cleanup();
         }
     }
 
@@ -48,20 +49,23 @@ public class ChunkMeshGenerator {
         }
     }
 
-    public record RawChunkMeshResult(RawMeshData[] opaque, RawMeshData[] translucent, long version, float firstSpawnTime, long[] visibilityMasks) {
+    public record RawChunkMeshResult(RawMeshData[] opaque, RawMeshData[] translucent, RawMeshData[] water, long version, float firstSpawnTime, long[] visibilityMasks) {
         public ChunkMeshResult upload(MeshPool pool) {
             Mesh[] opaqueMeshes = new Mesh[Chunk.NUM_SECTIONS];
             Mesh[] translucentMeshes = new Mesh[Chunk.NUM_SECTIONS];
+            Mesh[] waterMeshes = new Mesh[Chunk.NUM_SECTIONS];
             for (int i = 0; i < Chunk.NUM_SECTIONS; i++) {
                 if (opaque != null && opaque[i] != null) opaqueMeshes[i] = opaque[i].createMesh(pool);
                 if (translucent != null && translucent[i] != null) translucentMeshes[i] = translucent[i].createMesh(pool);
+                if (water != null && water[i] != null) waterMeshes[i] = water[i].createMesh(pool);
             }
-            return new ChunkMeshResult(version, opaqueMeshes, translucentMeshes, firstSpawnTime);
+            return new ChunkMeshResult(version, opaqueMeshes, translucentMeshes, waterMeshes, firstSpawnTime);
         }
 
         public void cleanup() {
             if (opaque != null) for (RawMeshData r : opaque) if (r != null) r.cleanup();
             if (translucent != null) for (RawMeshData r : translucent) if (r != null) r.cleanup();
+            if (water != null) for (RawMeshData r : water) if (r != null) r.cleanup();
         }
     }
 
@@ -463,6 +467,7 @@ public class ChunkMeshGenerator {
 
     private static final ThreadLocal<MeshData> threadOpaque = ThreadLocal.withInitial(() -> new MeshData(131072));
     private static final ThreadLocal<MeshData> threadTranslucent = ThreadLocal.withInitial(() -> new MeshData(32768));
+    private static final ThreadLocal<MeshData> threadWater = ThreadLocal.withInitial(() -> new MeshData(32768));
 
     public static Mesh generateSingleBlockMesh(Block block, DynamicTextureAtlas atlas, World world, BlockPos pos) {
         MeshData data = new MeshData(512);
@@ -508,7 +513,9 @@ public class ChunkMeshGenerator {
             };
             for (int face = 0; face < 6; face++) {
                 float faceBlockType = (float)block.getType();
-                if (isTranslucent) {
+                if (def.isFluid()) {
+                    faceBlockType = -(faceBlockType + 3000.0f + (def.getFluidIndex() - 1) * 1000.0f);
+                } else if (isTranslucent) {
                     faceBlockType = -(faceBlockType + 2000.0f);
                 } else if (def.isFaceTinted(face)) {
                     faceBlockType = -(faceBlockType + 1.0f);
@@ -614,9 +621,11 @@ public class ChunkMeshGenerator {
     public static RawChunkMeshResult generateRawMesh(Chunk chunk, World world, DynamicTextureAtlas atlas) {
         MeshData chunkOpaque = threadOpaque.get();
         MeshData chunkTranslucent = threadTranslucent.get();
+        MeshData chunkWater = threadWater.get();
         
         RawMeshData[] opaqueResults = new RawMeshData[Chunk.NUM_SECTIONS];
         RawMeshData[] translucentResults = new RawMeshData[Chunk.NUM_SECTIONS];
+        RawMeshData[] waterResults = new RawMeshData[Chunk.NUM_SECTIONS];
         long[] visibilityMasks = new long[Chunk.NUM_SECTIONS];
 
         ChunkNeighborhood neighborhood = new ChunkNeighborhood(world, chunk.getPosition().x(), chunk.getPosition().z());
@@ -647,6 +656,7 @@ public class ChunkMeshGenerator {
 
             chunkOpaque.clear();
             chunkTranslucent.clear();
+            chunkWater.clear();
 
             int startY = secIdx * ChunkSection.SECTION_SIZE;
             for (int x = 0; x < Chunk.CHUNK_SIZE; x++) {
@@ -676,9 +686,10 @@ public class ChunkMeshGenerator {
                         VoxelShape shape = block.getShape();
                         if (shape == null) continue;
 
+                        boolean isWater = def.isFluid();
                         boolean isLeaves = def.is(BlockDefinition.FLAG_LEAVES);
                         boolean isTranslucent = def.is(BlockDefinition.FLAG_TRANSLUCENT);
-                        MeshData currentTarget = isTranslucent ? chunkTranslucent : chunkOpaque;
+                        MeshData currentTarget = isWater ? chunkWater : (isTranslucent ? chunkTranslucent : chunkOpaque);
 
                         int worldX = cx * Chunk.CHUNK_SIZE + x;
                         int worldY = y;
@@ -686,14 +697,31 @@ public class ChunkMeshGenerator {
 
                         for (AABB box : shape.getBoxes()) {
                             Vector3f min = box.getMin(), max = box.getMax();
-                            float[][] facePositions = new float[][]{
-                                {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, max.y, max.z,  min.x, max.y, max.z},
-                                {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, max.y, min.z,  max.x, max.y, min.z},
-                                {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, max.y, min.z,  max.x, max.y, max.z},
-                                {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, max.y, max.z,  min.x, max.y, min.z},
-                                {min.x, max.y, max.z,  max.x, max.y, max.z,  max.x, max.y, min.z,  min.x, max.y, min.z},
-                                {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}
-                            };
+                            float[][] facePositions;
+                            if (isWater) {
+                                float h0 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 0, 1, blockType);
+                                float h1 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 1, 1, blockType);
+                                float h2 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 1, 0, blockType);
+                                float h3 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 0, 0, blockType);
+                                
+                                facePositions = new float[][]{
+                                    {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, min.y + h1, max.z,  min.x, min.y + h0, max.z}, // Face 0 (North, +Z)
+                                    {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, min.y + h3, min.z,  max.x, min.y + h2, min.z}, // Face 1 (South, -Z)
+                                    {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, min.y + h2, min.z,  max.x, min.y + h1, max.z}, // Face 2 (East, +X)
+                                    {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, min.y + h0, max.z,  min.x, min.y + h3, min.z}, // Face 3 (West, -X)
+                                    {min.x, min.y + h0, max.z,  max.x, min.y + h1, max.z,  max.x, min.y + h2, min.z,  min.x, min.y + h3, min.z}, // Face 4 (Up, +Y)
+                                    {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}  // Face 5 (Down, -Y)
+                                };
+                            } else {
+                                facePositions = new float[][]{
+                                    {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, max.y, max.z,  min.x, max.y, max.z},
+                                    {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, max.y, min.z,  max.x, max.y, min.z},
+                                    {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, max.y, min.z,  max.x, max.y, max.z},
+                                    {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, max.y, max.z,  min.x, max.y, min.z},
+                                    {min.x, max.y, max.z,  max.x, max.y, max.z,  max.x, max.y, min.z,  min.x, max.y, min.z},
+                                    {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}
+                                };
+                            }
                             
                             for (int face = 0; face < 6; face++) {
                                 Direction dir = Direction.values()[face];
@@ -721,7 +749,7 @@ public class ChunkMeshGenerator {
                                     drawFace = true;
                                 } else if (nType == 0) {
                                     drawFace = true;
-                                } else if (isTranslucent && nType == blockType) {
+                                } else if ((isTranslucent || isWater) && nType == blockType) {
                                     drawFace = false;
                                 } else if (neighborDef != null && neighborDef.is(BlockDefinition.FLAG_LEAVES)) {
                                     drawFace = !isLeaves || (nType != blockType);
@@ -742,7 +770,9 @@ public class ChunkMeshGenerator {
 
                                 if (drawFace) {
                                     float neighborMask = 0;
-                                    if (isTranslucent) {
+                                    if (isWater) {
+                                        neighborMask = getWaterFlowDirection(neighborhood, worldX, worldY, worldZ, blockType);
+                                    } else if (isTranslucent) {
                                         for (int i = 0; i < 4; i++) {
                                             int rawN = neighborhood.getRawBlockData(worldX + faceNeighbors[face][i][0], worldY + faceNeighbors[face][i][1], worldZ + faceNeighbors[face][i][2]);
                                             BlockDefinition nDef = BlockRegistry.getBlock(rawN >> 8);
@@ -754,7 +784,9 @@ public class ChunkMeshGenerator {
                                     
                                     float faceBlockType = (float)blockType;
                                     float overlayLayer = -1.0f;
-                                    if (isTranslucent) {
+                                    if (isWater) {
+                                        faceBlockType = -(faceBlockType + 3000.0f + (def.getFluidIndex() - 1) * 1000.0f);
+                                    } else if (isTranslucent) {
                                         faceBlockType = -(faceBlockType + 2000.0f);
                                     } else if (def != null && def.isFaceTinted(face)) {
                                         faceBlockType = -(faceBlockType + 1.0f);
@@ -781,9 +813,10 @@ public class ChunkMeshGenerator {
             }
             opaqueResults[secIdx] = chunkOpaque.buildRaw();
             translucentResults[secIdx] = chunkTranslucent.buildRaw();
+            waterResults[secIdx] = chunkWater.buildRaw();
         }
 
-        return new RawChunkMeshResult(opaqueResults, translucentResults, version, chunk.getFirstSpawnTime(), visibilityMasks);
+        return new RawChunkMeshResult(opaqueResults, translucentResults, waterResults, version, chunk.getFirstSpawnTime(), visibilityMasks);
     }
 
     private static void addCrossPlane(MeshData data, float ox, float oy, float oz, float x0, float z0, float x1, float z1, float[] uvs, float blockTypeId, float overlayLayer, float weightOffset, ChunkNeighborhood neighborhood, int wx, int wy, int wz) {
@@ -832,5 +865,106 @@ public class ChunkMeshGenerator {
 
     private static void addCrossPlane(MeshData data, float ox, float oy, float oz, float x0, float z0, float x1, float z1, float[] uvs, float blockTypeId, float overlayLayer, float weightOffset) {
         addCrossPlane(data, ox, oy, oz, x0, z0, x1, z1, uvs, blockTypeId, overlayLayer, weightOffset, null, 0, 0, 0);
+    }
+
+    private static float getCornerWaterHeight(ChunkNeighborhood neighborhood, int wx, int wy, int wz, int dx, int dz, int waterId) {
+        int xOffset = (dx == 0) ? -1 : 1;
+        int zOffset = (dz == 0) ? -1 : 1;
+        
+        float sumHeight = 0;
+        int count = 0;
+        boolean hasSourceOrFalling = false;
+        
+        // 1. Сначала сканируем на наличие источника (0) или падающего столба (8)
+        for (int ox = 0; ox <= 1; ox++) {
+            for (int oz = 0; oz <= 1; oz++) {
+                int bx = wx + (ox == 0 ? 0 : xOffset);
+                int bz = wz + (oz == 0 ? 0 : zOffset);
+                
+                int rawAbove = neighborhood.getRawBlockData(bx, wy + 1, bz);
+                if ((rawAbove >> 8) == waterId) {
+                    return 1.0f; // Вода сверху делает угол полным
+                }
+                
+                int raw = neighborhood.getRawBlockData(bx, wy, bz);
+                int type = raw >> 8;
+                if (type == waterId) {
+                    int level = raw & 0xFF;
+                    if (level == 0 || level == 8) {
+                        hasSourceOrFalling = true;
+                    }
+                }
+            }
+        }
+        
+        // 2. Рассчитываем высоту угла
+        for (int ox = 0; ox <= 1; ox++) {
+            for (int oz = 0; oz <= 1; oz++) {
+                int bx = wx + (ox == 0 ? 0 : xOffset);
+                int bz = wz + (oz == 0 ? 0 : zOffset);
+                
+                int raw = neighborhood.getRawBlockData(bx, wy, bz);
+                int type = raw >> 8;
+                if (type == waterId) {
+                    int level = raw & 0xFF;
+                    if (level == 8) {
+                        sumHeight += 1.0f;
+                    } else {
+                        // Ограничиваем максимальную высоту источника (level 0) до 0.875f (14/16 как в Minecraft)
+                        sumHeight += ((8 - level) / 8.0f) * 0.875f;
+                    }
+                    count++;
+                } else if (!hasSourceOrFalling) {
+                    // Соседний воксель - не вода. Проверяем, является ли он обрывом (только если нет источника/падающей воды)
+                    com.za.zenith.world.blocks.BlockDefinition neighborDef = BlockRegistry.getBlock(type);
+                    if (neighborDef.isReplaceable()) {
+                        int rawBelow = neighborhood.getRawBlockData(bx, wy - 1, bz);
+                        int typeBelow = rawBelow >> 8;
+                        com.za.zenith.world.blocks.BlockDefinition belowDef = BlockRegistry.getBlock(typeBelow);
+                        if (belowDef.isReplaceable()) {
+                            // Это обрыв! Приписываем ему высоту 0.0f
+                            sumHeight += 0.0f;
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (count == 0) return 0.875f;
+        return sumHeight / count;
+    }
+
+    private static float getWaterFlowDirection(ChunkNeighborhood neighborhood, int wx, int wy, int wz, int fluidId) {
+        int currentLevel = getWaterLevel(neighborhood, wx, wy, wz, fluidId);
+        if (currentLevel < 0) return 15.0f;
+        
+        int levelW = getWaterLevel(neighborhood, wx - 1, wy, wz, fluidId);
+        int levelE = getWaterLevel(neighborhood, wx + 1, wy, wz, fluidId);
+        int levelN = getWaterLevel(neighborhood, wx, wy, wz - 1, fluidId);
+        int levelS = getWaterLevel(neighborhood, wx, wy, wz + 1, fluidId);
+        
+        float dx = 0;
+        float dz = 0;
+        
+        if (levelW >= 0 && levelW != 8) dx += (currentLevel - levelW);
+        if (levelE >= 0 && levelE != 8) dx -= (currentLevel - levelE);
+        if (levelN >= 0 && levelN != 8) dz += (currentLevel - levelN);
+        if (levelS >= 0 && levelS != 8) dz -= (currentLevel - levelS);
+        
+        if (dx == 0 && dz == 0) return 15.0f;
+        
+        double angle = Math.atan2(dz, dx);
+        if (angle < 0) angle += 2.0 * Math.PI;
+        
+        int quantized = (int) Math.round((angle / (2.0 * Math.PI)) * 16.0) % 16;
+        return (float) quantized;
+    }
+
+    private static int getWaterLevel(ChunkNeighborhood neighborhood, int x, int y, int z, int waterId) {
+        int raw = neighborhood.getRawBlockData(x, y, z);
+        int type = raw >> 8;
+        if (type != waterId) return -1;
+        return raw & 0xFF;
     }
 }

@@ -99,7 +99,7 @@ public class PostProcessor {
         memFree(indexBuffer);
     }
     
-    public void processFXAA(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor, float hazeDensity) {
+    public void processFXAA(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor, float hazeDensity, boolean isUnderwater, float time) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         
@@ -108,6 +108,8 @@ public class PostProcessor {
         fxaaShader.setInt("depthTexture", 1);
         fxaaShader.setVector3f("uSkyColor", skyColor);
         fxaaShader.setFloat("uHazeDensity", hazeDensity);
+        fxaaShader.setBoolean("uIsUnderwater", isUnderwater);
+        fxaaShader.setFloat("uUnderwaterTime", time);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorTexture);
@@ -125,7 +127,7 @@ public class PostProcessor {
         glEnable(GL_CULL_FACE);
     }
     
-    public void processPassthrough(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor, float hazeDensity) {
+    public void processPassthrough(int colorTexture, int depthTexture, int screenWidth, int screenHeight, org.joml.Vector3f skyColor, float hazeDensity, boolean isUnderwater, float time) {
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         
@@ -133,6 +135,8 @@ public class PostProcessor {
         passthroughShader.setVector2f("screenSize", new Vector2f(screenWidth, screenHeight));
         passthroughShader.setVector3f("uSkyColor", skyColor);
         passthroughShader.setFloat("uHazeDensity", hazeDensity);
+        passthroughShader.setBoolean("uIsUnderwater", isUnderwater);
+        passthroughShader.setFloat("uUnderwaterTime", time);
         
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorTexture);

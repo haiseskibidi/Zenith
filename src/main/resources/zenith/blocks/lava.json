@@ -1,0 +1,11 @@
+{
+  "identifier": "zenith:lava",
+  "translationKey": "block.zenith.lava",
+  "solid": false,
+  "transparent": true,
+  "translucent": true,
+  "replaceable": true,
+  "fluid_type": "lava",
+  "emission": 15,
+  "hardness": -1.0
+}

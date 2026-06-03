@@ -82,6 +82,9 @@ public class Raycast {
         Block block = world.getBlock(x, y, z);
         if (block.isAir()) return null;
 
+        com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+        if (def.isFluid()) return null;
+
         VoxelShape shape = block.getShape(world, new BlockPos(x, y, z));
         if (shape == null) return null;
 

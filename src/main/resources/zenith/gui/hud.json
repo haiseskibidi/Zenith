@@ -28,6 +28,19 @@
       "color": [0.9, 0.1, 0.1, 1.0],
       "backgroundColor": [0.0, 0.0, 0.0, 0.6]
     },
+    "oxygen": {
+      "type": "bar",
+      "anchor": "bottom_center",
+      "alignX": "right",
+      "alignY": "bottom",
+      "x": "-210px",
+      "y": "-70px",
+      "width": 130,
+      "height": 5,
+      "segments": 10,
+      "color": [0.0, 0.7, 1.0, 1.0],
+      "backgroundColor": [0.0, 0.0, 0.0, 0.6]
+    },
     "hunger": {
       "type": "bar",
       "anchor": "bottom_center",

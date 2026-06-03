@@ -39,6 +39,8 @@ public abstract class Entity {
         components.put(component.getClass(), component);
     }
 
+    public boolean horizontalCollision = false;
+
     public Entity(Vector3f position, float width, float height) {
         this.position = new Vector3f(position);
         this.prevPosition = new Vector3f(position);
@@ -122,13 +124,15 @@ public abstract class Entity {
         float originalDx = dx;
         float originalDy = dy;
         float originalDz = dz;
+        float startX = position.x;
+        float startZ = position.z;
         
         // 1. Initialize local ChunkCache covering the entire motion Broadphase bounding box
         AABB currentBox = boundingBox.offset(position);
         float minXF = Math.min(currentBox.minX(), currentBox.minX() + dx);
         float maxXF = Math.max(currentBox.maxX(), currentBox.maxX() + dx);
         float minYF = Math.min(currentBox.minY(), currentBox.minY() + dy) - 1.0f; // buffer for unstuck
-        float maxYF = Math.max(currentBox.maxY(), currentBox.maxY() + dy) + 1.0f;
+        float maxYF = Math.max(currentBox.maxY(), currentBox.maxY() + dy) + 3.0f; // +3 for water step-up headroom checks
         float minZF = Math.min(currentBox.minZ(), currentBox.minZ() + dz);
         float maxZF = Math.max(currentBox.maxZ(), currentBox.maxZ() + dz);
 
@@ -256,6 +260,9 @@ public abstract class Entity {
             }
             position.z += dz;
         }
+
+        this.horizontalCollision = (Math.abs(originalDx) > 0.00001f && Math.abs(dx) < Math.abs(originalDx) * 0.9f) ||
+                                   (Math.abs(originalDz) > 0.00001f && Math.abs(dz) < Math.abs(originalDz) * 0.9f);
     }
 
     private boolean isCollidingAt(com.za.zenith.world.chunks.ChunkCache cache, AABB box) {
@@ -282,6 +289,71 @@ public abstract class Entity {
             }
         }
         return false;
+    }
+
+    public float getSubmersionRatio(World world) {
+        if (world == null) return 0.0f;
+        
+        int px = (int) Math.floor(position.x);
+        int pz = (int) Math.floor(position.z);
+        float height = boundingBox.maxY() - boundingBox.minY();
+        
+        // Ищем верхнюю границу воды в колонке вокруг сущности
+        float waterY = -999.0f;
+        int startY = (int) Math.floor(position.y + height);
+        int endY = (int) Math.floor(position.y - 0.5f);
+        
+        for (int y = startY; y >= endY; y--) {
+            if (y < 0 || y >= 256) continue;
+            Block b = world.getBlock(px, y, pz);
+            com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType());
+            if (def != null && def.isFluid()) {
+                int level = b.getMetadata() & 0xFF;
+                float fluidHeight = (level == 8 || level == 0) ? 0.875f : (1.0f - (level / 8.0f));
+                waterY = y + fluidHeight;
+                break;
+            }
+        }
+        
+        if (waterY == -999.0f) {
+            return 0.0f;
+        }
+        
+        float depth = waterY - position.y;
+        if (depth <= 0.0f) return 0.0f;
+        return Math.max(0.0f, Math.min(1.0f, depth / height));
+    }
+
+    public boolean isInWater() {
+        World w = com.za.zenith.engine.core.GameLoop.getInstance().getWorld();
+        return getSubmersionRatio(w) > 0.0f;
+    }
+
+    public Block getFluidBlock() {
+        World w = com.za.zenith.engine.core.GameLoop.getInstance().getWorld();
+        if (w == null) return null;
+        
+        float height = boundingBox.maxY() - boundingBox.minY();
+        // Ищем блок жидкости снизу вверх
+        float[] heights = { height * 0.1f, height * 0.5f, height * 0.9f };
+        for (float h : heights) {
+            int px = (int) Math.floor(position.x);
+            int py = (int) Math.floor(position.y + h);
+            int pz = (int) Math.floor(position.z);
+            if (py >= 0 && py < 256) {
+                Block b = w.getBlock(px, py, pz);
+                if (com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType()).isFluid()) {
+                    return b;
+                }
+            }
+        }
+        
+        // Фолбек
+        int px = (int) Math.floor(position.x);
+        int py = (int) Math.floor(position.y + 0.5f);
+        int pz = (int) Math.floor(position.z);
+        if (py < 0 || py >= 256) return null;
+        return w.getBlock(px, py, pz);
     }
 
     public Vector3f getPosition() { return position; }

@@ -169,10 +169,10 @@ public static Block grass_block; // Автоматически заполнит�
 
 ## 4. Графика и Окрашивание
 
-### 4.1. Unified Coloring System (v2.0)
+### 4.1. Unified Coloring System
 ... (текст из прошлого шага) ...
 
-### 4.2. Foliage Animation (v1.0)
+### 4.2. Foliage Animation
 Механика процедурного покачивания растительности на ветру.
 
 - **JSON Property**: `"sway": true` включает анимацию для блока. По умолчанию `false`.

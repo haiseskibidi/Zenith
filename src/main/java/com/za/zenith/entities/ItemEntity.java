@@ -109,8 +109,14 @@ public class ItemEntity extends Entity {
             }
         }
 
+        boolean inWater = isInWater();
+        if (inWater) {
+            isSleeping = false;
+            sleepTimer = 0;
+        }
+
         // 2. PHYSICS SLEEPING LOGIC
-        if (onGround && velocity.lengthSquared() < 0.001f && !isBeingAttracted) {
+        if (onGround && velocity.lengthSquared() < 0.001f && !isBeingAttracted && !inWater) {
             sleepTimer += deltaTime;
             if (sleepTimer > 2.0f) {
                 isSleeping = true;
@@ -123,15 +129,47 @@ public class ItemEntity extends Entity {
 
         float gravityMultiplier = stack.getItem().getWeight();
         if (!flying && !isBeingAttracted) {
-            velocity.y = Math.max(velocity.y + GRAVITY * gravityMultiplier * deltaTime, TERMINAL_VELOCITY);
+            if (inWater) {
+                // В воде предметы медленно всплывают
+                velocity.y = Math.min(velocity.y + 2.0f * deltaTime, 0.8f);
+
+                // Применяем снос течением
+                com.za.zenith.world.blocks.Block b = getFluidBlock();
+                if (b != null) {
+                    com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType());
+                    float flowForce = 1.5f;
+                    if (def != null && def.isFluid()) {
+                        String fluidType = def.getFluidType();
+                        if ("oil".equals(fluidType) || "lava".equals(fluidType)) {
+                            flowForce = 0.5f;
+                        }
+                    }
+                    Vector3f flowVec = world.getInterpolatedFluidFlowVector(position.x, position.y + 0.5f, position.z, b.getType());
+
+                    velocity.x += flowVec.x * flowForce * deltaTime;
+                    velocity.z += flowVec.z * flowForce * deltaTime;
+                    if (flowVec.y < 0) {
+                        velocity.y = Math.max(velocity.y + flowVec.y * flowForce * deltaTime, -3.0f);
+                    }
+                }
+            } else {
+                velocity.y = Math.max(velocity.y + GRAVITY * gravityMultiplier * deltaTime, TERMINAL_VELOCITY);
+            }
         }
         
         move(world, velocity.x * deltaTime, velocity.y * deltaTime, velocity.z * deltaTime);
 
-        float friction = isBeingAttracted ? 0.85f : (onGround ? 0.8f : 0.98f);
-        velocity.mul(friction);
+        if (inWater && !isBeingAttracted) {
+            float fluidDrag = 1.0f;
+            velocity.x *= (1.0f - fluidDrag * deltaTime);
+            velocity.z *= (1.0f - fluidDrag * deltaTime);
+            velocity.y *= (1.0f - fluidDrag * deltaTime);
+        } else {
+            float friction = isBeingAttracted ? 0.85f : (onGround ? 0.8f : 0.98f);
+            velocity.mul(friction);
+        }
         
-        if (onGround && !isBeingAttracted) {
+        if ((onGround || inWater) && !isBeingAttracted) {
             rotation.x = lerpAngle(rotation.x, 0, deltaTime * 5.0f);
             rotation.z = lerpAngle(rotation.z, 0, deltaTime * 5.0f);
             angularVelocity.mul(0.8f);

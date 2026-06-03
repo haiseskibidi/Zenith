@@ -2,6 +2,7 @@ package com.za.zenith.entities;
 
 import com.za.zenith.engine.core.PlayerMode;
 import com.za.zenith.world.World;
+import com.za.zenith.world.blocks.Block;
 import com.za.zenith.entities.parkour.animation.AnimationRegistry;
 import com.za.zenith.entities.parkour.animation.AnimationProfile;
 import com.za.zenith.world.items.ItemStack;
@@ -24,6 +25,9 @@ public class Player extends LivingEntity {
     private float noiseLevel = 0.0f;
     private float continuousNoise = 0.0f;
     private boolean sneaking = false;
+    private float oxygen = 300.0f;
+    private static final float MAX_OXYGEN = 300.0f;
+    private float drownDamageTimer = 0.0f;
     private boolean moving = false;
     private boolean sprinting = false;
 
@@ -130,13 +134,72 @@ public class Player extends LivingEntity {
         // Physics and Movement handled by super.move() or manual logic here
         // Note: Player uses a lot of custom movement logic, but we still use applyGravity or manual gravity
         if (!flying) {
-            velocity.y = Math.max(velocity.y + GRAVITY * deltaTime, TERMINAL_VELOCITY);
+            float submersion = getSubmersionRatio(world);
+            if (submersion > 0.0f) {
+                // Плавное ослабление гравитации в зависимости от степени погружения
+                float fluidGravity = GRAVITY * (1.0f - submersion * 0.8f);
+                velocity.y = Math.max(velocity.y + fluidGravity * deltaTime, -4.0f);
+                
+                // Трение (сопротивление) воды гасит скорость
+                float fluidDrag = 0.8f * submersion;
+                velocity.x *= (1.0f - fluidDrag * deltaTime);
+                velocity.z *= (1.0f - fluidDrag * deltaTime);
+                velocity.y *= (1.0f - fluidDrag * deltaTime);
+
+                // Применяем снос течением
+                Block b = getFluidBlock();
+                if (b != null) {
+                    com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType());
+                    float flowForce = 1.4f;
+                    if (def != null && def.isFluid()) {
+                        String fluidType = def.getFluidType();
+                        if ("oil".equals(fluidType) || "lava".equals(fluidType)) {
+                            flowForce = 0.5f;
+                        }
+                    }
+                    Vector3f flowVec = world.getInterpolatedFluidFlowVector(position.x, position.y + 0.5f, position.z, b.getType());
+
+                    velocity.x += flowVec.x * flowForce * submersion * deltaTime;
+                    velocity.z += flowVec.z * flowForce * submersion * deltaTime;
+                    if (flowVec.y < 0) {
+                        velocity.y = Math.max(velocity.y + flowVec.y * flowForce * submersion * deltaTime * 2.0f, -6.0f);
+                    }
+                }
+            } else {
+                velocity.y = Math.max(velocity.y + GRAVITY * deltaTime, TERMINAL_VELOCITY);
+            }
         }
+        
         
         move(world, velocity.x * deltaTime, velocity.y * deltaTime, velocity.z * deltaTime);
 
         // Update RPG stats from equipment
         updateEquipmentStats();
+
+        // --- Плавный выход из воды (Water Exit / Wall Climb) ---
+        if (isInWater()) {
+            waterExitGraceTimer = 0.4f;
+        } else if (waterExitGraceTimer > 0.0f) {
+            waterExitGraceTimer -= deltaTime;
+        }
+
+        boolean exitingWater = waterExitGraceTimer > 0.0f;
+
+        if (exitingWater && horizontalCollision && moving) {
+            velocity.y = Math.max(velocity.y, 4.5f);
+            waterExitBoostTimer = 0.25f;
+        }
+
+        if (waterExitBoostTimer > 0.0f) {
+            waterExitBoostTimer -= deltaTime;
+            Vector3f lookDir = com.za.zenith.engine.core.GameLoop.getInstance().getCamera().getDirection();
+            lookDir.y = 0;
+            if (lookDir.lengthSquared() > 0.001f) {
+                lookDir.normalize();
+                velocity.x += lookDir.x * 20.0f * deltaTime;
+                velocity.z += lookDir.z * 20.0f * deltaTime;
+            }
+        }
 
         // Impulse Trigger: Landing (Moved from updateAnimations for physical accuracy)
         if (onGround && !wasOnGround && preUpdateVelocityY < -1.5f) {
@@ -155,14 +218,14 @@ public class Player extends LivingEntity {
         parkourHandler.update(this, deltaTime, world);
         updateThermalAndConditions(deltaTime, world);
         
-        boolean isMovingPhysically = onGround && moving && velocity.lengthSquared() > 0.0001f;
+        boolean isMovingPhysically = (onGround || isInWater()) && moving && velocity.lengthSquared() > 0.0001f;
         if (isMovingPhysically) moveLatchTimer = LATCH_DURATION;
         else moveLatchTimer = Math.max(0, moveLatchTimer - deltaTime);
         
         float alphaTarget = (moveLatchTimer > 0) ? 1.0f : 0.0f;
         movementAlpha += (alphaTarget - movementAlpha) * (sneaking ? 4.0f : 8.0f) * deltaTime;
 
-        String cN = sneaking ? "sneak" : (sprinting ? "sprint" : "walk");
+        String cN = sneaking ? "sneak" : ((sprinting && !isInWater()) ? "sprint" : "walk");
         AnimationProfile cp = animationRegistry.get(cN);
         AnimationProfile cip = animationRegistry.get(sneaking ? "sneak_idle" : "idle");
         
@@ -178,7 +241,30 @@ public class Player extends LivingEntity {
         
         float currentDuration = iDur + ( (wDur / speedFactor) - iDur) * movementAlpha;
         locomotionTimer = (locomotionTimer + deltaTime / currentDuration) % 1.0f;
+
+        // Oxygen & Drowning tick
+        float cameraY = position.y + currentEyeHeight;
+        com.za.zenith.world.blocks.Block eyeBlock = world.getBlock((int)Math.floor(position.x), (int)Math.floor(cameraY), (int)Math.floor(position.z));
+        com.za.zenith.world.blocks.BlockDefinition eyeDef = com.za.zenith.world.blocks.BlockRegistry.getBlock(eyeBlock.getType());
+        boolean isEyesSubmerged = eyeDef != null && eyeDef.isFluid();
+        
+        if (isEyesSubmerged && mode == com.za.zenith.engine.core.PlayerMode.SURVIVAL) {
+            oxygen = Math.max(0.0f, oxygen - 20.0f * deltaTime);
+            if (oxygen <= 0.0f) {
+                drownDamageTimer += deltaTime;
+                if (drownDamageTimer >= 1.0f) {
+                    takeDamage(1.0f);
+                    drownDamageTimer = 0.0f;
+                }
+            }
+        } else {
+            oxygen = Math.min(MAX_OXYGEN, oxygen + 150.0f * deltaTime);
+            drownDamageTimer = 0.0f;
+        }
     }
+
+    private float waterExitGraceTimer = 0.0f;
+    private float waterExitBoostTimer = 0.0f;
 
     public void updateAnimations(float deltaTime, World world) {
         // Clamp deltaTime to prevent explicit Euler lerp explosions (NaN) during lag spikes
@@ -214,8 +300,9 @@ public class Player extends LivingEntity {
 
         // 3. Profiles & Evaluation
         com.za.zenith.world.items.Item heldItem = inventory.getSelectedItem();
-        String cN = sneaking ? "sneak" : (sprinting ? "sprint" : "walk");
-        String iN = heldItem != null ? heldItem.getAnimation(sneaking ? "item_sneak" : (sprinting ? "item_sprint" : "item_walk")) : (sneaking ? "item_sneak" : (sprinting ? "item_sprint" : "item_walk"));
+        boolean inWater = isInWater();
+        String cN = sneaking ? "sneak" : ((sprinting && !inWater) ? "sprint" : "walk");
+        String iN = heldItem != null ? heldItem.getAnimation(sneaking ? "item_sneak" : ((sprinting && !inWater) ? "item_sprint" : "item_walk")) : (sneaking ? "item_sneak" : ((sprinting && !inWater) ? "item_sprint" : "item_walk"));
         String iiN = heldItem != null ? heldItem.getAnimation("item_idle") : "item_idle";
 
         AnimationProfile cp = animationRegistry.get(cN);
@@ -361,6 +448,23 @@ public class Player extends LivingEntity {
                     targetRoll += swingAnim.evaluate("camera_roll", itemSwingTimer, 1.0f);
                 }
             } else swinging = false;
+        }
+        if (isInWater()) {
+            float swimCycle = locomotionTimer * (float)Math.PI * 2.0f;
+            // Плавно наклоняем камеру вперед (имитирует горизонтальное тело пловца)
+            targetTilt += 0.12f * movementAlpha;
+            // Очень мягкое покачивание камеры влево-вправо (чтобы не укачивало)
+            targetRoll += (float)Math.cos(swimCycle) * 0.015f * movementAlpha;
+            // Мягкое опускание и подъем (вдох-выдох / фаза гребка)
+            tCamY += (float)Math.sin(swimCycle) * 0.02f * movementAlpha;
+            
+            // Покачивание рук в такт плаванию (плавные гребки)
+            tItY += (float)Math.sin(swimCycle) * 0.03f * movementAlpha;
+            tItX += (float)Math.cos(swimCycle) * 0.02f * movementAlpha;
+            
+            // Мягкие круговые вращения рук Pitch/Roll без резких заломов
+            tItP += 0.12f * movementAlpha + (float)Math.cos(swimCycle) * 0.04f * movementAlpha;
+            tItR += (float)Math.sin(swimCycle) * 0.03f * movementAlpha;
         }
 
         // 6. Final Sync
@@ -676,10 +780,10 @@ public class Player extends LivingEntity {
     public boolean isSwinging() { return swinging; }
     public boolean isMoving() { return moving; }
 
-    public boolean isInWater() {
-        com.za.zenith.world.blocks.Block b = com.za.zenith.engine.core.GameLoop.getInstance().getWorld().getBlock((int)Math.floor(position.x), (int)Math.floor(position.y + 0.5f), (int)Math.floor(position.z));
-        return com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType()).getIdentifier().getPath().contains("water");
-    }
+
+
+    public float getOxygen() { return oxygen; }
+    public float getMaxOxygen() { return MAX_OXYGEN; }
 
     public boolean isInRain() {
         return false;
@@ -809,7 +913,13 @@ public class Player extends LivingEntity {
             }
         }
     }
-    public void jump() { if (onGround || flying) { velocity.y = com.za.zenith.world.physics.PhysicsSettings.getInstance().jumpVelocity; onGround = false; performDiscreteAction(com.za.zenith.utils.Identifier.of("zenith:jump")); } }
+    public void jump() {
+        if (onGround || flying) {
+            velocity.y = com.za.zenith.world.physics.PhysicsSettings.getInstance().jumpVelocity;
+            onGround = false;
+            performDiscreteAction(com.za.zenith.utils.Identifier.of("zenith:jump"));
+        }
+    }
     public void addVelocity(float vx, float vy, float vz) { velocity.add(vx, vy, vz); }
     public void applyHorizontalAcceleration(float ax, float az, float maxSpeed) {
         velocity.x += ax; velocity.z += az;

@@ -67,6 +67,8 @@ public class Blocks {
     public static BlockDefinition FIRED_VESSEL;
     public static BlockDefinition CLAY;
     public static BlockDefinition WATER;
+    public static BlockDefinition OIL;
+    public static BlockDefinition LAVA;
     public static BlockDefinition SHORT_GRASS;
     public static BlockDefinition TALL_GRASS;
     public static BlockDefinition DIAMOND_ORE;

@@ -3,14 +3,34 @@ struct BlockInfo {
     float type;
     bool isTinted;
     bool isGlass;
+    bool isWater;
+    int fluidType; // 0 = none, 1 = water, 2 = oil, 3 = lava
 };
 
 BlockInfo decodeBlockInfo(float blockTypeAttr) {
     BlockInfo info;
     info.isTinted = false;
     info.isGlass = false;
+    info.isWater = false;
+    info.fluidType = 0;
     
-    if (blockTypeAttr < -1500.0) {
+    if (blockTypeAttr < -2500.0) {
+        if (blockTypeAttr > -3500.0) {
+            info.type = abs(blockTypeAttr) - 3000.0;
+            info.isWater = true;
+            info.fluidType = 1;
+        } else if (blockTypeAttr > -4500.0) {
+            info.type = abs(blockTypeAttr) - 4000.0;
+            info.fluidType = 2; // Oil
+        } else if (blockTypeAttr > -5500.0) {
+            info.type = abs(blockTypeAttr) - 5000.0;
+            info.fluidType = 3; // Lava
+        } else {
+            info.type = abs(blockTypeAttr) - 3000.0;
+            info.isWater = true;
+            info.fluidType = 1;
+        }
+    } else if (blockTypeAttr < -1500.0) {
         info.type = abs(blockTypeAttr) - 2000.0;
         info.isGlass = true;
     } else if (blockTypeAttr < -0.5) {

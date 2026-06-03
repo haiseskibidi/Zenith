@@ -26,14 +26,22 @@ vec3 getNormal(vec2 uv, float centerDepth) {
     return normalize(cross(v1, v2));
 }
 
+uniform float uUnderwaterTime;
+
 void main() {
-    vec4 texSample = texture(screenTexture, fragTexCoord);
+    vec2 tc = fragTexCoord;
+    if (uIsUnderwater) {
+        tc.x += sin(tc.y * 25.0 + uUnderwaterTime * 2.5) * 0.0035;
+        tc.y += cos(tc.x * 25.0 + uUnderwaterTime * 2.5) * 0.0035;
+    }
+    
+    vec4 texSample = texture(screenTexture, tc);
     vec3 color = texSample.rgb;
     
     vec2 texelSize = 1.0 / screenSize;
     
     // Apply AAA Stylized Post-Stack
-    color = applyPostProcessing(color, fragTexCoord, texelSize, depthTexture);
+    color = applyPostProcessing(color, tc, texelSize, depthTexture);
 
     fragColor = vec4(color, 1.0);
 }

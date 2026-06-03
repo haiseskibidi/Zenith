@@ -142,6 +142,9 @@ public class HUDRenderer {
         renderBar("hunger", sw, sh, player.getHunger() / 20.0f);
         if (player.getStamina() < 0.99f) renderBar("stamina", sw, sh, player.getStamina());
         renderBar("noise", sw, sh, noise);
+        if (player.getOxygen() < player.getMaxOxygen()) {
+            renderBar("oxygen", sw, sh, player.getOxygen() / player.getMaxOxygen());
+        }
 
         renderMinimap(player, sw, sh);
 

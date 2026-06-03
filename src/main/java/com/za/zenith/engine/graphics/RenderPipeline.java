@@ -22,6 +22,7 @@ import static org.lwjgl.opengl.GL13.*;
  */
 public class RenderPipeline {
     private final Shader blockShader;
+    private final Shader waterShader;
     private final DynamicTextureAtlas atlas;
     private final MeshPool meshPool;
     
@@ -54,6 +55,7 @@ public class RenderPipeline {
     public RenderPipeline(int width, int height) {
         RenderContext.init();
         this.blockShader = new Shader("src/main/resources/shaders/vertex.glsl", "src/main/resources/shaders/fragment.glsl");
+        this.waterShader = new Shader("src/main/resources/shaders/water_vertex.glsl", "src/main/resources/shaders/water_fragment.glsl");
         this.atlas = new DynamicTextureAtlas(16);
         this.meshPool = new MeshPool();
         
@@ -78,6 +80,7 @@ public class RenderPipeline {
     private void initResources() {
         // 1. Blocks
         for (var def : com.za.zenith.world.blocks.BlockRegistry.getRegistry().values()) {
+            if (def.isFluid()) continue;
             if (def.getTextures() != null) {
                 for (int f = 0; f < 7; f++) {
                     String k = def.getTextures().getTextureForFace(f);
@@ -118,6 +121,9 @@ public class RenderPipeline {
         blockShader.use();
         blockShader.setInt("textureSampler", 0);
         blockShader.setInt("uHeightmap", 1); // Slot 1 for heightmap to avoid conflict with slot 0
+
+        waterShader.use();
+        waterShader.setInt("textureSampler", 0);
 
         float[] glassUV = atlas.uvFor("zenith/textures/block/glass.png");
         if (glassUV != null) blockShader.setFloat("glassLayer", glassUV[2]);
@@ -362,10 +368,21 @@ public class RenderPipeline {
             }
         }
         
+        Vector3f camPos = camera.getPosition();
+        Block camBlock = world.getBlock((int) Math.floor(camPos.x), (int) Math.floor(camPos.y), (int) Math.floor(camPos.z));
+        boolean isCameraSubmerged = false;
+        if (!camBlock.isAir()) {
+            com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(camBlock.getType());
+            if (def != null && def.isFluid()) {
+                isCameraSubmerged = true;
+            }
+        }
+        float systemTime = (float)(System.currentTimeMillis() % 1000000L) / 1000.0f;
+
         Vector3f currentHorizonColor = AtmosphereManager.getInstance().getHorizonColor();
         float hazeDensity = 0.012f * AtmosphereManager.getInstance().getHazeMultiplier();
-        if (fxaaEnabled) postProcessor.processFXAA(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentHorizonColor, hazeDensity);
-        else postProcessor.processPassthrough(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentHorizonColor, hazeDensity);
+        if (fxaaEnabled) postProcessor.processFXAA(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentHorizonColor, hazeDensity, isCameraSubmerged, systemTime);
+        else postProcessor.processPassthrough(finalInputColorTexture, resolveFramebuffer.getDepthTextureId(), window.getWidth(), window.getHeight(), currentHorizonColor, hazeDensity, isCameraSubmerged, systemTime);
 
         uiRenderer.renderCrosshair(window.getWidth(), window.getHeight());
         uiRenderer.renderHotbar(window.getWidth(), window.getHeight(), atlas);
@@ -479,10 +496,25 @@ public class RenderPipeline {
         chunkSystem.render(state, blockShader, false);
         glDepthMask(true);
 
+        // 5. Water / Fluids Render Pass
+        waterShader.use();
+        waterShader.setBoolean("uIsCompressed", true);
+        waterShader.setBoolean("uIsBatch", true);
+        waterShader.setLights("uLights", com.za.zenith.world.lighting.LightManager.getActiveLights());
+        waterShader.setFloat("uRainIntensity", state.getWorld().getWeatherManager() != null ? state.getWorld().getWeatherManager().getRainIntensity() : 0.0f);
+        
+        glDepthMask(false);
+        chunkSystem.renderWater(state, waterShader);
+        glDepthMask(true);
+
         // Reset state for safety
         blockShader.setBoolean("uIsBatch", false);
         blockShader.setBoolean("uIsCompressed", false);
         blockShader.setInt("uHiddenCount", 0);
+        
+        waterShader.use();
+        waterShader.setBoolean("uIsBatch", false);
+        waterShader.setBoolean("uIsCompressed", false);
     }
 
     private void updateEnvironment(SceneState state) {

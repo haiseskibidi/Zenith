@@ -62,6 +62,7 @@ public class BlockDataLoader extends AbstractJsonLoader<BlockDefinition> {
             }
 
             if (obj.has("hardness")) def.setHardness(obj.get("hardness").getAsFloat());
+            if (obj.has("fluid_type")) def.setFluidType(obj.get("fluid_type").getAsString());
             if (obj.has("fellingStages")) def.setFellingStages(obj.get("fellingStages").getAsInt());
             if (obj.has("nextStage")) def.setNextStage(Identifier.of(obj.get("nextStage").getAsString()));
             if (obj.has("next_stage")) def.setNextStage(Identifier.of(obj.get("next_stage").getAsString()));

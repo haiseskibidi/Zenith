@@ -90,11 +90,16 @@ public class InteractionInputHandler {
                     return null; 
                 }
 
-                if (miningController.getBreakingBlockPos() == null) {
-                    miningController.startMining(hitPos, blockDef, world, raycast.getNormal());
+                if (blockDef.getHardness() >= 0) {
+                    if (miningController.getBreakingBlockPos() == null) {
+                        miningController.startMining(hitPos, blockDef, world, raycast.getNormal());
+                    }
+                    miningController.mine(world, player, hitPos, blockType, blockDef, currentStack, currentItem, isNewLeftClick, localHit, raycast.getNormal());
+                } else {
+                    if (isNewLeftClick) {
+                        player.swing();
+                    }
                 }
-
-                miningController.mine(world, player, hitPos, blockType, blockDef, currentStack, currentItem, isNewLeftClick, localHit, raycast.getNormal());
             }
         } else {
             if (raycast.isHit()) {
@@ -341,6 +346,9 @@ public class InteractionInputHandler {
                             }
                         } else {
                             byte meta = manager.calculateMetadata(blockType, normal, raycast.getHitPoint(), camera);
+                            if (def.isFluid()) {
+                                meta = 0; // Источники жидкостей всегда ставятся с метаданными 0
+                            }
                             world.setBlock(pPos, new Block(blockType, meta));
                             if (networkClient != null && networkClient.isConnected()) networkClient.sendBlockUpdate(pPos.x(), pPos.y(), pPos.z(), blockType);
                             ItemStack newStack = currentStack.getCount() > 1 ? new ItemStack(currentItem, currentStack.getCount() - 1) : null;
