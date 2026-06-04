@@ -109,6 +109,10 @@ public class BlockHighlightRenderer {
     }
 
     private Mesh createMeshForShape(VoxelShape shape) {
+        if (shape.getGeometry() == VoxelShape.ShapeGeometry.RAMP) {
+            return createRampMesh(shape);
+        }
+
         List<Float> positionsList = new ArrayList<>();
         List<Integer> indicesList = new ArrayList<>();
         int vertexOffset = 0;
@@ -229,6 +233,86 @@ public class BlockHighlightRenderer {
             }
         }
         return false;
+    }
+
+    private Mesh createRampMesh(VoxelShape shape) {
+        List<Float> positionsList = new ArrayList<>();
+        List<Integer> indicesList = new ArrayList<>();
+        
+        byte dir = (byte)(shape.getMetadata() & 0x0F);
+        float H = 1.0f; // Height of the ramp
+        
+        // Base edges (Y = 0)
+        addEdge(positionsList, indicesList, 0, 0, 0,  1, 0, 0);
+        addEdge(positionsList, indicesList, 1, 0, 0,  1, 0, 1);
+        addEdge(positionsList, indicesList, 1, 0, 1,  0, 0, 1);
+        addEdge(positionsList, indicesList, 0, 0, 1,  0, 0, 0);
+        
+        switch (dir) {
+            case Block.DIR_EAST:
+                addEdge(positionsList, indicesList, 1, 0, 0,  1, H, 0);
+                addEdge(positionsList, indicesList, 1, 0, 1,  1, H, 1);
+                addEdge(positionsList, indicesList, 0, 0, 0,  1, H, 0);
+                addEdge(positionsList, indicesList, 0, 0, 1,  1, H, 1);
+                addEdge(positionsList, indicesList, 1, H, 0,  1, H, 1);
+                break;
+            case Block.DIR_WEST:
+                addEdge(positionsList, indicesList, 0, 0, 0,  0, H, 0);
+                addEdge(positionsList, indicesList, 0, 0, 1,  0, H, 1);
+                addEdge(positionsList, indicesList, 1, 0, 0,  0, H, 0);
+                addEdge(positionsList, indicesList, 1, 0, 1,  0, H, 1);
+                addEdge(positionsList, indicesList, 0, H, 0,  0, H, 1);
+                break;
+            case Block.DIR_SOUTH:
+                addEdge(positionsList, indicesList, 0, 0, 1,  0, H, 1);
+                addEdge(positionsList, indicesList, 1, 0, 1,  1, H, 1);
+                addEdge(positionsList, indicesList, 0, 0, 0,  0, H, 1);
+                addEdge(positionsList, indicesList, 1, 0, 0,  1, H, 1);
+                addEdge(positionsList, indicesList, 0, H, 1,  1, H, 1);
+                break;
+            case Block.DIR_NORTH:
+            default:
+                addEdge(positionsList, indicesList, 0, 0, 0,  0, H, 0);
+                addEdge(positionsList, indicesList, 1, 0, 0,  1, H, 0);
+                addEdge(positionsList, indicesList, 0, 0, 1,  0, H, 0);
+                addEdge(positionsList, indicesList, 1, 0, 1,  1, H, 0);
+                addEdge(positionsList, indicesList, 0, H, 0,  1, H, 0);
+                break;
+        }
+
+        int numVerts = positionsList.size() / 3;
+        float[] posArray = new float[positionsList.size()];
+        for (int i = 0; i < positionsList.size(); i += 3) {
+            posArray[i] = positionsList.get(i) - 0.5f;
+            posArray[i+1] = positionsList.get(i+1);
+            posArray[i+2] = positionsList.get(i+2) - 0.5f;
+        }
+
+        int[] indArray = new int[indicesList.size()];
+        for (int i = 0; i < indicesList.size(); i++) indArray[i] = indicesList.get(i);
+
+        float[] tcArray = new float[numVerts * 4];
+        float[] wArray = new float[numVerts];
+        for (int i = 0; i < numVerts; i++) {
+            tcArray[i * 4 + 0] = 0.0f;
+            tcArray[i * 4 + 1] = 0.0f;
+            tcArray[i * 4 + 2] = 0.0f;
+            tcArray[i * 4 + 3] = 1.0f;
+            wArray[i] = (posArray[i * 3 + 1] > 0.5f) ? 1.0f : 0.0f;
+        }
+        float[] nArray = new float[numVerts * 3];
+        float[] btArray = new float[numVerts];
+
+        return new Mesh(posArray, tcArray, nArray, btArray, new float[numVerts], wArray, indArray);
+    }
+
+    private void addEdge(List<Float> positionsList, List<Integer> indicesList, 
+                         float x1, float y1, float z1, float x2, float y2, float z2) {
+        int startIdx = positionsList.size() / 3;
+        positionsList.add(x1); positionsList.add(y1); positionsList.add(z1);
+        positionsList.add(x2); positionsList.add(y2); positionsList.add(z2);
+        indicesList.add(startIdx);
+        indicesList.add(startIdx + 1);
     }
 
     public void cleanup() {
