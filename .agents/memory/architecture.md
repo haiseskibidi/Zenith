@@ -127,6 +127,7 @@
 3.  **AABB Collision Strategy**: Используется скользящая коллизия с epsilon-отступами. Внедрена логика **Unstuck** (поэтапное выталкивание вверх) для предотвращения проваливания объектов сквозь террейн при лагах или некорректном спавне.
 4.  **Aggressive Lifecycle Culling**: Активные сущности симулируются в радиусе 320м (20 чанков). Статические ресурсы имеют жесткий лимит 128м, после которого они полностью удаляются из памяти. При выгрузке чанка его записи в `groundEntityMap` очищаются для предотвращения Entity Leaks.
 5.  **Ground Locking**: Для оптимизации и стабильности визуализации, при нахождении на земле (`onGround`) вертикальная скорость обнуляется, а гравитация временно отключается, предотвращая микро-колебания объекта "внутри" поверхности блока.
+6.  **Data-Driven Step-Up Mechanics**: Физика авто-подъема по ступеням и наклонным поверхностям вынесена в модульный [StepUpHandler.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/physics/StepUpHandler.java) с конфигурированием высоты шага `stepHeight` и режима `stepUpMode` (`STEP` / `SMOOTH` / `NONE`). Для игрока физический шаг компенсируется экспоненциально затухающим смещением камеры `stepUpVisualOffset`, предотвращая дёрганье изображения.
 
 ### Rendering Pipeline
 1.  **RGBA Framebuffer**: Supports alpha-channel masking for post-processing effects.
@@ -410,6 +411,7 @@
 
 #### 4. Data-Driven Physics
 - Все физические константы вынесены в `physics.json`.
+- Параметры автоматического подъема сущностей (`stepHeight` и `stepUpMode`) управляются через [physics.json](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/resources/zenith/registry/physics.json) без жесткого кодирования в Java.
 
 ## Работа с метаданными и Оптимизация
 1. **Эффективные Чанки**: 

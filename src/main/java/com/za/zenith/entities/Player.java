@@ -48,6 +48,15 @@ public class Player extends LivingEntity {
     private float fovOffset = 0.0f;
     private float cameraOffsetX = 0.0f;
     private float cameraOffsetY = 0.0f;
+    private float stepUpVisualOffset = 0.0f;
+    private float stepUpPendingHeight = 0.0f;
+    private boolean stepUpActiveInTick = false;
+    private float currentAlpha = 0.0f;
+
+    public void setCurrentAlpha(float alpha) {
+        this.currentAlpha = alpha;
+    }
+
     private float lastYaw = 0.0f;
     private float lastPitch = 0.0f;
     private float leanAmount = 0.0f;
@@ -116,6 +125,8 @@ public class Player extends LivingEntity {
         com.za.zenith.world.physics.PhysicsSettings settings = com.za.zenith.world.physics.PhysicsSettings.getInstance();
         this.currentEyeHeight = settings.standingEyeHeight;
         this.wasOnGround = true; 
+        this.stepHeight = settings.stepHeight;
+        this.stepUpMode = settings.stepUpMode; 
 
         com.za.zenith.engine.graphics.model.ViewmodelDefinition handsDef = 
             com.za.zenith.engine.graphics.model.ModelRegistry.getViewmodel(com.za.zenith.utils.Identifier.of("zenith:hands"));
@@ -172,6 +183,16 @@ public class Player extends LivingEntity {
         
         
         move(world, velocity.x * deltaTime, velocity.y * deltaTime, velocity.z * deltaTime);
+        if (this.lastStepUpHeight > 0.0f) {
+            this.stepUpActiveInTick = true;
+            this.stepUpPendingHeight = this.lastStepUpHeight;
+        } else {
+            if (this.stepUpActiveInTick) {
+                this.stepUpVisualOffset -= this.stepUpPendingHeight;
+                this.stepUpActiveInTick = false;
+                this.stepUpPendingHeight = 0.0f;
+            }
+        }
 
         // Update RPG stats from equipment
         updateEquipmentStats();
@@ -269,6 +290,11 @@ public class Player extends LivingEntity {
     public void updateAnimations(float deltaTime, World world) {
         // Clamp deltaTime to prevent explicit Euler lerp explosions (NaN) during lag spikes
         deltaTime = Math.min(deltaTime, 0.05f);
+
+        // Step-Up Visual Offset smoothing
+        if (!stepUpActiveInTick) {
+            stepUpVisualOffset += (0.0f - stepUpVisualOffset) * 12.0f * deltaTime;
+        }
 
         if (isFirstFrame) {
             lastYaw = getRotation().y;
@@ -738,7 +764,13 @@ public class Player extends LivingEntity {
     public float getCameraRollOffset() { return parkourCameraRoll; }
     public float getFovOffset() { return fovOffset; }
     public float getCameraOffsetX() { return cameraOffsetX; }
-    public float getCameraOffsetY() { return cameraOffsetY; }
+    public float getCameraOffsetY() { 
+        float offset = stepUpVisualOffset;
+        if (stepUpActiveInTick) {
+            offset -= stepUpPendingHeight * currentAlpha;
+        }
+        return cameraOffsetY + offset; 
+    }
     public float getCameraOffsetZ() { return 0.0f; } 
     public float getItemOffsetX() { return itemOffsetX; }
     public float getItemOffsetY() { return itemOffsetY; }

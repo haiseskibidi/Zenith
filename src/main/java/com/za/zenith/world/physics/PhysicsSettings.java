@@ -46,6 +46,10 @@ public class PhysicsSettings implements com.za.zenith.utils.LiveReloadable {
     // Input
     public float mouseSensitivity = 0.002f;
 
+    // Step-up configuration
+    public float stepHeight = 0.6f;
+    public String stepUpMode = "STEP";
+
     // Items
     public float itemAttractionRadius = 3.2f;
     public float itemPickupRadius = 1.5f;

@@ -41,6 +41,15 @@ public abstract class Entity {
 
     public boolean horizontalCollision = false;
 
+    protected float stepHeight = 0.0f;
+    protected String stepUpMode = "NONE";
+    public float lastStepUpHeight = 0.0f;
+
+    public float getStepHeight() { return stepHeight; }
+    public void setStepHeight(float stepHeight) { this.stepHeight = stepHeight; }
+    public String getStepUpMode() { return stepUpMode; }
+    public void setStepUpMode(String stepUpMode) { this.stepUpMode = stepUpMode; }
+
     public Entity(Vector3f position, float width, float height) {
         this.position = new Vector3f(position);
         this.prevPosition = new Vector3f(position);
@@ -121,6 +130,7 @@ public abstract class Entity {
     }
 
     protected void move(World world, float dx, float dy, float dz) {
+        this.lastStepUpHeight = 0.0f;
         float originalDx = dx;
         float originalDy = dy;
         float originalDz = dz;
@@ -198,6 +208,10 @@ public abstract class Entity {
             onGround = false;
         }
 
+        float xBeforeHorizontal = position.x;
+        float yBeforeHorizontal = position.y;
+        float zBeforeHorizontal = position.z;
+
         // 4. HORIZONTAL COLLISION (X)
         if (dx != 0) {
             int minX = (int) Math.floor(currentBox.minX() + Math.min(0, dx));
@@ -261,8 +275,33 @@ public abstract class Entity {
             position.z += dz;
         }
 
-        this.horizontalCollision = (Math.abs(originalDx) > 0.00001f && Math.abs(dx) < Math.abs(originalDx) * 0.9f) ||
-                                   (Math.abs(originalDz) > 0.00001f && Math.abs(dz) < Math.abs(originalDz) * 0.9f);
+        boolean collidedHorizontally = (Math.abs(originalDx) > 0.00001f && Math.abs(dx) < Math.abs(originalDx) * 0.9f) ||
+                                       (Math.abs(originalDz) > 0.00001f && Math.abs(dz) < Math.abs(originalDz) * 0.9f);
+
+        boolean didStepUp = false;
+
+        if (stepHeight > 0.0f && !stepUpMode.equalsIgnoreCase("NONE") && onGround && collidedHorizontally) {
+            com.za.zenith.world.physics.StepUpHandler.StepResult result = com.za.zenith.world.physics.StepUpHandler.tryStepUp(
+                this, cache,
+                xBeforeHorizontal, yBeforeHorizontal, zBeforeHorizontal,
+                originalDx, originalDz,
+                dx, dz,
+                stepHeight, stepUpMode
+            );
+
+            if (result.success) {
+                didStepUp = true;
+                this.lastStepUpHeight = result.stepHeight;
+                dx = result.actualDx;
+                dz = result.actualDz;
+                onGround = true;
+            }
+        }
+
+        this.horizontalCollision = !didStepUp && (
+            (Math.abs(originalDx) > 0.00001f && Math.abs(dx) < Math.abs(originalDx) * 0.9f) ||
+            (Math.abs(originalDz) > 0.00001f && Math.abs(dz) < Math.abs(originalDz) * 0.9f)
+        );
     }
 
     private boolean isCollidingAt(com.za.zenith.world.chunks.ChunkCache cache, AABB box) {
@@ -360,6 +399,7 @@ public abstract class Entity {
     public Vector3f getVelocity() { return velocity; }
     public Vector3f getRotation() { return rotation; }
     public AABB getBoundingBox() { return boundingBox.offset(position); }
+    public AABB getLocalBoundingBox() { return boundingBox; }
     public boolean isOnGround() { return onGround; }
     public boolean isFlying() { return flying; }
     public void setFlying(boolean flying) { this.flying = flying; }

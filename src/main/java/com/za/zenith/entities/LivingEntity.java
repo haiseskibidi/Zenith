@@ -12,6 +12,8 @@ public abstract class LivingEntity extends Entity {
     public LivingEntity(Vector3f position, float width, float height, float maxHealth) {
         super(position, width, height);
         this.addComponent(new HealthComponent(maxHealth));
+        this.stepHeight = com.za.zenith.world.physics.PhysicsSettings.getInstance().stepHeight;
+        this.stepUpMode = com.za.zenith.world.physics.PhysicsSettings.getInstance().stepUpMode;
     }
 
     public void takeDamage(float amount) {

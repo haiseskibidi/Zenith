@@ -339,6 +339,7 @@ public class GameLoop {
 
         // High-Frequency Animation Update (Right before render)
         if (!paused) {
+            player.setCurrentAlpha(alpha);
             player.updateAnimations(deltaTime, world);
 
             // Sync animated offsets to camera (High-frequency)

@@ -15,6 +15,8 @@
   "baseMoveSpeed": 3.8,
   "flySpeed": 9.0,
   "baseMiningCooldown": 0.5,
+  "stepHeight": 0.6,
+  "stepUpMode": "STEP",
   "mouseSensitivity": 0.002,
   "itemAttractionRadius": 1.5,
   "itemPickupRadius": 0.75,
