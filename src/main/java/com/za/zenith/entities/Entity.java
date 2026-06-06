@@ -131,6 +131,7 @@ public abstract class Entity {
 
     protected void move(World world, float dx, float dy, float dz) {
         this.lastStepUpHeight = 0.0f;
+        boolean wasOnGround = onGround;
         float originalDx = dx;
         float originalDy = dy;
         float originalDz = dz;
@@ -185,7 +186,32 @@ public abstract class Entity {
                             VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                             if (shape != null) {
                                 for (AABB box : shape.getBoxes()) {
+                                    if (shape.getGeometry() == com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+                                        // Рампа: вертикальное приземление на наклонную поверхность.
+                                        // Вычисляем высоту склона в точке центра игрока.
+                                        float rampH = getRampAbsoluteHeight(cache, shape, x, y, z, boundingBox, position.x, position.z);
+                                        if (dy < 0) {
+                                            float feetAfterFall = position.y + dy;
+                                            // Если игрок падает сквозь поверхность склона и находится в досягаемости
+                                            if (feetAfterFall < rampH && position.y >= rampH - 1.0f) {
+                                                dy = rampH - position.y;
+                                                onGround = true;
+                                                velocity.y = 0;
+                                            }
+                                        } else if (dy > 0) {
+                                            // Движение вверх (прыжок) — рампа блокирует голову снизу
+                                            float headAfterMove = position.y + boundingBox.maxY() + dy;
+                                            if (headAfterMove > y && position.y + boundingBox.maxY() <= y + 0.01f) {
+                                                dy = y - (position.y + boundingBox.maxY()) - 0.001f;
+                                                velocity.y = 0;
+                                            }
+                                        }
+                                        continue;
+                                    }
                                     if (AABB.intersects(boundingBox, position.x, position.y + dy, position.z, box, x, y, z)) {
+                                        if (shouldSkipCollisionWithBlock(cache, x, y, z, box, 0, 0)) {
+                                            continue;
+                                        }
                                         if (dy > 0) dy = (box.minY() + y) - (boundingBox.maxY() + position.y) - 0.001f;
                                         else {
                                             dy = (box.maxY() + y) - (boundingBox.minY() + position.y) + 0.001f;
@@ -229,9 +255,22 @@ public abstract class Entity {
                             VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                             if (shape != null) {
                                 for (AABB box : shape.getBoxes()) {
+                                    if (shape.getGeometry() == com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+                                        if (com.za.zenith.world.physics.StepUpHandler.isRampPassable(cache, shape, x, y, z, position.x, position.y, position.z, stepHeight)) {
+                                            continue;
+                                        }
+                                    }
                                     if (AABB.intersects(boundingBox, position.x + dx, position.y, position.z, box, x, y, z)) {
-                                        if (dx > 0) dx = (box.minX() + x) - (boundingBox.maxX() + position.x) - 0.001f;
-                                        else dx = (box.maxX() + x) - (boundingBox.minX() + position.x) + 0.001f;
+                                        if (shouldSkipCollisionWithBlock(cache, x, y, z, box, dx, 0)) {
+                                            continue;
+                                        }
+                                        if (originalDx > 0) {
+                                            float newDx = (box.minX() + x) - (boundingBox.maxX() + position.x) - 0.001f;
+                                            dx = Math.max(0.0f, Math.min(dx, newDx));
+                                        } else if (originalDx < 0) {
+                                            float newDx = (box.maxX() + x) - (boundingBox.minX() + position.x) + 0.001f;
+                                            dx = Math.min(0.0f, Math.max(dx, newDx));
+                                        }
                                         velocity.x = 0;
                                     }
                                 }
@@ -261,9 +300,22 @@ public abstract class Entity {
                             VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                             if (shape != null) {
                                 for (AABB box : shape.getBoxes()) {
+                                    if (shape.getGeometry() == com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+                                        if (com.za.zenith.world.physics.StepUpHandler.isRampPassable(cache, shape, x, y, z, position.x, position.y, position.z, stepHeight)) {
+                                            continue;
+                                        }
+                                    }
                                     if (AABB.intersects(boundingBox, position.x, position.y, position.z + dz, box, x, y, z)) {
-                                        if (dz > 0) dz = (box.minZ() + z) - (boundingBox.maxZ() + position.z) - 0.001f;
-                                        else dz = (box.maxZ() + z) - (boundingBox.minZ() + position.z) + 0.001f;
+                                        if (shouldSkipCollisionWithBlock(cache, x, y, z, box, 0, dz)) {
+                                            continue;
+                                        }
+                                        if (originalDz > 0) {
+                                            float newDz = (box.minZ() + z) - (boundingBox.maxZ() + position.z) - 0.001f;
+                                            dz = Math.max(0.0f, Math.min(dz, newDz));
+                                        } else if (originalDz < 0) {
+                                            float newDz = (box.maxZ() + z) - (boundingBox.minZ() + position.z) + 0.001f;
+                                            dz = Math.min(0.0f, Math.max(dz, newDz));
+                                        }
                                         velocity.z = 0;
                                     }
                                 }
@@ -298,6 +350,8 @@ public abstract class Entity {
             }
         }
 
+        adjustYForRamps(cache, wasOnGround, originalDy);
+
         this.horizontalCollision = !didStepUp && (
             (Math.abs(originalDx) > 0.00001f && Math.abs(dx) < Math.abs(originalDx) * 0.9f) ||
             (Math.abs(originalDz) > 0.00001f && Math.abs(dz) < Math.abs(originalDz) * 0.9f)
@@ -319,8 +373,16 @@ public abstract class Entity {
                     if (!block.isAir() && block.isSolid()) {
                         VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
                         if (shape != null) {
-                            for (AABB bBox : shape.getBoxes()) {
-                                if (AABB.intersects(box, 0, 0, 0, bBox, x, y, z)) return true;
+                            for (AABB sbox : shape.getBoxes()) {
+                                if (shape.getGeometry() == com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+                                    continue; // Рампа не считается «застреванием»
+                                }
+                                if (AABB.intersects(sbox, (float)x, (float)y, (float)z, box, 0, 0, 0)) {
+                                    if (shouldSkipCollisionWithBlock(cache, x, y, z, sbox, 0, 0)) {
+                                        continue;
+                                    }
+                                    return true;
+                                }
                             }
                         }
                     }
@@ -404,6 +466,131 @@ public abstract class Entity {
     public boolean isFlying() { return flying; }
     public void setFlying(boolean flying) { this.flying = flying; }
     public void setPosition(float x, float y, float z) { position.set(x, y, z); }
+
+    /**
+     * Вычисляет высоту наклонной поверхности рампы в точке центра игрока.
+     * Используется для вертикального приземления и горизонтальной проходимости.
+     */
+    private float getRampAbsoluteHeight(com.za.zenith.world.chunks.ChunkCache cache, com.za.zenith.world.physics.VoxelShape shape, int blockX, int blockY, int blockZ, AABB localBox, float entityX, float entityZ) {
+        return com.za.zenith.world.physics.StepUpHandler.getRampAbsoluteHeight(cache, shape, blockX, blockY, blockZ, entityX, entityZ);
+    }
+
+    private boolean shouldSkipCollisionWithBlock(com.za.zenith.world.chunks.ChunkCache cache, int blockX, int blockY, int blockZ, AABB box, float dx, float dz) {
+        // Проверяем блок строго непосредственно над текущим блоком
+        int rampY = blockY + 1;
+        Block b = cache.getBlock(blockX, rampY, blockZ);
+        if (b.isAir() || !b.isSolid()) {
+            return false;
+        }
+        
+        com.za.zenith.world.physics.VoxelShape rampShape = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType()).getShape(b.getMetadata());
+        if (rampShape == null || rampShape.getGeometry() != com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+            return false;
+        }
+        
+        // Вычисляем целевую координату на основе взаимного расположения
+        float targetX = position.x;
+        if (blockX > position.x) {
+            targetX = blockX;
+        } else if (blockX + 1.0f < position.x) {
+            targetX = blockX + 1.0f;
+        }
+        
+        float targetZ = position.z;
+        if (blockZ > position.z) {
+            targetZ = blockZ;
+        } else if (blockZ + 1.0f < position.z) {
+            targetZ = blockZ + 1.0f;
+        }
+        
+        float rampH = com.za.zenith.world.physics.StepUpHandler.getRampAbsoluteHeight(cache, rampShape, blockX, rampY, blockZ, targetX, targetZ);
+        float blockMaxY = blockY + box.maxY();
+        
+        // Пропускаем коллизию только если игрок находится сверху на уровне рампы (или переходит на неё)
+        if (position.y < blockMaxY - 0.6f) {
+            return false;
+        }
+        
+        return blockMaxY <= rampH + 0.01f;
+    }
+
+    /**
+     * Подстройка Y-позиции игрока к поверхности рампы ПОСЛЕ горизонтального движения.
+     * Обеспечивает плавный подъём/спуск по склону при ходьбе.
+     * Работает в обе стороны: и вверх, и вниз (прилипание к поверхности).
+     */
+    private void adjustYForRamps(com.za.zenith.world.chunks.ChunkCache cache, boolean wasOnGround, float originalDy) {
+        int centerX = (int) Math.floor(position.x);
+        int centerZ = (int) Math.floor(position.z);
+        AABB currentBox = boundingBox.offset(position);
+        int minY = (int) Math.floor(currentBox.minY() - 1.0f);
+        int maxY = (int) Math.floor(currentBox.maxY());
+
+        float bestRampY = -999.0f;
+        boolean foundOnCenter = false;
+
+        // 1. Сначала проверяем колонку прямо под центром игрока (основная опора)
+        for (int y = minY; y <= maxY; y++) {
+            Block block = cache.getBlock(centerX, y, centerZ);
+            if (!block.isAir() && block.isSolid()) {
+                com.za.zenith.world.physics.VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
+                if (shape != null && shape.getGeometry() == com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+                    float rampH = getRampAbsoluteHeight(cache, shape, centerX, y, centerZ, boundingBox, position.x, position.z);
+                    if (rampH > bestRampY) {
+                        bestRampY = rampH;
+                        foundOnCenter = true;
+                    }
+                }
+            }
+        }
+
+        // 2. Если под центром рампы нет, ищем по всей площади AABB игрока (боковая поддержка)
+        if (!foundOnCenter) {
+            int minBoxX = (int) Math.floor(currentBox.minX());
+            int maxBoxX = (int) Math.floor(currentBox.maxX());
+            int minBoxZ = (int) Math.floor(currentBox.minZ());
+            int maxBoxZ = (int) Math.floor(currentBox.maxZ());
+
+            for (int x = minBoxX; x <= maxBoxX; x++) {
+                for (int z = minBoxZ; z <= maxBoxZ; z++) {
+                    if (x == centerX && z == centerZ) continue;
+                    for (int y = minY; y <= maxY; y++) {
+                        Block block = cache.getBlock(x, y, z);
+                        if (!block.isAir() && block.isSolid()) {
+                            com.za.zenith.world.physics.VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType()).getShape(block.getMetadata());
+                            if (shape != null && shape.getGeometry() == com.za.zenith.world.physics.VoxelShape.ShapeGeometry.RAMP) {
+                                float minX = position.x + boundingBox.minX();
+                                float maxX = position.x + boundingBox.maxX();
+                                float minZ = position.z + boundingBox.minZ();
+                                float maxZ = position.z + boundingBox.maxZ();
+                                float rampH = com.za.zenith.world.physics.StepUpHandler.getRampAbsoluteHeight(cache, shape, x, y, z, minX, maxX, minZ, maxZ);
+                                 // Учитываем боковую рампу, только если игрок уже стоит на ней (разница высот минимальна)
+                                 if (Math.abs(rampH - position.y) <= stepHeight) {
+                                     if (rampH > bestRampY) {
+                                         bestRampY = rampH;
+                                     }
+                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (bestRampY != -999.0f) {
+            float diff = bestRampY - position.y;
+            // Прилипание к склону: подтягиваем вверх (до +stepHeight) или прижимаем вниз (до -stepHeight)
+            if (diff > 0.0f && diff <= stepHeight && (onGround || wasOnGround)) {
+                // Подъём по склону
+                position.y = bestRampY;
+                onGround = true;
+                if (velocity.y < 0) velocity.y = 0;
+            } else if (diff < 0.0f && diff >= -stepHeight && (onGround || wasOnGround) && originalDy <= 0.001f) {
+                // Спуск по склону — прижимаем к поверхности (только если были или стоим на земле и не прыгаем)
+                position.y = bestRampY;
+                onGround = true;
+                if (velocity.y < 0) velocity.y = 0;
+            }
+        }
+    }
 }
-
-

@@ -1,0 +1,13 @@
+{
+  "identifier": "zenith:asphalt_ramp",
+  "translationKey": "block.zenith.asphalt_ramp",
+  "solid": true,
+  "transparent": true,
+  "hardness": 1.5,
+  "type": "ramp",
+  "textures": {
+    "all": "asphalt.png"
+  },
+  "requiredTool": "pickaxe",
+  "placement": "stairs"
+}
