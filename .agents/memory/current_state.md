@@ -1,6 +1,9 @@
 ## Текущий статус проекта "Zenith"
 
 ## Реализованные фичи (Последние изменения)
+- **Mineshaft Support & Step-Up Ceiling Collision Fix**:
+  * **Ceiling Collision in Step-Up**: Исправлен критический баг с телепортацией (вверх или горизонтально в сторону) игрока при проходе под низкими препятствиями (например, деревянными опорами шахт). При подъеме `tryStepUp` в [StepUpHandler.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/physics/StepUpHandler.java) теперь выполняется проверка на коллизии с потолком (ceiling collision check). Высота подъема `elevatedY` динамически ограничивается solid-блоками над головой игрока, предотвращая проталкивание головы сквозь препятствия и ложные горизонтальные выталкивания при клиппинге.
+  * **Ramp Support**: Добавлена физика рамп в `StepUpHandler` для корректного перемещения по наклонным поверхностям.
 - **Data-Driven Step-Up & Camera Smooth Interpolation (Milestone 4)**:
   * **Data-Driven Physics Config**: Введены параметры `stepHeight` и `stepUpMode` (`"STEP" / "SMOOTH" / "NONE"`) в [physics.json](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/resources/zenith/registry/physics.json) and [PhysicsSettings.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/physics/PhysicsSettings.java). Логика полностью отвязана от хардкода в Java.
   * **StepUpHandler**: Создан изолированный класс [StepUpHandler.java](file:///C:/Users/akopa/IdeaProjects/MinecraftButBetter/src/main/java/com/za/zenith/world/physics/StepUpHandler.java), инкапсулирующий Zero-Allocation коллизии для расчёта подъёма по ступеням и наклонным поверхностям для игрока и всех живых существ (`LivingEntity`).
