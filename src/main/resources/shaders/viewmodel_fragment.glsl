@@ -28,6 +28,7 @@ uniform int uLightCount;
 
 uniform float uMiningHeat = 0.0; // 0.0 to 1.0 intensity
 uniform float uAlpha = 1.0;
+uniform vec3 uOverrideLight; // x=sun, y=block, z=ao
 
 void main() {
     vec4 textureColor = texture(textureSampler, fragTexCoord.xyz);
@@ -69,17 +70,39 @@ void main() {
     // 3. Apply Lighting
     vec3 totalDynamicLight = vec3(0.0);
     vec3 sunlighting = vec3(0.0);
+    float sunlightMask = uOverrideLight.x / 15.0;
     
     for (int i = 0; i < uLightCount; i++) {
-        if (uLights[i].type == 1) { // Directional
-            sunlighting += calculateLighting(fragNormal, uSunDirection, uLights[i].color, vec3(0.0));
+        if (uLights[i].type == 1) { // Directional (Sun/Moon)
+            // FIXED: Use uLights[i].direction (view-space) instead of uSunDirection (world-space)
+            // AAA Polish: Ultra-soft diffuse for viewmodel rotation (0.0 to 1.0 range)
+            float diffuse = max(dot(fragNormal, -uLights[i].direction), 0.0);
+            float softToon = smoothstep(-0.2, 0.5, diffuse) * 0.5 + smoothstep(0.1, 0.9, diffuse) * 0.5;
+            
+            // Mask sunlight by local voxel light (stops leaking into caves)
+            // Added wrap-around (0.15) also masked by sunlight level
+            sunlighting += uLights[i].color * (softToon * sunlightMask + 0.15 * sunlightMask);
         } else {
-            totalDynamicLight += calculateDynamicLighting(fragNormal, fragPos, uLights[i]);
+            // Dynamic lights: smoother transitions for viewmodel
+            vec3 toLight = uLights[i].position - fragPos;
+            float distance = length(toLight);
+            if (distance < uLights[i].radius) {
+                vec3 lightDir = normalize(-toLight);
+                float attenuation = pow(clamp(1.0 - distance / uLights[i].radius, 0.0, 1.0), 2.0);
+                float diffuse = max(dot(fragNormal, -lightDir), 0.0);
+                // Wider steps for dynamic lights on viewmodel for smoother rotation
+                float softToon = smoothstep(0.0, 0.4, diffuse) * 0.7 + smoothstep(0.2, 0.8, diffuse) * 0.3;
+                totalDynamicLight += uLights[i].color * (softToon * attenuation * uLights[i].intensity);
+            }
         }
     }
     
-    vec3 lighting = uAmbientColor * vec3(0.85, 0.88, 0.95);
+    // AAA Polish: Ambient from sky + block light (torch in cave) + visibility boost
+    vec3 lighting = max(uAmbientColor, vec3(0.16)) * vec3(0.85, 0.88, 0.95);
     lighting += sunlighting + totalDynamicLight;
+    lighting += vec3(1.0, 0.85, 0.6) * (uOverrideLight.y / 15.0); // Local block light (Torches)
+    
+    lighting = max(lighting, vec3(0.05)); // Hard baseline
     
     // 4. Unified Tinting (Leaves/Grass)
     if (info.isTinted) {

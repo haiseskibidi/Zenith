@@ -294,6 +294,11 @@ public class EntityRenderSystem {
             viewLights.add(dst);
         }
         viewmodelShader.setLights("uLights", viewLights);
+        
+        // Pass light from player's eyes level to viewmodel (Zero Alloc)
+        Vector3f eyePos = RenderContext.getVector().set(player.getPosition()).add(0, player.getEyeHeight(), 0);
+        setEntityLight(state.getWorld(), eyePos, viewmodelShader);
+        
         viewmodelShader.setVector3f("uCondition", RenderContext.getVector().set(player.getDirt(), player.getBlood(), player.getWetness()));
         
         Viewmodel vm = player.getViewmodel();
