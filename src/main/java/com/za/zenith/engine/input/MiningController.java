@@ -63,12 +63,29 @@ public class MiningController {
         
         // Сразу передаем цвет в рендерер, чтобы не было желтой вспышки в начале
         if (renderer != null) {
-            renderer.setBreakingBlock(hitPos, world.getBlock(hitPos), 0.0f, 1.0f, new Vector3f(0.5f), currentWeakSpot, blockDef.getMiningSettings().weakSpotColor(), hitHistory, world);
+            boolean hasWeakSpots = blockDef.getMiningSettings().strategy().equals("weak_spots");
+            Vector3f weakSpot = hasWeakSpots ? currentWeakSpot : null;
+            Vector3f wsColor = hasWeakSpots ? blockDef.getMiningSettings().weakSpotColor() : null;
+            List<Vector4f> historyToSend = (blockDef.getBreakingPattern() != 0) ? hitHistory : null;
+            renderer.setBreakingBlock(hitPos, world.getBlock(hitPos), 0.0f, 1.0f, new Vector3f(0.5f), weakSpot, wsColor, historyToSend, world);
         }
     }
 
     public void stopMining() {
+        stopMining(null);
+    }
+
+    public void stopMining(World world) {
         if (breakingBlockPos != null) {
+            if (world != null) {
+                var block = world.getBlock(breakingBlockPos);
+                if (block != null && !block.isAir()) {
+                    var def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+                    if (def != null && def.getBreakingPattern() == 0) {
+                        world.setBlockDamage(breakingBlockPos, 0); // ponytail: clear damage for generic blocks on stop
+                    }
+                }
+            }
             breakingBlockPos = null;
             breakingProgress = 0.0f;
             if (renderer != null) renderer.setBreakingBlock(null, null, 0.0f, 0.0f, null, null, null, null, null);
@@ -230,7 +247,11 @@ public class MiningController {
         }
             
         if (renderer != null && breakingBlockPos != null) {
-            renderer.setBreakingBlock(hitPos, world.getBlock(hitPos), breakingProgress, wobbleTimer, localHit, currentWeakSpot, blockDef.getMiningSettings().weakSpotColor(), hitHistory, world);
+            boolean hasWeakSpots = blockDef.getMiningSettings().strategy().equals("weak_spots");
+            Vector3f weakSpot = hasWeakSpots ? currentWeakSpot : null;
+            Vector3f wsColor = hasWeakSpots ? blockDef.getMiningSettings().weakSpotColor() : null;
+            List<Vector4f> historyToSend = (blockDef.getBreakingPattern() != 0) ? hitHistory : null;
+            renderer.setBreakingBlock(hitPos, world.getBlock(hitPos), breakingProgress, wobbleTimer, localHit, weakSpot, wsColor, historyToSend, world);
         }
 
         if (breakingProgress >= 1.0f) {
@@ -267,7 +288,11 @@ public class MiningController {
     public void renderVisuals(BlockPos hitPos, Block block, Vector3f localHit, World world) {
         if (breakingBlockPos != null && hitPos != null && hitPos.equals(breakingBlockPos)) {
             com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
-            renderer.setBreakingBlock(hitPos, block, breakingProgress, wobbleTimer, localHit, currentWeakSpot, def.getMiningSettings().weakSpotColor(), hitHistory, world);
+            boolean hasWeakSpots = def.getMiningSettings().strategy().equals("weak_spots");
+            Vector3f weakSpot = hasWeakSpots ? currentWeakSpot : null;
+            Vector3f wsColor = hasWeakSpots ? def.getMiningSettings().weakSpotColor() : null;
+            List<Vector4f> historyToSend = (def.getBreakingPattern() != 0) ? hitHistory : null;
+            renderer.setBreakingBlock(hitPos, block, breakingProgress, wobbleTimer, localHit, weakSpot, wsColor, historyToSend, world);
         }
     }
 
@@ -276,6 +301,8 @@ public class MiningController {
     public float getBreakingProgress() { return breakingProgress; }
 
     public float getHitPulse() { return hitPulse; }
+
+    public float getWobbleTimer() { return wobbleTimer; }
 
     private Vector3f generateRandomWeakSpot(VoxelShape shape, Vector3f normal) {
         if (shape == null || shape.getBoxes().isEmpty()) return new Vector3f(0, 0.5f, 0);

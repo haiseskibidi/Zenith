@@ -469,6 +469,14 @@ public class RenderPipeline {
             }
             if (alreadyHidden) continue;
             
+            // Skip hiding blocks with breakingPattern == 0 (e.g. grass, dirt, sand) if we aren't looking at them,
+            // as they won't render any persistent scars proxy anyway.
+            var block = state.getWorld().getBlock(new com.za.zenith.world.BlockPos(bx, by, bz));
+            if (block != null) {
+                var def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+                if (def != null && def.getBreakingPattern() == 0) continue;
+            }
+            
             blockShader.setVector3f("uHiddenPositions[" + hiddenCount + "]", bx, by, bz);
             hiddenCount++;
         }

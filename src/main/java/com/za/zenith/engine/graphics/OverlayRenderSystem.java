@@ -106,8 +106,16 @@ public class OverlayRenderSystem {
         this.breakingProgress = progress;
         this.wobbleTimer = timer;
         if (localHitPoint != null) this.breakingHitPoint.set(localHitPoint);
-        if (localWeakSpot != null) this.weakSpotPos.set(localWeakSpot);
-        if (color != null) this.weakSpotColor.set(color);
+        if (localWeakSpot != null) {
+            this.weakSpotPos.set(localWeakSpot);
+        } else {
+            this.weakSpotPos.set(0.0f, -100.0f, 0.0f); // ponytail: hide weak spot
+        }
+        if (color != null) {
+            this.weakSpotColor.set(color);
+        } else {
+            this.weakSpotColor.set(1.0f, 1.0f, 1.0f);
+        }
         this.hitCount = history != null ? Math.min(16, history.size()) : 0;
         if (history != null) {
             for (int i = 0; i < hitCount; i++) {

@@ -22,12 +22,14 @@ import org.joml.Vector3f;
 public class InteractionInputHandler {
     
     public RaycastResult update(Window window, Camera camera, Player player, World world, RaycastResult raycast, float deltaTime, com.za.zenith.engine.input.InputManager manager, com.za.zenith.network.GameClient networkClient) {
+        com.za.zenith.engine.input.MiningController miningController = manager.getMiningController();
         boolean anyScreen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().isAnyScreenOpen();
         boolean nappingOpen = GameLoop.getInstance().isNappingOpen();
         
         if (anyScreen || nappingOpen) {
             manager.setLootboxOpeningTimer(0);
             manager.setLootboxStack(null);
+            miningController.stopMining(world);
             return raycast;
         }
 
@@ -37,17 +39,16 @@ public class InteractionInputHandler {
         boolean lm = manager.isPressed(com.za.zenith.engine.input.InputAction.ATTACK_MINE);
         boolean isNewLeftClick = manager.wasJustPressed(com.za.zenith.engine.input.InputAction.ATTACK_MINE);
 
-        com.za.zenith.engine.input.MiningController miningController = manager.getMiningController();
         com.za.zenith.entities.Entity hitEntity = manager.getHitEntity();
 
         if (raycast.isHit()) {
             BlockPos hitPos = raycast.getBlockPos();
             if (miningController.getBreakingBlockPos() != null && !hitPos.equals(miningController.getBreakingBlockPos())) {
-                miningController.stopMining();
+                miningController.stopMining(world);
             }
         } else {
             if (miningController.getBreakingBlockPos() != null) {
-                miningController.stopMining();
+                miningController.stopMining(world);
             }
         }
 

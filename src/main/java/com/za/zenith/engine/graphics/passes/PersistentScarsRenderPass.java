@@ -37,6 +37,9 @@ public class PersistentScarsRenderPass implements RenderPass {
             Block block = info.getBlock();
             if (block == null || block.isAir()) continue;
 
+            var def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
+            if (def.getBreakingPattern() == 0) continue;
+
             // 1. Hole (for adjacent faces)
             Mesh hole = system.getPersistentHoleCache().computeIfAbsent(pos, p -> ChunkMeshGenerator.generateHoleMesh(p, world, atlas));
             if (hole != null) {
@@ -53,7 +56,6 @@ public class PersistentScarsRenderPass implements RenderPass {
             // 2. Proxy (the static damaged block)
             Mesh mesh = system.getPersistentProxyCache().computeIfAbsent(pos, p -> ChunkMeshGenerator.generateSingleBlockMesh(block, atlas, world, p));
             if (mesh != null) {
-                var def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
                 stateManager.setBoolean("uIsProxy", true);
                 stateManager.setFloat("uBreakingProgress", info.getDamage() / (def.getHardness() * 10.0f));
                 stateManager.setInt("uBreakingPattern", def.getBreakingPattern());
