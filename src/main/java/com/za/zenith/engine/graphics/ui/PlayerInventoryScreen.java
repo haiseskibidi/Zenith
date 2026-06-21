@@ -114,6 +114,12 @@ public class PlayerInventoryScreen extends InventoryScreen {
         return super.handleChar(codepoint);
     }
 
+    @Override
+    public boolean isInputFocused() {
+        InventoryScreenRenderer invRenderer = GameLoop.getInstance().getRenderer().getUIRenderer().getInventoryScreenRenderer();
+        return invRenderer != null && invRenderer.isSearchBarFocused();
+    }
+
     public java.util.List<GroupUI> getGroupsUI() {
         return groups;
     }

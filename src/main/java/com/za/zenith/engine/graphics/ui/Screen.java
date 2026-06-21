@@ -68,6 +68,13 @@ public interface Screen {
     default boolean isScene() {
         return false;
     }
+
+    /**
+     * @return true if the screen has an active input field focused (e.g. search bar).
+     */
+    default boolean isInputFocused() {
+        return false;
+    }
 }
 
 

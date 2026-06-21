@@ -5,14 +5,6 @@
   "droppedScale": 1.15,
   "weight": 2.0,
   "gender": "feminine",
-  "light": {
-    "type": "spot",
-    "color": [1.0, 1.0, 1.0],
-    "intensity": 5.0,
-    "radius": 20.0,
-    "spotAngle": 25.0,
-    "dynamic": true
-  },
   "tags": ["zenith:tools", "zenith:melee"],
   "components": {
     "viewmodel": {

@@ -480,6 +480,11 @@ public class DevInspectorScreen implements Screen {
     }
 
     @Override
+    public boolean isInputFocused() {
+        return searchBar != null && searchBar.isFocused();
+    }
+
+    @Override
     public boolean handleScroll(double yoffset) {
         float mouseX = GameLoop.getInstance().getInputManager().getMouseX();
         float mouseY = GameLoop.getInstance().getInputManager().getMouseY();

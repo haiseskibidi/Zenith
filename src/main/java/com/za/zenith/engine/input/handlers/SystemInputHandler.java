@@ -21,6 +21,8 @@ public class SystemInputHandler {
         boolean nappingOpen = GameLoop.getInstance().isNappingOpen();
         boolean inventoryOpen = GameLoop.getInstance().isInventoryOpen();
         boolean paused = GameLoop.getInstance().isPaused();
+        com.za.zenith.engine.graphics.ui.Screen active = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
+        boolean isInputFocused = active != null && active.isInputFocused();
         
         // F - Toggle Fly
         if (manager.wasJustPressed(InputAction.TOGGLE_FLY) && !anyScreen && !nappingOpen) {
@@ -63,19 +65,21 @@ public class SystemInputHandler {
         }
 
         // Z - Sort Inventory
-        if (manager.wasJustPressed(InputAction.SORT_INVENTORY) && inventoryOpen) {
+        if (manager.wasJustPressed(InputAction.SORT_INVENTORY) && inventoryOpen && !isInputFocused) {
             player.getInventory().sortMainInventory();
         }
 
         // Q - Drop Item
         if (manager.wasJustPressed(InputAction.DROP) && !paused && !nappingOpen) {
             if (inventoryOpen) {
-                if (manager.getHoveredSlot() != null) {
-                    ItemStack stack = manager.getHoveredSlot().getStack();
-                    if (stack != null) {
-                        boolean ctrlPressed = window.isKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL) || window.isKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL);
-                        manager.dropStack(stack, player, GameLoop.getInstance().getWorld(), GameLoop.getInstance().getCamera(), ctrlPressed);
-                        if (stack.getCount() <= 0) manager.getHoveredSlot().setStack(null);
+                if (!isInputFocused) {
+                    if (manager.getHoveredSlot() != null) {
+                        ItemStack stack = manager.getHoveredSlot().getStack();
+                        if (stack != null) {
+                            boolean ctrlPressed = window.isKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL) || window.isKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL);
+                            manager.dropStack(stack, player, GameLoop.getInstance().getWorld(), GameLoop.getInstance().getCamera(), ctrlPressed);
+                            if (stack.getCount() <= 0) manager.getHoveredSlot().setStack(null);
+                        }
                     }
                 }
             } else {

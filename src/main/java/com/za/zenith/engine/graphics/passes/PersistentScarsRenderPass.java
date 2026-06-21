@@ -24,6 +24,7 @@ public class PersistentScarsRenderPass implements RenderPass {
         // Clean stale items in system's caches
         system.getPersistentHoleCache().keySet().removeIf(pos -> !world.getBlockDamageMap().containsKey(World.packBlockPos(pos.x(), pos.y(), pos.z())));
         system.getPersistentProxyCache().keySet().removeIf(pos -> !world.getBlockDamageMap().containsKey(World.packBlockPos(pos.x(), pos.y(), pos.z())));
+        system.getProxyBlockTypeMap().keySet().removeIf(pos -> !world.getBlockDamageMap().containsKey(World.packBlockPos(pos.x(), pos.y(), pos.z())));
 
         for (var entry : world.getBlockDamageMap().entrySet()) {
             long packed = entry.getKey();
@@ -39,6 +40,16 @@ public class PersistentScarsRenderPass implements RenderPass {
 
             var def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
             if (def.getBreakingPattern() == 0) continue;
+
+            // Invalidate caches if the block type changed (e.g. log -> felling stage)
+            Integer cachedType = system.getProxyBlockTypeMap().get(pos);
+            if (cachedType != null && cachedType != block.getType()) {
+                Mesh oldMesh = system.getPersistentProxyCache().remove(pos);
+                if (oldMesh != null) oldMesh.cleanup();
+                Mesh oldHole = system.getPersistentHoleCache().remove(pos);
+                if (oldHole != null) oldHole.cleanup();
+            }
+            system.getProxyBlockTypeMap().put(pos, block.getType());
 
             // 1. Hole (for adjacent faces)
             Mesh hole = system.getPersistentHoleCache().computeIfAbsent(pos, p -> ChunkMeshGenerator.generateHoleMesh(p, world, atlas));

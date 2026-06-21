@@ -45,6 +45,7 @@ public class OverlayRenderSystem {
     // Persistent scars cache
     private final Map<com.za.zenith.world.BlockPos, Mesh> persistentHoleCache = new java.util.HashMap<>();
     private final Map<com.za.zenith.world.BlockPos, Mesh> persistentProxyCache = new java.util.HashMap<>();
+    private final Map<com.za.zenith.world.BlockPos, Integer> proxyBlockTypeMap = new java.util.HashMap<>();
 
     // Recently broken holes (prevents X-Ray holes during asynchronous chunk meshing)
     public static class RecentlyBrokenHole {
@@ -195,6 +196,7 @@ public class OverlayRenderSystem {
         persistentHoleCache.clear();
         persistentProxyCache.values().forEach(Mesh::cleanup);
         persistentProxyCache.clear();
+        proxyBlockTypeMap.clear();
     }
 
     public void cleanup() {
@@ -238,5 +240,6 @@ public class OverlayRenderSystem {
     public Mesh getPreviewMesh() { return previewMesh; }
     public Map<com.za.zenith.world.BlockPos, Mesh> getPersistentHoleCache() { return persistentHoleCache; }
     public Map<com.za.zenith.world.BlockPos, Mesh> getPersistentProxyCache() { return persistentProxyCache; }
+    public Map<com.za.zenith.world.BlockPos, Integer> getProxyBlockTypeMap() { return proxyBlockTypeMap; }
     public RaycastResult getHighlightedBlock() { return currentHighlightedBlock; }
 }

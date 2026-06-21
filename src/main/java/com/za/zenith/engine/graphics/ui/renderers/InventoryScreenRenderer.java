@@ -231,6 +231,11 @@ public class InventoryScreenRenderer {
         return devSearchBar.handleChar(codepoint);
     }
 
+    public boolean isSearchBarFocused() {
+        if (lastMode != PlayerMode.DEVELOPER) return false;
+        return devSearchBar != null && devSearchBar.isFocused();
+    }
+
     private void renderTooltip(java.util.List<String> lines, float mx, float my, int sw, int sh) {
         if (lines == null || lines.isEmpty()) return;
 

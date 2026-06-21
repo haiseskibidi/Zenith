@@ -2,7 +2,7 @@
   "fov": 80.0,
   "mouseSensitivity": 1.0,
   "devMode": true,
-  "debugOverlayVisible": false,
+  "debugOverlayVisible": true,
   "vsync": true,
   "keyBinds": {
     "drop": 81,

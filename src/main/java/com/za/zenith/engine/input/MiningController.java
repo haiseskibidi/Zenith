@@ -266,13 +266,17 @@ public class MiningController {
                     if (networkClient != null && networkClient.isConnected()) {
                         networkClient.sendBlockUpdate(hitPos.x(), hitPos.y(), hitPos.z(), Blocks.AIR.getId());
                     }
+                    stopMining();
+                    world.setBlockDamage(hitPos, 0); // Clear damage once broken
                 } else {
-                    breakingProgress = 0;
+                    breakingProgress = 0.0f;
+                    wobbleTimer = 0.0f;
+                    // Initialize the damage map with the new block type immediately with a tiny damage
+                    // to prevent visual rollback to the full log before the next hit or chunk rebuild
+                    world.setBlockDamage(hitPos, 0.001f);
                 }
             }
 
-            stopMining();
-            world.setBlockDamage(hitPos, 0); // Clear damage once broken
             breakDelayTimer = interval; // Use global interval instead of BREAK_COOLDOWN
             hitCooldownTimer = interval;
             if (currentStack != null && currentItem.isTool()) {

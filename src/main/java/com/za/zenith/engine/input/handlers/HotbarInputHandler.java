@@ -16,6 +16,8 @@ public class HotbarInputHandler {
         boolean inventoryOpen = GameLoop.getInstance().isInventoryOpen();
         boolean nappingOpen = GameLoop.getInstance().isNappingOpen();
         boolean anyScreen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().isAnyScreenOpen();
+        com.za.zenith.engine.graphics.ui.Screen active = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
+        boolean isInputFocused = active != null && active.isInputFocused();
 
         // Блокируем хотбар во время скалывания, инвентаря или любых других экранов (настройки, инспектор)
         if (!nappingOpen && !anyScreen) {
@@ -26,7 +28,7 @@ public class HotbarInputHandler {
                     break;
                 }
             }
-        } else if (inventoryOpen) {
+        } else if (inventoryOpen && !isInputFocused) {
             for (int i = 0; i < 9; i++) {
                 InputAction action = InputAction.values()[InputAction.SLOT_1.ordinal() + i];
                 if (manager.wasJustPressed(action)) {

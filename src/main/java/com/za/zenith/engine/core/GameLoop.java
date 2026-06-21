@@ -137,9 +137,10 @@ public class GameLoop {
     private void input(float deltaTime) {
         screenToggleCooldown = Math.max(0, screenToggleCooldown - deltaTime);
         com.za.zenith.engine.graphics.ui.Screen active = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
+        boolean isInputFocused = active != null && active.isInputFocused();
         
         // F8 - Editor Toggle
-        if (inputManager.wasJustPressed(InputAction.EDITOR_TOGGLE) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("editor_toggle"))) {
+        if (inputManager.wasJustPressed(InputAction.EDITOR_TOGGLE) && !paused && screenToggleCooldown <= 0 && !isInputFocused && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("editor_toggle"))) {
             if (active instanceof AnimationEditorScreen) {
                 toggleAnimationEditor();
                 screenToggleCooldown = 0.25f;
@@ -150,7 +151,7 @@ public class GameLoop {
         }
 
         // F9 - Live Inspector
-        if (inputManager.wasJustPressed(InputAction.LIVE_INSPECTOR) && SettingsManager.getInstance().isDevMode() && screenToggleCooldown <= 0) {
+        if (inputManager.wasJustPressed(InputAction.LIVE_INSPECTOR) && SettingsManager.getInstance().isDevMode() && screenToggleCooldown <= 0 && !isInputFocused) {
             if (active instanceof DevInspectorScreen) {
                 com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().closeScreen();
                 inputManager.enableMouseCapture(window);
@@ -163,7 +164,7 @@ public class GameLoop {
         }
 
         // J - Journal Toggle
-        if (inputManager.wasJustPressed(InputAction.JOURNAL) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("journal"))) {
+        if (inputManager.wasJustPressed(InputAction.JOURNAL) && !paused && screenToggleCooldown <= 0 && !isInputFocused && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("journal"))) {
             if (active instanceof com.za.zenith.engine.graphics.ui.JournalScreen) {
                 toggleJournal();
                 screenToggleCooldown = 0.25f;
@@ -174,7 +175,7 @@ public class GameLoop {
         }
 
         // E - Inventory Toggle
-        if (inputManager.wasJustPressed(InputAction.INVENTORY) && !paused && screenToggleCooldown <= 0 && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("inventory"))) {
+        if (inputManager.wasJustPressed(InputAction.INVENTORY) && !paused && screenToggleCooldown <= 0 && !isInputFocused && !inputManager.isKeyHandled(SettingsManager.getInstance().getKeyCode("inventory"))) {
             if (active instanceof com.za.zenith.engine.graphics.ui.InventoryScreen) {
                 toggleInventory();
                 screenToggleCooldown = 0.25f;

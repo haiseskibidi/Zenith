@@ -31,8 +31,10 @@ public class LightManager {
         if (player.getInventory().getSelectedItemStack() != null) {
             com.za.zenith.world.items.Item item = player.getInventory().getSelectedItemStack().getItem();
             if (item.getLightData() != null) {
-                // Optimization: reuse or pool if needed, but Item light is rare enough for now
-                activeDynamicLights.add(createSource(item.getLightData(), new Vector3f(player.getPosition()).add(0, 1.5f, 0), player.getRotation(), time));
+                Vector3f lookDir = new Vector3f(0, 0, -1)
+                    .rotateX(player.getRotation().x)
+                    .rotateY(player.getRotation().y);
+                activeDynamicLights.add(createSource(item.getLightData(), new Vector3f(player.getPosition()).add(0, 1.5f, 0), lookDir, time));
             }
         }
 
