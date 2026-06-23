@@ -146,12 +146,46 @@ public class Player extends LivingEntity {
 
     private boolean canStandUp(World world) {
         com.za.zenith.world.physics.PhysicsSettings settings = com.za.zenith.world.physics.PhysicsSettings.getInstance();
-        com.za.zenith.world.physics.AABB standingBox = new com.za.zenith.world.physics.AABB(-settings.playerWidth / 2, 0, -settings.playerWidth / 2, settings.playerWidth / 2, settings.standingHeight, settings.playerWidth / 2).offset(position);
-        for (int x = (int)Math.floor(standingBox.minX()); x <= (int)Math.floor(standingBox.maxX()); x++) {
-            for (int y = (int)Math.floor(standingBox.minY()); y <= (int)Math.floor(standingBox.maxY()); y++) {
-                for (int z = (int)Math.floor(standingBox.minZ()); z <= (int)Math.floor(standingBox.maxZ()); z++) {
+        
+        float playerHalfWidth = settings.playerWidth / 2.0f;
+        float minX = position.x - playerHalfWidth;
+        float maxX = position.x + playerHalfWidth;
+        float minY = position.y;
+        float maxY = position.y + settings.standingHeight;
+        float minZ = position.z - playerHalfWidth;
+        float maxZ = position.z + playerHalfWidth;
+
+        int gridMinX = (int) Math.floor(minX);
+        int gridMaxX = (int) Math.floor(maxX);
+        int gridMinY = (int) Math.floor(minY);
+        int gridMaxY = (int) Math.floor(maxY);
+        int gridMinZ = (int) Math.floor(minZ);
+        int gridMaxZ = (int) Math.floor(maxZ);
+
+        for (int x = gridMinX; x <= gridMaxX; x++) {
+            for (int y = gridMinY; y <= gridMaxY; y++) {
+                for (int z = gridMinZ; z <= gridMaxZ; z++) {
                     com.za.zenith.world.blocks.Block b = world.getBlock(x, y, z);
-                    if (!b.isAir() && b.isSolid()) return false;
+                    if (!b.isAir() && b.isSolid()) {
+                        com.za.zenith.world.physics.VoxelShape shape = com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType()).getShape(b.getMetadata());
+                        if (shape != null) {
+                            for (com.za.zenith.world.physics.AABB box : shape.getBoxes()) {
+                                float bMinX = box.minX() + x;
+                                float bMaxX = box.maxX() + x;
+                                float bMinY = box.minY() + y;
+                                float bMaxY = box.maxY() + y;
+                                float bMinZ = box.minZ() + z;
+                                float bMaxZ = box.maxZ() + z;
+
+                                // Строгая проверка пересечения AABB стоящего игрока с рамкой коллизии блока
+                                if (maxX > bMinX && minX < bMaxX &&
+                                    maxY > bMinY && minY < bMaxY &&
+                                    maxZ > bMinZ && minZ < bMaxZ) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
