@@ -9,7 +9,6 @@ import com.za.zenith.world.chunks.Chunk;
 import com.za.zenith.world.chunks.ChunkPos;
 import com.za.zenith.world.generation.TerrainGenerator;
 import com.za.zenith.world.items.ItemStack;
-
 import com.za.zenith.entities.Entity;
 import com.za.zenith.entities.Player;
 import com.za.zenith.entities.ScoutEntity;
@@ -20,134 +19,37 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.Set;
 import java.util.Map;
 
+/**
+ * Main facade class representing the Zenith game world.
+ * Coordinate translation, block management, and subsystem orchestration.
+ * ponytail: refactored to keep size manageable and delegates tasks to specific managers.
+ */
 public class World {
     private final Map<Long, Chunk> chunks;
     private final Map<Long, Chunk> stagingChunks = new ConcurrentHashMap<>();
-    private final java.util.List<CloudInstance> activeClouds = new java.util.concurrent.CopyOnWriteArrayList<>();
-    private final List<Entity> entities = java.util.Collections.synchronizedList(new ArrayList<>());
-    private final Map<com.za.zenith.world.chunks.ChunkPos, List<Entity>> groundEntityMap = new ConcurrentHashMap<>();
-    private final Vector3f vPool1 = new Vector3f();
-    private final Vector3f vPool2 = new Vector3f();
     private final Map<BlockPos, BlockEntity> blockEntities;
     private final List<ITickable> tickableBlockEntities;
     private final LightEngine lightEngine;
     private float worldTime; // Stored as float for smooth interpolation
-    private float windTime = 0.0f;
 
-    public float getWindTime() { return windTime; }
+    // Subsystems
+    private final com.za.zenith.world.weather.CloudSimulationSystem cloudSystem;
+    private final WorldDamageManager damageManager;
+    private final WorldEntityManager entityManager;
+    private final com.za.zenith.world.chunks.WorldChunkManager chunkManager;
 
-    private final com.za.zenith.utils.PriorityExecutorService chunkGenExecutor = new com.za.zenith.utils.PriorityExecutorService(
-        Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() - 2)),
-        r -> {
-            Thread t = new Thread(r, "ChunkGenerator");
-            t.setDaemon(true);
-            t.setPriority(Thread.MIN_PRIORITY);
-            return t;
-        }
-    );
-    private final com.za.zenith.utils.PriorityExecutorService lightExecutor = new com.za.zenith.utils.PriorityExecutorService(
-        Math.min(2, Math.max(1, Runtime.getRuntime().availableProcessors() / 4)),
-        r -> {
-            Thread t = new Thread(r, "LightGenerator");
-            t.setDaemon(true);
-            t.setPriority(Thread.MIN_PRIORITY);
-            return t;
-        }
-    );
-    private final Map<Long, Future<?>> generatingChunks = new ConcurrentHashMap<>();
-    private final Map<Long, Future<?>> lightingChunks = new ConcurrentHashMap<>();
-    private final List<java.util.function.Consumer<Chunk>> unloadListeners = new CopyOnWriteArrayList<>();
+    private final com.za.zenith.world.fluid.FluidSimulator fluidSimulator = new com.za.zenith.world.fluid.FluidSimulator(this);
+    private Player player;
+    private final TerrainGenerator terrainGenerator;
+    private final com.za.zenith.world.generation.BiomeGenerator biomeGenerator;
+    private final long seed;
+    private boolean generating = false;
 
-    public void addUnloadListener(java.util.function.Consumer<Chunk> listener) {
-        unloadListeners.add(listener);
-    }
+    private final com.za.zenith.world.weather.WeatherManager weatherManager = new com.za.zenith.world.weather.WeatherManager();
 
-    private int lastPlayerChunkX = Integer.MAX_VALUE;
-    private int lastPlayerChunkZ = Integer.MAX_VALUE;
-
-    private static class WorldCache {
-        Chunk lastChunk;
-        long lastPackedPos = Long.MIN_VALUE;
-    }
-    private final ThreadLocal<WorldCache> threadCache = ThreadLocal.withInitial(WorldCache::new);
-
-    public Chunk getChunk(int chunkX, int chunkZ) {
-        WorldCache cache = threadCache.get();
-        long packed = ChunkPos.pack(chunkX, chunkZ);
-        if (packed == cache.lastPackedPos) return cache.lastChunk;
-
-        cache.lastChunk = chunks.get(packed);
-        cache.lastPackedPos = packed;
-        return cache.lastChunk;
-    }
-
-    public Chunk getChunk(ChunkPos pos) {
-        if (pos == null) return null;
-        return getChunk(pos.x(), pos.z());
-    }
-
-    public Chunk getChunkInternal(int chunkX, int chunkZ) {
-        long packed = ChunkPos.pack(chunkX, chunkZ);
-        Chunk c = chunks.get(packed);
-        if (c == null) {
-            c = stagingChunks.get(packed);
-            // Double-check chunks in case it was moved from staging to main map between the two calls
-            if (c == null) c = chunks.get(packed);
-        }
-        return c;
-    }
-
-    public Chunk getChunkInternal(ChunkPos pos) {
-        if (pos == null) return null;
-        return getChunkInternal(pos.x(), pos.z());
-    }
-
-    public int getHighestBlock(int x, int z) {
-        Chunk chunk = getChunkInternal(x >> 4, z >> 4);
-        if (chunk == null) return 0;
-        return chunk.getHighestBlock(x & 15, z & 15);
-    }
-
-    public int getRawBlockData(int x, int y, int z) {
-        if (y < 0 || y >= Chunk.CHUNK_HEIGHT) return 0;
-        Chunk chunk = getChunkInternal(x >> 4, z >> 4);
-        if (chunk == null) return 0;
-        return chunk.getRawBlockData(x & 15, y, z & 15);
-    }
-
-    public static class BlockDamageInstance {
-        private float damage;
-        private final Block block;
-        private final List<Vector4f> hitHistory;
-        private long lastHitTime;
-
-        public BlockDamageInstance(float damage, Block block, List<Vector4f> hitHistory) {
-            this.damage = damage;
-            this.block = block;
-            this.hitHistory = new ArrayList<>(hitHistory);
-            this.lastHitTime = System.currentTimeMillis();
-        }
-
-        public Block getBlock() { return block; }
-        public float getDamage() { return damage; }
-        public void setDamage(float damage) { this.damage = damage; }
-        public List<Vector4f> getHitHistory() { return hitHistory; }
-        public long getLastHitTime() { return lastHitTime; }
-        public void resetLastHitTime() { this.lastHitTime = System.currentTimeMillis(); }
-    }
-
-    private final Map<Long, BlockDamageInstance> blockDamageMap = new ConcurrentHashMap<>();
-
-    public Map<Long, BlockDamageInstance> getBlockDamageMap() {
-        return blockDamageMap;
-    }
-
+    // Packing Block Pos helper methods
     public static long packBlockPos(int x, int y, int z) {
         return ((long) x & 0x3FFFFFFL) << 38 | ((long) y & 0x3FFL) << 28 | ((long) z & 0x3FFFFFFL);
     }
@@ -167,34 +69,15 @@ public class World {
         if ((z & 0x2000000L) != 0) z |= 0xFFFFFFFFFF000000L;
         return (int) z;
     }
-    private final com.za.zenith.world.fluid.FluidSimulator fluidSimulator = new com.za.zenith.world.fluid.FluidSimulator(this);
 
-    private Player player;
-    private final TerrainGenerator terrainGenerator;
-    private final com.za.zenith.world.generation.BiomeGenerator biomeGenerator;
-    private final long seed;
-    private boolean generating = false;
-
-    private final com.za.zenith.world.weather.WeatherManager weatherManager = new com.za.zenith.world.weather.WeatherManager();
-
-    public com.za.zenith.world.weather.WeatherManager getWeatherManager() {
-        return weatherManager;
+    private static class WorldCache {
+        Chunk lastChunk;
+        long lastPackedPos = Long.MIN_VALUE;
     }
+    private final ThreadLocal<WorldCache> threadCache = ThreadLocal.withInitial(WorldCache::new);
 
     public World() {
-        this.chunks = new ConcurrentHashMap<>();
-        this.blockEntities = new ConcurrentHashMap<>();
-        this.tickableBlockEntities = java.util.Collections.synchronizedList(new ArrayList<>());
-        this.seed = System.currentTimeMillis(); // Random seed each time
-        com.za.zenith.utils.Logger.info("Generating new world with seed: %d", seed);
-        this.biomeGenerator = new com.za.zenith.world.generation.BiomeGenerator(seed);
-        this.terrainGenerator = new TerrainGenerator(seed);
-        this.lightEngine = new com.za.zenith.world.lighting.LightEngine(this);
-        this.worldTime = WorldSettings.getInstance().initialTime;
-
-        generating = true;
-        generateWorld();
-        generating = false;
+        this(System.currentTimeMillis());
     }
 
     public World(long seed) {
@@ -208,13 +91,19 @@ public class World {
         this.lightEngine = new com.za.zenith.world.lighting.LightEngine(this);
         this.worldTime = WorldSettings.getInstance().initialTime;
 
+        // Initialize managers before generation starts
+        this.cloudSystem = new com.za.zenith.world.weather.CloudSimulationSystem();
+        this.damageManager = new WorldDamageManager(this);
+        this.entityManager = new WorldEntityManager(this);
+        this.chunkManager = new com.za.zenith.world.chunks.WorldChunkManager(this);
+
         generating = true;
         generateWorld();
         generating = false;
     }
 
     private void generateWorld() {
-        int renderDistance = com.za.zenith.world.generation.GenerationSettings.getInstance().initialRenderDistance; // Generate small radius initially
+        int renderDistance = com.za.zenith.world.generation.GenerationSettings.getInstance().initialRenderDistance;
 
         // First pass: generate terrain
         for (int chunkX = -renderDistance; chunkX <= renderDistance; chunkX++) {
@@ -224,7 +113,6 @@ public class World {
 
                 terrainGenerator.generateTerrain(chunk);
                 chunks.put(pos.pack(), chunk);
-                registerChunkClouds(chunk);
             }
         }
 
@@ -276,460 +164,97 @@ public class World {
         this.worldTime = WorldSettings.getInstance().initialTime;
     }
 
-    private final java.util.LinkedHashSet<Long> pendingChunkQueue = new java.util.LinkedHashSet<>();
+    // Accessors for subsystems & components
+    public Map<Long, Chunk> getChunksMap() { return chunks; }
+    public Map<Long, Chunk> getStagingChunks() { return stagingChunks; }
+    public TerrainGenerator getTerrainGenerator() { return terrainGenerator; }
+    public LightEngine getLightEngine() { return lightEngine; }
+    public com.za.zenith.world.weather.CloudSimulationSystem getCloudSystem() { return cloudSystem; }
+    public WorldDamageManager getDamageManager() { return damageManager; }
+    public WorldEntityManager getEntityManager() { return entityManager; }
+    public Map<com.za.zenith.world.chunks.ChunkPos, List<Entity>> getGroundEntityMap() { return entityManager.getGroundEntityMap(); }
+    public com.za.zenith.world.chunks.WorldChunkManager getChunkManager() { return chunkManager; }
+    public List<ITickable> getTickableBlockEntities() { return tickableBlockEntities; }
+    public com.za.zenith.world.weather.WeatherManager getWeatherManager() { return weatherManager; }
+    public com.za.zenith.world.generation.BiomeGenerator getBiomeManager() { return biomeGenerator; }
+    public java.util.Map<BlockPos, com.za.zenith.world.blocks.entity.BlockEntity> getBlockEntities() { return blockEntities; }
+    public Player getPlayer() { return player; }
+    public void setPlayer(Player player) { this.player = player; }
+    public long getSeed() { return seed; }
+    public boolean isGenerating() { return generating; }
+    public float getWorldTime() { return worldTime; }
 
-    public int getRenderDistance() {
-        return com.za.zenith.world.generation.GenerationSettings.getInstance().activeRenderDistance;
+    // API Compatibility Delegates
+    public float getWindTime() { return cloudSystem.getWindTime(); }
+    public java.util.List<com.za.zenith.world.World.CloudInstance> getActiveClouds() { return cloudSystem.getActiveClouds(); }
+    public void registerChunkClouds(Chunk chunk) {}
+    public void unregisterChunkClouds(Chunk chunk) {}
+    public int getRenderDistance() { return com.za.zenith.world.generation.GenerationSettings.getInstance().activeRenderDistance; }
+    public com.za.zenith.utils.PriorityExecutorService getLightExecutor() { return chunkManager.getLightExecutor(); }
+    public void addUnloadListener(java.util.function.Consumer<Chunk> listener) { chunkManager.addUnloadListener(listener); }
+    public Map<Long, BlockDamageInstance> getBlockDamageMap() { return damageManager.getBlockDamageMap(); }
+    public float getBlockDamage(BlockPos pos) { return damageManager.getBlockDamage(pos); }
+    public float getBlockDamage(int x, int y, int z) { return damageManager.getBlockDamage(x, y, z); }
+    public List<Vector4f> getBlockHitHistory(BlockPos pos) { return damageManager.getBlockHitHistory(pos); }
+    public void setBlockDamage(BlockPos pos, float damage) { damageManager.setBlockDamage(pos, damage); }
+    public void setBlockDamage(BlockPos pos, float damage, List<Vector4f> history) { damageManager.setBlockDamage(pos, damage, history); }
+    public void spawnEntity(Entity entity) { entityManager.spawnEntity(entity); }
+    public void spawnItem(ItemStack stack, float x, float y, float z) { entityManager.spawnItem(stack, x, y, z); }
+    public void updateItemSpatial(com.za.zenith.entities.ItemEntity item, com.za.zenith.world.chunks.ChunkPos oldPos, com.za.zenith.world.chunks.ChunkPos newPos) { entityManager.updateItemSpatial(item, oldPos, newPos); }
+    public List<Entity> getGroundEntitiesInChunk(com.za.zenith.world.chunks.ChunkPos pos) { return entityManager.getGroundEntitiesInChunk(pos); }
+    public List<Entity> getEntities() { return entityManager.getEntities(); }
+
+    public Chunk getChunk(int chunkX, int chunkZ) {
+        WorldCache cache = threadCache.get();
+        long packed = ChunkPos.pack(chunkX, chunkZ);
+        if (packed == cache.lastPackedPos) return cache.lastChunk;
+
+        cache.lastChunk = chunks.get(packed);
+        cache.lastPackedPos = packed;
+        return cache.lastChunk;
     }
 
-    private final org.joml.Vector3f lastSortPos = new org.joml.Vector3f(Float.MAX_VALUE);
-    private long lastSpiralCheckTime = 0;
-    private long lastUnloadCheckTime = 0;
-
-    private void updateChunks() {
-        if (player == null) return;
-
-        int currentChunkX = (int) Math.floor(player.getPosition().x / Chunk.CHUNK_SIZE);
-        int currentChunkZ = (int) Math.floor(player.getPosition().z / Chunk.CHUNK_SIZE);
-
-        int renderDistance = com.za.zenith.world.generation.GenerationSettings.getInstance().activeRenderDistance;
-        int unloadDistance = com.za.zenith.world.generation.GenerationSettings.getInstance().unloadDistance;
-
-        long now = System.currentTimeMillis();
-        boolean forceCheck = now - lastSpiralCheckTime > 1500; // Check every 1.5 seconds
-        boolean shouldUnload = now - lastUnloadCheckTime > 1000; // Unload every 1.0 second (highly responsive!)
-
-        // 1. SPIRAL DISCOVERY: If player moved or timer fired, rebuild queue in strict spiral order from center
-        if (currentChunkX != lastPlayerChunkX || currentChunkZ != lastPlayerChunkZ || (forceCheck && pendingChunkQueue.isEmpty())) {
-            lastPlayerChunkX = currentChunkX;
-            lastPlayerChunkZ = currentChunkZ;
-            lastSpiralCheckTime = now;
-
-            // Clear old non-relevant queue entries. Closest chunks will always be added first!
-            pendingChunkQueue.clear();
-
-            // SPIRAL LOADING: Build a list of chunks in a radial spiral from player
-            int x = 0, z = 0, dx = 0, dz = -1;
-            int maxChunks = (renderDistance * 2 + 1) * (renderDistance * 2 + 1);
-            for (int i = 0; i < maxChunks; i++) {
-                if (-renderDistance <= x && x <= renderDistance && -renderDistance <= z && z <= renderDistance) {
-                    long packed = ChunkPos.pack(currentChunkX + x, currentChunkZ + z);
-                    if (!chunks.containsKey(packed) && !generatingChunks.containsKey(packed) && !lightingChunks.containsKey(packed)) {
-                        pendingChunkQueue.add(packed);
-                    }
-                }
-                if (x == z || (x < 0 && x == -z) || (x > 0 && x == 1 - z)) {
-                    int temp = dx;
-                    dx = -dz;
-                    dz = temp;
-                }
-                x += dx;
-                z += dz;
-            }
-        }
-
-        // 2. LAZY UNLOAD: Clean up far chunks once every 5 seconds to eliminate CPU lock contention and garbage sweeps
-        if (shouldUnload) {
-            lastUnloadCheckTime = now;
-
-            // Unload chunks outside unloadDistance and cancel their generation tasks
-            chunks.entrySet().removeIf(entry -> {
-                long packed = entry.getKey();
-                int cx = ChunkPos.unpackX(packed);
-                int cz = ChunkPos.unpackZ(packed);
-                boolean remove = Math.abs(cx - currentChunkX) > unloadDistance || Math.abs(cz - currentChunkZ) > unloadDistance;
-                if (remove) {
-                    Chunk chunk = entry.getValue();
-                    com.za.zenith.world.lighting.LightManager.onChunkUnload(chunk);
-                    
-                    // Ultra-fast chunk-local O(1) clear for block damage
-                    for (long packedPos : chunk.getLocalBlockDamage()) {
-                        blockDamageMap.remove(packedPos);
-                    }
-                    chunk.getLocalBlockDamage().clear();
-
-                    // Ultra-fast chunk-local O(1) clear for block entities
-                    for (com.za.zenith.world.BlockPos pos : chunk.getLocalBlockEntities()) {
-                        BlockEntity be = blockEntities.remove(pos);
-                        if (be != null) {
-                            be.setRemoved();
-                            if (be instanceof ITickable) {
-                                tickableBlockEntities.remove(be);
-                            }
-                        }
-                    }
-                    chunk.getLocalBlockEntities().clear();
-
-                    // CRITICAL FIX: Properly remove the entire chunk from groundEntityMap
-                    groundEntityMap.remove(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
-
-                    unregisterChunkClouds(chunk);
-
-                    for (java.util.function.Consumer<Chunk> listener : unloadListeners) {
-                        listener.accept(chunk);
-                    }
-                }
-                return remove;
-            });
-
-            generatingChunks.entrySet().removeIf(entry -> {
-                long packed = entry.getKey();
-                int cx = ChunkPos.unpackX(packed);
-                int cz = ChunkPos.unpackZ(packed);
-                if (Math.abs(cx - currentChunkX) > unloadDistance || Math.abs(cz - currentChunkZ) > unloadDistance) {
-                    entry.getValue().cancel(true);
-                    return true;
-                }
-                return false;
-            });
-
-            lightingChunks.entrySet().removeIf(entry -> {
-                long packed = entry.getKey();
-                int cx = ChunkPos.unpackX(packed);
-                int cz = ChunkPos.unpackZ(packed);
-                if (Math.abs(cx - currentChunkX) > unloadDistance || Math.abs(cz - currentChunkZ) > unloadDistance) {
-                    entry.getValue().cancel(true);
-                    return true;
-                }
-                return false;
-            });
-
-            stagingChunks.keySet().removeIf(packed -> {
-                int cx = ChunkPos.unpackX(packed);
-                int cz = ChunkPos.unpackZ(packed);
-                return Math.abs(cx - currentChunkX) > unloadDistance || Math.abs(cz - currentChunkZ) > unloadDistance;
-            });
-
-            groundEntityMap.keySet().removeIf(pos -> {
-                return Math.abs(pos.x() - currentChunkX) > unloadDistance || Math.abs(pos.z() - currentChunkZ) > unloadDistance;
-            });
-
-            pendingChunkQueue.removeIf(packed -> {
-                int cx = ChunkPos.unpackX(packed);
-                int cz = ChunkPos.unpackZ(packed);
-                return Math.abs(cx - currentChunkX) > renderDistance || Math.abs(cz - currentChunkZ) > renderDistance;
-            });
-        }
-
-        if (!pendingChunkQueue.isEmpty()) {
-            int submittedThisTick = 0;
-            // Backpressure for generation (limit discovery to 4 per tick to avoid boundary spikes)
-            int canSubmitGen = Math.min(4, Math.max(0, (chunkGenExecutor.getCorePoolSize() * 2) - generatingChunks.size()));
-            
-            java.util.Iterator<Long> it = pendingChunkQueue.iterator();
-            while (it.hasNext() && submittedThisTick < canSubmitGen) {
-                long packedPos = it.next();
-                it.remove();
-                
-                if (!chunks.containsKey(packedPos) && !generatingChunks.containsKey(packedPos) && !lightingChunks.containsKey(packedPos)) {
-                    int cx = ChunkPos.unpackX(packedPos);
-                    int cz = ChunkPos.unpackZ(packedPos);
-                    
-                    Future<?> future = chunkGenExecutor.submit(new com.za.zenith.utils.PriorityExecutorService.PrioritizedRunnable() {
-                        @Override public int getPriority() { 
-                            if (player == null) return 0;
-                            int px = (int) Math.floor(player.getPosition().x / Chunk.CHUNK_SIZE);
-                            int pz = (int) Math.floor(player.getPosition().z / Chunk.CHUNK_SIZE);
-                            return (cx - px)*(cx - px) + (cz - pz)*(cz - pz);
-                        }
-
-                        @Override public void run() {
-                            try {
-                                Chunk chunk = stagingChunks.get(packedPos);
-                                if (chunk == null) chunk = new Chunk(new ChunkPos(cx, cz));
-                                terrainGenerator.generateTerrain(chunk);
-                                stagingChunks.put(packedPos, chunk);
-                                
-                                // Chain to lighting
-                                submitLightingTask(packedPos, chunk);
-                            } catch (Exception e) {
-                                generatingChunks.remove(packedPos);
-                            }
-                        }
-                    });
-                    generatingChunks.put(packedPos, future);
-                    submittedThisTick++;
-                }
-            }
-        }
+    public Chunk getChunk(ChunkPos pos) {
+        if (pos == null) return null;
+        return getChunk(pos.x(), pos.z());
     }
 
-    private void submitLightingTask(long packedPos, Chunk chunk) {
-        int cx = chunk.getPosition().x();
-        int cz = chunk.getPosition().z();
-        
-        Future<?> future = lightExecutor.submit(new com.za.zenith.utils.PriorityExecutorService.PrioritizedRunnable() {
-            @Override public int getPriority() {
-                if (player == null) return 0;
-                int px = (int) Math.floor(player.getPosition().x / Chunk.CHUNK_SIZE);
-                int pz = (int) Math.floor(player.getPosition().z / Chunk.CHUNK_SIZE);
-                return (cx - px)*(cx - px) + (cz - pz)*(cz - pz);
-            }
-
-            @Override public void run() {
-                try {
-                    terrainGenerator.generateStructures(World.this, chunk);
-                    lightEngine.generateInitialSunlight(chunk);
-                    chunk.setReady(true);
-                    chunk.setNeedsMeshUpdate(true);
-                    lightEngine.onChunkReady(chunk);
-                    com.za.zenith.world.lighting.LightManager.onChunkLoad(chunk);
-                    chunks.put(packedPos, chunk);
-                    registerChunkClouds(chunk);
-                } catch (Exception e) {
-                    String errorMsg = "Lighting error in chunk " + chunk.getPosition() + ": " + e.getMessage();
-                    com.za.zenith.utils.Logger.error(errorMsg, e);
-                    try (java.io.FileWriter fw = new java.io.FileWriter("chunk_errors.txt", true);
-                         java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
-                        pw.println(new java.util.Date() + " - " + errorMsg);
-                        e.printStackTrace(pw);
-                    } catch (Exception ex) {}
-                } finally {
-                    stagingChunks.remove(packedPos);
-                    generatingChunks.remove(packedPos);
-                    lightingChunks.remove(packedPos);
-                }
-            }
-        });
-        lightingChunks.put(packedPos, future);
-    }
-
-    public int getFastSurfaceColor(int x, int z) {
-        Chunk chunk = getChunk(x >> 4, z >> 4);
-        if (chunk == null || !chunk.isReady()) return 0xFF000000;
-
-        int lx = x & 15;
-        int lz = z & 15;
-
-        int y = chunk.getHighestBlock(lx, lz);
-        if (y <= 0) return 0xFF000000;
-
-        int data = chunk.getRawBlockData(lx, y, lz);
-        int type = data >> 8;
-        if (type == 0) return 0xFF000000; // Air
-
-        if (!com.za.zenith.engine.graphics.ui.renderers.MinimapRegistry.isSolid(type) && type != com.za.zenith.world.blocks.Blocks.WATER.getId()) return 0xFF000000;
-
-        int color = com.za.zenith.engine.graphics.ui.renderers.MinimapRegistry.getColor(type);
-
-        // Apply height-based shading for volume effect
-        float brightness = 0.7f + (y / (float)Chunk.CHUNK_HEIGHT) * 0.6f;
-        int r = (int) ((color & 0xFF) * brightness);
-        int g = (int) (((color >> 8) & 0xFF) * brightness);
-        int b = (int) (((color >> 16) & 0xFF) * brightness);
-
-        // Store Y height in Alpha channel for toon-shading outlines in shader
-        return (y << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
-    }
-
-    private int getSurfaceHeight(int x, int z) {
-        for (int y = 255; y > 0; y--) {
-            Block b = getBlock(x, y, z);
-            if (!b.isAir() && com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType()).isSolid()) {
-                return y;
-            }
+    public Chunk getChunkInternal(int chunkX, int chunkZ) {
+        long packed = ChunkPos.pack(chunkX, chunkZ);
+        Chunk c = chunks.get(packed);
+        if (c == null) {
+            c = stagingChunks.get(packed);
+            if (c == null) c = chunks.get(packed);
         }
-        return -1;
+        return c;
+    }
+
+    public Chunk getChunkInternal(ChunkPos pos) {
+        if (pos == null) return null;
+        return getChunkInternal(pos.x(), pos.z());
+    }
+
+    public int getHighestBlock(int x, int z) {
+        Chunk chunk = getChunkInternal(x >> 4, z >> 4);
+        if (chunk == null) return 0;
+        return chunk.getHighestBlock(x & 15, z & 15);
+    }
+
+    public int getRawBlockData(int x, int y, int z) {
+        if (y < 0 || y >= Chunk.CHUNK_HEIGHT) return 0;
+        Chunk chunk = getChunkInternal(x >> 4, z >> 4);
+        if (chunk == null) return 0;
+        return chunk.getRawBlockData(x & 15, y, z & 15);
     }
 
     public void update(float deltaTime) {
-        updateChunks();
+        chunkManager.update(player);
         weatherManager.update(deltaTime);
-        windTime += deltaTime * 1.5f; // Облака плавно плывут по небу со скоростью 1.5 блока/сек
+        cloudSystem.update(deltaTime, this, player, weatherManager);
         
         fluidSimulator.tick(deltaTime);
         
-        float px = 0;
-        float playerZ = 0;
-        if (player != null) {
-            px = player.getPosition().x;
-            playerZ = player.getPosition().z;
-        }
-
-        // 1. Обновляем и фильтруем активные облака
-        for (CloudInstance c : activeClouds) {
-            c.update(deltaTime);
-            
-            // Реальные мировые координаты облака с учетом ветра
-            float wx = c.x + windTime;
-            float dx = wx - px;
-            float dz = c.z - playerZ;
-            float distSq = dx * dx + dz * dz;
-            
-            // Удаляем облако, если оно слишком далеко (более 256 метров по горизонтали)
-            // или если оно было собрано (разрушено ПКМ) и полностью растворилось
-            if (distSq > 256.0f * 256.0f) {
-                activeClouds.remove(c);
-            } else if (c.isCollected()) {
-                activeClouds.remove(c);
-            }
-        }
-
-        // 2. Поддерживаем стабильное количество облаков на небе (целевое число: 28 в ясную погоду, до 60 во время дождя)
-        if (player != null) {
-            float rainIntensity = weatherManager.getRainIntensity();
-            int targetClouds = (int)(28 + rainIntensity * 32);
-            
-            if (activeClouds.isEmpty()) {
-                // При инициализации заполняем небо равномерно вокруг игрока в радиусе 200 метров,
-                // чтобы игрок не видел пустое небо при входе
-                for (int i = 0; i < targetClouds; i++) {
-                    float angle = (float) (Math.random() * Math.PI * 2.0);
-                    float dist = 20.0f + (float) Math.random() * 180.0f;
-                    float spawnX = px + (float) Math.cos(angle) * dist;
-                    float spawnZ = playerZ + (float) Math.sin(angle) * dist;
-                    
-                    float worldX = spawnX - windTime; // компенсируем смещение ветра
-                    float worldY = 270.0f + (float) Math.random() * 25.0f;
-                    float scale = (6.0f + (float) Math.random() * 9.0f) * (1.0f + rainIntensity * 0.8f);
-                    float seed = (float) Math.random();
-                    
-                    CloudInstance c = new CloudInstance(worldX, worldY, spawnZ, scale, seed);
-                    c.currentAlpha = 1.0f; // Начальные облака сразу плотные
-                    activeClouds.add(c);
-                }
-            } else if (activeClouds.size() < targetClouds) {
-                float worldY = 270.0f + (float) Math.random() * 25.0f;
-                float scale = (6.0f + (float) Math.random() * 9.0f) * (1.0f + rainIntensity * 0.8f);
-                float seed = (float) Math.random();
-                float spawnX, spawnZ;
-                float initAlpha = 1.0f;
-                
-                if (rainIntensity > 0.0f) {
-                    // Во время дождя спавним тучи по всей зоне видимости вокруг игрока,
-                    // чтобы они плотно затянули небо прямо над головой.
-                    // Но они спавнятся плавно конденсирующимися (initAlpha = 0.0f), чтобы исключить popping!
-                    float angle = (float) (Math.random() * Math.PI * 2.0);
-                    float dist = (float) Math.random() * 220.0f;
-                    spawnX = px + (float) Math.cos(angle) * dist;
-                    spawnZ = playerZ + (float) Math.sin(angle) * dist;
-                    initAlpha = 0.0f; // плавно проявляются прямо на небе за 2.5 секунды
-                } else {
-                    // В ясную погоду спавним облака строго на западном горизонте (наветренная сторона),
-                    // откуда ветер несет их прямо на восток через координату игрока.
-                    // Они спавнятся сразу плотными (initAlpha = 1.0f) за пределами видимости (200-240 метров),
-                    // и бесшовно вплывают в зону видимости.
-                    float dist = 200.0f + (float) Math.random() * 40.0f;
-                    spawnX = px - dist; // с запада (наветренная сторона)
-                    spawnZ = playerZ + ((float) Math.random() - 0.5f) * 360.0f; // широкий фронт
-                    initAlpha = 1.0f;
-                }
-                
-                float worldX = spawnX - windTime; // компенсируем ветер в рендере
-                CloudInstance c = new CloudInstance(worldX, worldY, spawnZ, scale, seed);
-                c.currentAlpha = initAlpha;
-                activeClouds.add(c);
-            }
-        }
-
-        // Advance time
-        worldTime += deltaTime * WorldSettings.getInstance().dayCycleSpeed * 20.0f; 
-        if (worldTime >= WorldSettings.getInstance().dayLength) {
-            worldTime -= WorldSettings.getInstance().dayLength;
-        }
-
-        // Cache player values for zero-allocation access
-        float py = 0, pz = 0;
-        boolean inventoryFull = false;
-        if (player != null) {
-            py = player.getPosition().y + player.getHeight() * 0.5f;
-            pz = player.getPosition().z;
-            inventoryFull = player.getInventory().isFull();
-        }
-
-        // Update all entities
-        for (int i = entities.size() - 1; i >= 0; i--) {
-            Entity entity = entities.get(i);
-
-            if (entity.isRemoved()) {
-                if (entity instanceof com.za.zenith.entities.ItemEntity item) {
-                    com.za.zenith.world.chunks.ChunkPos cp = item.getLastChunkPos();
-                    if (cp != null) {
-                        List<Entity> list = groundEntityMap.get(cp);
-                        if (list != null) list.remove(item);
-                    }
-                } else if (entity instanceof com.za.zenith.entities.ResourceEntity) {
-                    com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)entity.getPosition().x, (int)entity.getPosition().z);
-                    List<Entity> list = groundEntityMap.get(cp);
-                    if (list != null) list.remove(entity);
-                }
-                entities.remove(i);
-                continue;
-            }
-
-            // SIMULATION DISTANCE GUARD: Remove distant entities
-            if (player != null && entity != player) {
-                float edx = px - entity.getPosition().x;
-                float edz = pz - entity.getPosition().z;
-                float distSq = edx * edx + edz * edz;
-                
-                // Aggressive culling for static resources: 128m radius (8 chunks)
-                if (entity instanceof com.za.zenith.entities.ResourceEntity) {
-                    if (distSq > 128 * 128) {
-                        entity.setRemoved();
-                        continue;
-                    }
-                } else {
-                    // Standard culling for dynamic entities: 320m radius
-                    if (distSq > 320 * 320) {
-                        entity.setRemoved();
-                        continue;
-                    }
-                }
-            }
-
-            entity.update(deltaTime, this);
-
-            // Item Pickup logic - Optimized zero-allocation
-            if (player != null && entity instanceof com.za.zenith.entities.ItemEntity itemEntity) {
-                if (itemEntity.canBePickedUp()) {
-                    Vector3f itemPos = itemEntity.getPosition();
-                    float dx = px - itemPos.x;
-                    float dy = py - itemPos.y;
-                    float dz = pz - itemPos.z;
-                    float distSq = dx*dx + dy*dy + dz*dz;
-
-                    float pickupRadius = com.za.zenith.world.physics.PhysicsSettings.getInstance().itemPickupRadius;
-                    com.za.zenith.world.items.component.MagneticComponent magnet = player.getInventory().getActiveComponent(com.za.zenith.world.items.component.MagneticComponent.class);
-                    if (magnet != null) {
-                        pickupRadius = magnet.pickupRadius;
-                    }
-                    
-                    boolean isMagnetic = itemEntity.isBeingAttracted();
-                    float effectiveRadius = isMagnetic ? pickupRadius * 1.5f : pickupRadius;
-
-                    if (distSq < effectiveRadius * effectiveRadius || player.getBoundingBox().intersects(itemEntity.getBoundingBox())) {
-                        if (itemEntity.isRemoved()) continue; 
-
-                        if (inventoryFull) {
-                             com.za.zenith.engine.graphics.ui.NotificationTriggers.getInstance().onInventoryFull();
-                        } else if (player.getInventory().addItem(itemEntity.getStack(), true)) {
-                            itemEntity.setRemoved();
-                            com.za.zenith.utils.Logger.info("Picked up item: %s", itemEntity.getStack().getItem().getName());
-                            inventoryFull = player.getInventory().isFull();
-                            
-                            // Remove from spatial map safely using actual registered chunk position
-                            com.za.zenith.world.chunks.ChunkPos cp = itemEntity.getLastChunkPos();
-                            if (cp != null) {
-                                List<Entity> list = groundEntityMap.get(cp);
-                                if (list != null) list.remove(itemEntity);
-                            }
-                            
-                            continue;
-                        } else {
-                            inventoryFull = true;
-                        }
-                    }
-                }
-            }
-
-            // Remove dead entities (if they are LivingEntity)
-            if (entity instanceof com.za.zenith.entities.LivingEntity living) {
-                if (living.isDead()) {
-                    entities.remove(i);
-                }
-            }
-        }
+        entityManager.update(deltaTime, player);
 
         // Update tickable block entities
         for (int i = tickableBlockEntities.size() - 1; i >= 0; i--) {
@@ -747,61 +272,49 @@ public class World {
             player.update(deltaTime, this);
         }
 
-        // Heal blocks over time and fade scars
-        if (!blockDamageMap.isEmpty()) {
-            long currentTime = System.currentTimeMillis();
-            for (java.util.Map.Entry<Long, BlockDamageInstance> entry : blockDamageMap.entrySet()) {
-                long packed = entry.getKey();
-                BlockDamageInstance info = entry.getValue();
+        damageManager.update(deltaTime);
 
-                // --- HEALING DELAY ---
-                // Do not start healing if block was hit in the last 5 seconds
-                if (currentTime - info.getLastHitTime() < 5000) continue;
+        // Day/night cycle progression
+        worldTime += deltaTime * WorldSettings.getInstance().dayCycleSpeed * 20.0f; 
+        if (worldTime >= WorldSettings.getInstance().dayLength) {
+            worldTime -= WorldSettings.getInstance().dayLength;
+        }
+    }
 
-                float damage = info.getDamage();
-                int bx = unpackBlockX(packed);
-                int by = unpackBlockY(packed);
-                int bz = unpackBlockZ(packed);
-                int blockType = getRawBlockData(bx, by, bz) >> 8;
-                com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(blockType);
+    public int getFastSurfaceColor(int x, int z) {
+        Chunk chunk = getChunk(x >> 4, z >> 4);
+        if (chunk == null || !chunk.isReady()) return 0xFF000000;
 
-                if (def.getHealingSpeed() > 0) {
-                    float maxHealth = def.getHardness() * 10.0f;
-                    float healAmount = def.getHealingSpeed() * maxHealth * deltaTime;
-                    float newDamage = damage - healAmount;
+        int lx = x & 15;
+        int lz = z & 15;
 
-                    if (newDamage <= 0) {
-                        blockDamageMap.remove(packed);
-                    } else {
-                        info.setDamage(newDamage);
+        int y = chunk.getHighestBlock(lx, lz);
+        if (y <= 0) return 0xFF000000;
 
-                        // --- SMOOTH SCAR FADING ---
-                        List<Vector4f> history = info.getHitHistory();
-                        if (!history.isEmpty()) {
-                            // Target total intensity across all scars based on health
-                            float targetTotalIntensity = (newDamage / maxHealth) * 16.0f;
+        int data = chunk.getRawBlockData(lx, y, lz);
+        int type = data >> 8;
+        if (type == 0) return 0xFF000000;
 
-                            float currentTotalIntensity = 0;
-                            for (Vector4f hit : history) currentTotalIntensity += hit.w;
+        if (!com.za.zenith.engine.graphics.ui.renderers.MinimapRegistry.isSolid(type) && type != com.za.zenith.world.blocks.Blocks.WATER.getId()) return 0xFF000000;
 
-                            if (currentTotalIntensity > targetTotalIntensity) {
-                                float toRemove = currentTotalIntensity - targetTotalIntensity;
-                                while (toRemove > 0 && !history.isEmpty()) {
-                                    Vector4f oldest = history.get(0);
-                                    if (oldest.w <= toRemove) {
-                                        toRemove -= oldest.w;
-                                        history.remove(0);
-                                    } else {
-                                        oldest.w -= toRemove;
-                                        toRemove = 0;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        int color = com.za.zenith.engine.graphics.ui.renderers.MinimapRegistry.getColor(type);
+
+        float brightness = 0.7f + (y / (float)Chunk.CHUNK_HEIGHT) * 0.6f;
+        int r = (int) ((color & 0xFF) * brightness);
+        int g = (int) (((color >> 8) & 0xFF) * brightness);
+        int b = (int) (((color >> 16) & 0xFF) * brightness);
+
+        return (y << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
+    }
+
+    private int getSurfaceHeight(int x, int z) {
+        for (int y = 255; y > 0; y--) {
+            Block b = getBlock(x, y, z);
+            if (!b.isAir() && com.za.zenith.world.blocks.BlockRegistry.getBlock(b.getType()).isSolid()) {
+                return y;
             }
         }
+        return -1;
     }
 
     public void registerTickable(ITickable tickable) {
@@ -814,206 +327,21 @@ public class World {
         tickableBlockEntities.remove(tickable);
     }
 
-    public float getBlockDamage(BlockPos pos) {
-        return getBlockDamage(pos.x(), pos.y(), pos.z());
+    public Vector3f getInterpolatedFluidFlowVector(float px, float py, float pz, int fluidId) {
+        return com.za.zenith.world.physics.FluidFlowCalculator.getInterpolatedFluidFlowVector(this, px, py, pz, fluidId);
     }
 
-    public float getBlockDamage(int x, int y, int z) {
-        BlockDamageInstance info = blockDamageMap.get(packBlockPos(x, y, z));
-        return (info != null) ? info.getDamage() : 0.0f;
-    }
-
-    public List<Vector4f> getBlockHitHistory(BlockPos pos) {
-        BlockDamageInstance info = blockDamageMap.get(packBlockPos(pos.x(), pos.y(), pos.z()));
-        return (info != null) ? info.getHitHistory() : new ArrayList<>();
-    }
-
-    public void setBlockDamage(BlockPos pos, float damage) {
-        setBlockDamage(pos, damage, new ArrayList<>());
-    }
-
-    public void setBlockDamage(BlockPos pos, float damage, List<Vector4f> history) {
-        long packed = packBlockPos(pos.x(), pos.y(), pos.z());
-        if (damage <= 0.0f) {
-            if (blockDamageMap.remove(packed) != null) {
-                Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
-                if (chunk != null) {
-                    chunk.removeLocalBlockDamage(packed);
-                }
-            }
-        } else {
-            BlockDamageInstance info = blockDamageMap.get(packed);
-            if (info != null) {
-                info.setDamage(damage);
-                info.resetLastHitTime(); // Refresh the delay on every hit
-
-                // Update history smoothly: only add new ones that aren't already there
-                List<Vector4f> targetHistory = info.getHitHistory();
-                if (history.size() > targetHistory.size()) {
-                    for (int i = targetHistory.size(); i < history.size(); i++) {
-                        targetHistory.add(new Vector4f(history.get(i)));
-                    }
-                }
-
-                // Cap at 16
-                while (targetHistory.size() > 16) {
-                    targetHistory.remove(0);
-                }
-            } else {
-                blockDamageMap.put(packed, new BlockDamageInstance(damage, getBlock(pos).copy(), new ArrayList<>(history)));
-                Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
-                if (chunk != null) {
-                    chunk.addLocalBlockDamage(packed);
-                }
-            }
-        }
-    }
-
-    public void spawnEntity(Entity entity) {
-        if (entity == null) return;
-        entities.add(entity);
-        if (entity.isGroundEntity()) {
-            com.za.zenith.world.chunks.ChunkPos cp = com.za.zenith.world.chunks.ChunkPos.fromBlockPos((int)entity.getPosition().x, (int)entity.getPosition().z);
-            groundEntityMap.computeIfAbsent(cp, k -> java.util.Collections.synchronizedList(new ArrayList<>())).add(entity);
-        }
-    }
-
-    public void updateItemSpatial(com.za.zenith.entities.ItemEntity item, com.za.zenith.world.chunks.ChunkPos oldPos, com.za.zenith.world.chunks.ChunkPos newPos) {
-        if (oldPos != null) {
-            List<Entity> list = groundEntityMap.get(oldPos);
-            if (list != null) list.remove(item);
-        }
-        if (newPos != null) {
-            groundEntityMap.computeIfAbsent(newPos, k -> java.util.Collections.synchronizedList(new ArrayList<>())).add(item);
-        }
-    }
-
-    public List<Entity> getGroundEntitiesInChunk(com.za.zenith.world.chunks.ChunkPos pos) {
-        return groundEntityMap.getOrDefault(pos, java.util.Collections.emptyList());
-    }
-
-    public List<Entity> getEntities() {
-        return entities;
-    }
-
-    public void setPlayer(Player player) {
-        this.player = player;
-    }
-
-    public com.za.zenith.world.generation.BiomeGenerator getBiomeManager() {
-        return biomeGenerator;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public java.util.Map<BlockPos, com.za.zenith.world.blocks.entity.BlockEntity> getBlockEntities() {
-        return blockEntities;
+    public Vector3f getFluidFlowVector(int x, int y, int z, int fluidId, int currentLevel) {
+        return com.za.zenith.world.physics.FluidFlowCalculator.getFluidFlowVector(this, x, y, z, fluidId, currentLevel);
     }
 
     public Block getBlock(BlockPos pos) {
         return getBlock(pos.x(), pos.y(), pos.z());
     }
 
-    public Vector3f getInterpolatedFluidFlowVector(float px, float py, float pz, int fluidId) {
-        int y = (int) Math.floor(py);
-        if (y < 0 || y >= 256) return new Vector3f(0, 0, 0);
-        
-        // Сетка центров вокселей смещена на 0.5f относительно начала блока
-        int x0 = (int) Math.floor(px - 0.5f);
-        int z0 = (int) Math.floor(pz - 0.5f);
-        int x1 = x0 + 1;
-        int z1 = z0 + 1;
-        
-        float tx = px - (x0 + 0.5f);
-        float tz = pz - (z0 + 0.5f);
-        
-        tx = Math.max(0.0f, Math.min(1.0f, tx));
-        tz = Math.max(0.0f, Math.min(1.0f, tz));
-        
-        Vector3f v00 = getFluidFlowVectorAt(x0, y, z0, fluidId);
-        Vector3f v10 = getFluidFlowVectorAt(x1, y, z0, fluidId);
-        Vector3f v01 = getFluidFlowVectorAt(x0, y, z1, fluidId);
-        Vector3f v11 = getFluidFlowVectorAt(x1, y, z1, fluidId);
-        
-        Vector3f flow = new Vector3f();
-        flow.x = (v00.x * (1.0f - tx) + v10.x * tx) * (1.0f - tz) + (v01.x * (1.0f - tx) + v11.x * tx) * tz;
-        flow.z = (v00.z * (1.0f - tx) + v10.z * tx) * (1.0f - tz) + (v01.z * (1.0f - tx) + v11.z * tx) * tz;
-        flow.y = (v00.y * (1.0f - tx) + v10.y * tx) * (1.0f - tz) + (v01.y * (1.0f - tx) + v11.y * tx) * tz;
-        
-        return flow;
-    }
-    
-    private Vector3f getFluidFlowVectorAt(int x, int y, int z, int fluidId) {
-        Block block = getBlock(x, y, z);
-        if (block.getType() != fluidId) {
-            return new Vector3f(0, 0, 0);
-        }
-        int fluidLevel = block.getMetadata() & 0xFF;
-        return getFluidFlowVector(x, y, z, fluidId, fluidLevel);
-    }
-
-    public Vector3f getFluidFlowVector(int x, int y, int z, int fluidId, int currentLevel) {
-        Vector3f flow = new Vector3f(0, 0, 0);
-        
-        // Если сверху течет та же жидкость, течение преимущественно направлено вниз
-        if (y < 255) {
-            Block above = getBlock(x, y + 1, z);
-            if (above.getType() == fluidId) {
-                flow.y = -1.0f; // Увлекает вниз
-            }
-        }
-        
-        int currentHeight = (currentLevel == 8) ? 8 : (8 - currentLevel);
-        
-        // Высоты соседей
-        int hNorth = getFluidHeightForFlow(x, y, z + 1, fluidId, currentHeight);
-        int hSouth = getFluidHeightForFlow(x, y, z - 1, fluidId, currentHeight);
-        int hEast  = getFluidHeightForFlow(x + 1, y, z,     fluidId, currentHeight);
-        int hWest  = getFluidHeightForFlow(x - 1, y, z,     fluidId, currentHeight);
-        
-        flow.x = hWest - hEast;
-        flow.z = hSouth - hNorth;
-        
-        // Нормализуем горизонтальный вектор, если он ненулевой
-        float lenSq = flow.x * flow.x + flow.z * flow.z;
-        if (lenSq > 0.0001f) {
-            float len = (float) Math.sqrt(lenSq);
-            flow.x /= len;
-            flow.z /= len;
-        }
-        
-        return flow;
-    }
-    
-    private int getFluidHeightForFlow(int x, int y, int z, int fluidId, int currentHeight) {
-        if (y < 0 || y >= 256) return currentHeight;
-        Block block = getBlock(x, y, z);
-        if (block.getType() != fluidId) {
-            if (block.isSolid()) {
-                return currentHeight; // Твердые блоки ведут себя как текущий уровень (нет течения от/к ним)
-            }
-            // Воздух или replaceable блок
-            if (y > 0) {
-                Block below = getBlock(x, y - 1, z);
-                if (below.isAir() || below.isReplaceable()) {
-                    return currentHeight - 4; // Обрыв сильно притягивает воду
-                }
-            }
-            return currentHeight - 1; // Обычный сухой блок притягивает воду с силой 1
-        }
-        
-        int level = block.getMetadata() & 0xFF;
-        if (level == 8) {
-            return 8; // Падающий столб
-        }
-        return 8 - level; // 0 -> 8, 7 -> 1
-    }
-
     public Block getBlock(int x, int y, int z) {
-        if (!blockDamageMap.isEmpty()) {
-            BlockDamageInstance damageInstance = blockDamageMap.get(packBlockPos(x, y, z));
+        if (!damageManager.getBlockDamageMap().isEmpty()) {
+            BlockDamageInstance damageInstance = damageManager.getBlockDamageMap().get(packBlockPos(x, y, z));
             if (damageInstance != null) {
                 return damageInstance.getBlock();
             }
@@ -1047,7 +375,6 @@ public class World {
         Chunk chunk = chunks.get(packed);
         if (chunk == null) chunk = stagingChunks.get(packed);
         
-        // Neighbor creation: ensure neighbor chunk exists to receive blocks from current generation
         if (chunk == null) {
             chunk = new Chunk(new ChunkPos(x >> 4, z >> 4));
             stagingChunks.put(packed, chunk);
@@ -1068,16 +395,8 @@ public class World {
         }
     }
 
-    public boolean isGenerating() {
-        return generating;
-    }
-
     public void setBlock(int x, int y, int z, Block block) {
         setBlock(x, y, z, block, true);
-    }
-
-    public com.za.zenith.utils.PriorityExecutorService getLightExecutor() {
-        return lightExecutor;
     }
 
     public void setBlock(int x, int y, int z, Block block, boolean notifyAndLight) {
@@ -1111,12 +430,10 @@ public class World {
 
         BlockPos pos = new BlockPos(x, y, z);
 
-        // Remove old block entity if it exists
         removeBlockEntity(pos);
 
-        // IMPORTANT: Clear any damage/proxy data at this position immediately
         long packedPos = packBlockPos(x, y, z);
-        if (blockDamageMap.remove(packedPos) != null) {
+        if (damageManager.getBlockDamageMap().remove(packedPos) != null) {
             if (chunk != null) {
                 chunk.removeLocalBlockDamage(packedPos);
             }
@@ -1141,11 +458,10 @@ public class World {
                 }
             }
 
-            // Wake up nearby sleeping items when a block is changed/destroyed (skip during gen)
             if (!generating) {
                 int cx = x >> 4;
                 int cz = z >> 4;
-                List<Entity> list = groundEntityMap.get(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
+                List<Entity> list = entityManager.getGroundEntityMap().get(new com.za.zenith.world.chunks.ChunkPos(cx, cz));
                 if (list != null) {
                     Entity[] itemsToWake = null;
                     synchronized (list) {
@@ -1163,23 +479,18 @@ public class World {
                 }
             }
 
-            // Event-driven lighting registration
             com.za.zenith.world.lighting.LightManager.onBlockChange(this, pos, block.getType());
 
-            // Update lighting: gameplay changes are calculated synchronously to prevent lag, skip during generation
             if (notifyAndLight && !generating) {
                 lightEngine.enqueueLightUpdate(pos, false);
             }
 
-            // Handle block entities
             com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(block.getType());
-            // Automatically create block entity if defined
             BlockEntity be = def.createBlockEntity(pos);
             if (be != null) {
                 setBlockEntity(be);
             }
 
-            // Notify neighbors if block is on the edge
             int lx = x & 15;
             int lz = z & 15;
             int cx = x >> 4;
@@ -1190,36 +501,25 @@ public class World {
             if (lz == 0) notifyChunkUpdate(cx, cz - 1);
             if (lz == Chunk.CHUNK_SIZE - 1) notifyChunkUpdate(cx, cz + 1);
 
-            // Notify all 6 neighbors about the block change for survival/logic updates
             if (notifyAndLight && !generating) {
                 notifyNeighbors(pos);
             }
         }
     }
 
-    /**
-     * Notify 6 neighbor blocks about a change at the current position.
-     * This triggers survival logic (requiresSupport) and other updates.
-     */
     public void notifyNeighbors(BlockPos pos) {
         Block centerBlock = getBlock(pos);
         for (com.za.zenith.utils.Direction dir : com.za.zenith.utils.Direction.values()) {
             BlockPos neighborPos = dir.offset(pos);
             Block neighborBlock = getBlock(neighborPos);
 
-            // Air doesn't handle updates
             if (neighborBlock.isAir()) continue;
 
             com.za.zenith.world.blocks.BlockDefinition def = com.za.zenith.world.blocks.BlockRegistry.getBlock(neighborBlock.getType());
-            // Pass the direction from the neighbor to the CHANGED block
             def.onNeighborChange(this, neighborPos, centerBlock, dir.getOpposite());
         }
     }
 
-    /**
-     * Called by the player upon completion of block breaking progress.
-     * @return true if the block should be removed.
-     */
     public boolean onBlockBreak(BlockPos pos, Player player) {
         Block block = getBlock(pos);
         if (block.isAir()) return true;
@@ -1228,9 +528,6 @@ public class World {
         return def.onBlockBreak(this, pos, block, player);
     }
 
-    /**
-     * Destroys a block by a player. Calls the onDestroyed hook.
-     */
     public void destroyBlock(BlockPos pos, Player player) {
         Block block = getBlock(pos);
         if (block.isAir()) return;
@@ -1246,7 +543,7 @@ public class World {
 
     public void setBlockEntity(BlockEntity entity) {
         BlockPos pos = entity.getPos();
-        removeBlockEntity(pos); // Clean up any existing at this position
+        removeBlockEntity(pos);
 
         entity.setWorld(this);
         blockEntities.put(pos, entity);
@@ -1254,7 +551,6 @@ public class World {
             tickableBlockEntities.add((ITickable) entity);
         }
 
-        // Trigger mesh update for the chunk
         com.za.zenith.world.chunks.Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
         if (chunk != null) {
             chunk.addLocalBlockEntity(pos);
@@ -1273,7 +569,6 @@ public class World {
             if (entity instanceof ITickable) {
                 tickableBlockEntities.remove(entity);
             }
-            // Trigger mesh update for the chunk
             com.za.zenith.world.chunks.Chunk chunk = getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(pos.x(), pos.z()));
             if (chunk != null) {
                 chunk.removeLocalBlockEntity(pos);
@@ -1281,7 +576,6 @@ public class World {
             }
         }
     }
-
 
     private void notifyChunkUpdate(int cx, int cz) {
         Chunk neighbor = chunks.get(ChunkPos.pack(cx, cz));
@@ -1294,10 +588,6 @@ public class World {
         return chunks.values();
     }
 
-    public float getWorldTime() {
-        return worldTime;
-    }
-
     public int getSunlight(BlockPos pos) {
         return getSunlight(pos.x(), pos.y(), pos.z());
     }
@@ -1306,14 +596,6 @@ public class World {
         Chunk chunk = getChunkInternal(x >> 4, z >> 4);
         if (chunk == null) return 0;
         return chunk.getSunlight(x & 15, y, z & 15);
-    }
-
-    public LightEngine getLightEngine() {
-        return lightEngine;
-    }
-
-    public long getSeed() {
-        return seed;
     }
 
     public int getBlockLight(BlockPos pos) {
@@ -1341,33 +623,20 @@ public class World {
         setBlock(x, y, z, new Block(blockType));
     }
 
-    public void spawnItem(ItemStack stack, float x, float y, float z) {
-        com.za.zenith.entities.ItemEntity entity = new com.za.zenith.entities.ItemEntity(new Vector3f(x, y, z), stack);
-        spawnEntity(entity);
-    }
-
-    /**
-     * Calculates the noise level at a specific point in the world.
-     * Takes into account player noise and working machines (BlockEntities).
-     */
     public float getNoiseLevelAt(Vector3f pos) {
         float totalNoise = 0.0f;
 
-        // Player noise
         if (player != null) {
             float dist = pos.distance(player.getPosition());
             float playerNoise = player.getNoiseLevel();
-            // Player noise attenuation (radius 32 blocks)
             if (dist < 32.0f) {
                 totalNoise = Math.max(totalNoise, playerNoise * (1.0f - dist / 32.0f));
             }
         }
 
-        // Active block entity noise
         for (BlockEntity be : blockEntities.values()) {
             if (be instanceof com.za.zenith.world.blocks.entity.GeneratorBlockEntity generator && generator.isRunning()) {
                 float dist = pos.distance(new Vector3f(be.getPos().x() + 0.5f, be.getPos().y() + 0.5f, be.getPos().z() + 0.5f));
-                // Generator noise (radius 20 blocks, base noise 0.5)
                 if (dist < 20.0f) {
                     float genNoise = 0.5f * (1.0f - dist / 20.0f);
                     totalNoise = Math.max(totalNoise, genNoise);
@@ -1378,6 +647,17 @@ public class World {
         return totalNoise;
     }
 
+    public void scheduleFluidTick(int x, int y, int z) {
+        if (!generating && y >= 0 && y < 256) {
+            fluidSimulator.scheduleTick(x, y, z);
+        }
+    }
+
+    public void cleanup() {
+        chunkManager.cleanup();
+    }
+
+    // Static nested class left for type compatibility in graphic renderer modules
     public static class CloudInstance {
         private static int nextId = 0;
         public final int id;
@@ -1385,7 +665,7 @@ public class World {
         public float scale;
         public float seed;
         private boolean collected = false;
-        public float currentAlpha = 1.0f; // По умолчанию сразу плотные
+        public float currentAlpha = 1.0f;
         
         public CloudInstance(float x, float y, float z, float scale, float seed) {
             this.id = nextId++;
@@ -1407,7 +687,6 @@ public class World {
         }
         
         public boolean isCollected() { 
-            // Облако считается полностью убранным из мира только когда оно полностью растаяло
             return collected && currentAlpha <= 0.001f; 
         }
         
@@ -1425,40 +704,32 @@ public class World {
         
         public void update(float deltaTime) {
             if (collected) {
-                currentAlpha = Math.max(0.0f, currentAlpha - deltaTime * 0.8f); // Растворяется за ~1.2 секунды
+                currentAlpha = Math.max(0.0f, currentAlpha - deltaTime * 0.8f);
             } else {
-                currentAlpha = Math.min(1.0f, currentAlpha + deltaTime * 0.4f); // Проявляется за ~2.5 секунды
+                currentAlpha = Math.min(1.0f, currentAlpha + deltaTime * 0.4f);
             }
         }
     }
 
-    public java.util.List<CloudInstance> getActiveClouds() {
-        return activeClouds;
-    }
+    // Static nested class left for type compatibility in PersistentScarsRenderPass
+    public static class BlockDamageInstance {
+        private float damage;
+        private final Block block;
+        private final List<Vector4f> hitHistory;
+        private long lastHitTime;
 
-    public void registerChunkClouds(Chunk chunk) {
-        // Отключено: теперь облака генерируются и управляются централизованно в World.update
-        // во избежание внезапного появления облаков перед лицом игрока.
-    }
-
-    public void unregisterChunkClouds(Chunk chunk) {
-        // Отключено: неиспользуемые облака автоматически очищаются по дальности в World.update
-    }
-
-    public void scheduleFluidTick(int x, int y, int z) {
-        if (!generating && y >= 0 && y < 256) {
-            fluidSimulator.scheduleTick(x, y, z);
+        public BlockDamageInstance(float damage, Block block, List<Vector4f> hitHistory) {
+            this.damage = damage;
+            this.block = block;
+            this.hitHistory = new ArrayList<>(hitHistory);
+            this.lastHitTime = System.currentTimeMillis();
         }
-    }
 
-    public void cleanup() {
-        chunkGenExecutor.shutdown();
-        try {
-            if (!chunkGenExecutor.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS)) {
-                chunkGenExecutor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            chunkGenExecutor.shutdownNow();
-        }
+        public Block getBlock() { return block; }
+        public float getDamage() { return damage; }
+        public void setDamage(float damage) { this.damage = damage; }
+        public List<Vector4f> getHitHistory() { return hitHistory; }
+        public long getLastHitTime() { return lastHitTime; }
+        public void resetLastHitTime() { this.lastHitTime = System.currentTimeMillis(); }
     }
 }
