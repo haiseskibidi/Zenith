@@ -37,7 +37,7 @@
 - **ViewmodelController.java**: Парсер треков. Отвечает за применение AnimationProfile. Внедрена система `Snapshot Buffer` для хранения прошлых поз и плавной `slerp`-интерполяции (Cross-fade) при смене анимаций или предметов.
 
 ### com.za.zenith.engine.graphics.model
-- **ModelNode.java**: Узел скелета. Теперь имеет два состояния вращения: `animRotation` (Euler, v1) и `animRotationQuat` (Quaternion, v2).
+- **ModelNode.java**: Узел скелета. Теперь имеет два состояния вращения: `animRotation` (Euler) и `animRotationQuat` (Quaternion).
 - **HeldItemRenderer.java**: Отрисовывает предметы в руках. Очищен от хардкода.
 - **ViewmodelRenderer.java**: Центрирует блоки математически точно в сокете (socket_palm), опираясь на параметры `ViewmodelComponent`.
 - **GripRegistry.java** / **GripDefinition.java**: Система Data-Driven пресетов для костей пальцев (например, `flat_sheet` для удержания блоков снизу).
@@ -47,7 +47,7 @@
 - **LightEngine.java**: Ядро системы освещения. Реализует BFS-распространение блочного света (от источников) и первичную заливку солнечного света (`generateInitialSunlight`) сверху вниз. Алгоритм оптимизирован для стабильности (без агрессивных проверок `isOpaqueAbove`).
 - **WorldSettings.java**: Data-Driven контейнер для настроек времени и цветов освещения (загружается из `world.json`).
 
-### com.za.zenith.engine.graphics (Zenith v2.0 Modular Architecture)
+### com.za.zenith.engine.graphics
 - **RenderPipeline.java**: Главный оркестратор графического конвейера. Управляет жизненным циклом кадра, переключением буферов и делегирует отрисовку специализированным системам. Вычисляет циклы лунных фаз, `isNight` состояние, направляет серебряные лучи Moonlight Shafts сквозь листву и передает недавно разрушенные блоки (`recentlyBrokenHoles`) в массив `uHiddenPositions` для моментального GPU-сокрытия во избежание мерцания граней.
 - **RenderContext.java**: Синхронизация глобального UBO (`GlobalData`), включая передачу флага `isNight`. Управляет Zero-Alloc пулами объектов (матрицы, векторы JOML) и централизованным сбросом состояний шейдеров.
 - **MeshRegistry.java**: Единый кэш мешей для блоков, предметов и сущностей. Устраняет дублирование генерации геометрии и управляет инвалидацией кэша.
@@ -72,16 +72,16 @@
 - **SkySettings.java**: Конфигурация параметров неба.
 
 ### com.za.zenith.world.chunks
-- **Chunk.java (Zenith v1.1 UPDATED)**: Контейнер данных (16x512x16). Поддерживает **консолидированные меши**, синхронизированную палитру и `LOGICAL_OFFSET_Y = 128` для трансляции в логические координаты.
+- **Chunk.java (UPDATED)**: Контейнер данных (16x512x16). Поддерживает **консолидированные меши**, синхронизированную палитру и `LOGICAL_OFFSET_Y = 128` для трансляции в логические координаты.
 - **ChunkSection.java**: Подраздел чанка (16x16x16). Реализует асинхронный расчет `visibilityMask` через Flood-Fill алгоритм для графа связности.
-- **ChunkMeshGenerator.java (Zenith v1.0)**: Реализует **Greedy Mesh Merging** (объединение всех секций в один VBO).
+- **ChunkMeshGenerator.java**: Реализует **Greedy Mesh Merging** (объединение всех секций в один VBO).
 
 ### com.za.zenith.world.lighting
 - **LightEngine.java**: Движок освещения. Реализует **Async Stage 4** (асинхронный расчет света в отдельном потоке). 
 - **WorldSettings.java**: Контейнер настроек освещения и времени.
 
 ### com.za.zenith.world
-### com.za.zenith.world.World (UPDATED Zenith v2.6)
+### com.za.zenith.world.World (UPDATED)
 Назначение: Управление состоянием мира и сущностями.
 Функции: 
 - **Async Pipeline**: Управление асинхронным конвейером (`chunkGenExecutor`, `lightExecutor`). 
@@ -89,7 +89,7 @@
 - **Zero-Allocation**: Оптимизирован цикл обновления (`update`) — устранены все аллокации векторов и объектов. 
 - **L1 Chunk Cache**: Ускоренный доступ к данным чанков.
 
-### com.za.zenith.entities.ItemEntity (UPDATED Zenith v1.0)
+### com.za.zenith.entities.ItemEntity (UPDATED)
 Назначение: Выпавшие игровые предметы.
 Функции: 
 - **Spatial Merging**: Слияние предметов через `world.getItemsInChunk()` ($O(1)$).
@@ -263,7 +263,7 @@
 - **RainRenderer.java**: Высокопроизводительный рендерер дождя. Реализует инстансинг 3000+ капель за один вызов отрисовки. Использует "Mathemagical Sync" для синхронизации позиций капель с брызгами на поверхности блоков на основе глобального времени.
 - **MiningVFXManager.java**: Менеджер визуальных эффектов добычи. Рассчитывает уровень раскаления (`heatLevel`) инструментов и рук. Обеспечивает плавное остывание и универсальный сброс прогресса добычи при смене/выбрасывании предмета.
 
-### com.za.zenith.engine.graphics (Zenith v2.0 Modular Architecture)
+### com.za.zenith.engine.graphics
 - **vertex.glsl**: Вершинный шейдер мира. Добавлено схлопывание вершин (`gl_Position = vec4(0.0)`) скрываемых блоков (активных ломаемых блоков) на GPU, что полностью перенесло логику скрытия с фрагментной стадии и сберегло Early-Z. Медленные деления `%` и `/` заменены на быстрые побитовые сдвиги `&` и `>>`.
 - **fragment.glsl**: Фрагментный шейдер мира. Полностью вырезан тяжелый discard-цикл проверки скрытых блоков, возвращая Early-Z на максимальную мощность.
 - **include/block_features.glsl**: Процедурные фичи вокселей. Connected glass освобожден от динамического сэмплирования центрального пикселя, теперь возвращается `vec4(0.0)` напрямую.
@@ -301,7 +301,7 @@
 Назначение: Главная сущность игрока.
 Функции: Управление инвентарем, статами (голод, стамина), паркуром и анимациями. Поддерживает методы `swing()` (удар) и `interact()` (быстрый сбор/подбор). Поддерживает методы `swing()` (удар) и `interact()` (быстрый сбор/подбор).
 
-### com.za.zenith.engine.input (UPDATED v2.0)
+### com.za.zenith.engine.input (UPDATED)
 Назначение: Архитектура ввода на основе Domain Controllers.
 - **InputManager.java**: Event Dispatcher. Хранит глобальный контекст, централизованно отслеживает фазы нажатий на основе плоских Zero-Alloc буферов и делегирует события специализированным хэндлерам.
 - **InputAction.java**: Перечисление всех абстрактных логических действий игрока, связывающее настройки SettingsManager с геймплейным кодом.
@@ -313,7 +313,7 @@
 - **controllers/CombatController.java**: Контроллер сражений. Подписывается на `PlayerAttackEntityEvent` и обрабатывает урон по врагам.
 - **controllers/InteractionController.java**: Контроллер взаимодействия. Подписывается на `PlayerPickupEvent` и `BlockLeftClickEvent` для обработки подбора лута и кастомного поведения блоков.
 
-### com.za.zenith.engine.event (NEW v2.0)
+### com.za.zenith.engine.event (NEW)
 Назначение: Потокобезопасная Zero-Alloc реактивная шина игровых событий.
 - **Event.java**: Базовый маркерный интерфейс для событий.
 - **EventBus.java**: Высокопроизводительная шина событий, реализующая шаблон Publish-Subscribe с потокобезопасным хранением слушателей.
