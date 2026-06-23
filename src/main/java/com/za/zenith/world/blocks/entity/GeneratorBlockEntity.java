@@ -19,6 +19,7 @@ public class GeneratorBlockEntity extends BlockEntity implements ITickable, IEne
 
     @Override
     public void update(float deltaTime) {
+        if (world == null) return;
         if (running) {
             if (fuel > 0) {
                 float consumeAmount = 1.0f * deltaTime;

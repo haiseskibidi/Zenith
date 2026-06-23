@@ -4,9 +4,9 @@
 
 ---
 
-## 1. Animation System v2.0 (Quaternion Engine)
+## 1. Animation System (Quaternion Engine)
 - **Dual-State ModelNode**: Гибридные узлы. Сохраняют старое поле `animRotation` (Euler) для 100% обратной совместимости и добавляют `animRotationQuat` (Quaternion) для новой системы. Вычисляются аддитивно.
-- **Modular Additive Controller**: `ViewmodelController` парсит `version` из JSON. V1 треки пишутся напрямую в Euler, V2 треки конвертируются в `Quaternionf` и накладываются через сферическую интерполяцию (slerp).
+- **Modular Additive Controller**: `ViewmodelController` парсит тип из JSON. Треки старого типа пишутся напрямую в Euler, новые треки конвертируются в `Quaternionf` и накладываются через сферическую интерполяцию (slerp).
 - **Transition Buffer (Cross-fade)**: `ViewmodelController` делает "снимок" позы (`saveSnapshotRecursive`) при смене предметов и плавно сглаживает (lerp/slerp) предыдущий кадр с новым. Логика перенесена в конец кадра (после Инерции и Хвата).
 
 ---

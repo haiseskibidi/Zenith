@@ -1,4 +1,4 @@
-# Zenith Architecture v4.0: High-Performance Engine Refactoring
+# Zenith Architecture: High-Performance Engine Refactoring
 
 ## Проблема
 Рандомные просадки FPS (160 -> 80) и микро-фризы при перемещении по миру (загрузка чанков) и разрушении/установке блоков.

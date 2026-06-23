@@ -203,14 +203,14 @@ public class InputManager {
                     isDragging = false;
                     
                     if (heldStack == null) {
-                        handleInventoryClick(window, button);
+                        com.za.zenith.engine.input.handlers.InventoryClickHandler.handleInventoryClick(window, button, this, currentPos.x, currentPos.y);
                     } else {
-                        com.za.zenith.entities.inventory.Slot slot = getSlotAt(currentPos.x, currentPos.y);
+                        com.za.zenith.entities.inventory.Slot slot = com.za.zenith.engine.input.handlers.InventoryClickHandler.getSlotAt(currentPos.x, currentPos.y);
                         if (slot != null) {
                             draggedSlots.add(slot);
                             isDragging = true;
                         } else {
-                            handleInventoryClick(window, button);
+                            com.za.zenith.engine.input.handlers.InventoryClickHandler.handleInventoryClick(window, button, this, currentPos.x, currentPos.y);
                         }
                     }
                 }
@@ -225,9 +225,9 @@ public class InputManager {
                     if (dragButton == button) {
                         if (isDragging && !draggedSlots.isEmpty()) {
                             if (draggedSlots.size() == 1) {
-                                handleInventoryClickOnSlot(window, button, draggedSlots.iterator().next());
+                                com.za.zenith.engine.input.handlers.InventoryClickHandler.handleInventoryClickOnSlot(window, button, draggedSlots.iterator().next(), this);
                             } else {
-                                finishDrag();
+                                com.za.zenith.engine.input.handlers.InventoryClickHandler.finishDrag(this);
                             }
                         }
                         dragButton = -1;
@@ -262,292 +262,20 @@ public class InputManager {
         enableMouseCapture(window);
     }
     
-    private com.za.zenith.entities.inventory.Slot getSlotAt(float mx, float my) {
-        com.za.zenith.engine.graphics.ui.Screen screen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-        if (screen instanceof com.za.zenith.engine.graphics.ui.InventoryScreen invScreen) {
-            com.za.zenith.engine.graphics.ui.SlotUI ui = invScreen.getSlotAt(mx, my);
-            return ui != null ? ui.getSlot() : null;
-        }
-        return null;
-    }
-
     public void dropStack(ItemStack stack, Player player, World world, Camera camera, boolean dropAll) {
-        if (stack == null) return;
-
-        ItemStack toDrop;
-        if (dropAll) {
-            toDrop = stack.copy();
-            stack.setCount(0); 
-        } else {
-            toDrop = stack.split(1);
-        }
-
-        if (toDrop == null) return;
-
-        Vector3f lookDirV = new Vector3f(0, 0, -1)
-            .rotateX(camera.getRotation().x)
-            .rotateY(camera.getRotation().y)
-            .normalize();
-
-        Vector3f rightDir = new Vector3f(1, 0, 0)
-            .rotateX(camera.getRotation().x)
-            .rotateY(camera.getRotation().y)
-            .normalize();
-
-        Vector3f downDir = new Vector3f(0, -1, 0)
-            .rotateX(camera.getRotation().x)
-            .rotateY(camera.getRotation().y)
-            .normalize();
-
-        // Offset spawn position slightly to the right and down to simulate throwing from hand
-        Vector3f spawnPos = new Vector3f(camera.getPosition())
-            .add(new Vector3f(lookDirV).mul(0.5f))
-            .add(rightDir.mul(0.3f))
-            .add(downDir.mul(0.2f));
-
-        com.za.zenith.entities.ItemEntity itemEntity = new com.za.zenith.entities.ItemEntity(spawnPos, toDrop);
-        itemEntity.setPickupDelay(1.5f); // 1.5s delay for manually dropped items to avoid instant pickup
-
-        float throwStrength = 6.0f / toDrop.getItem().getWeight();
-        itemEntity.getVelocity().set(lookDirV).mul(throwStrength);
-        itemEntity.getVelocity().y += 1.5f / toDrop.getItem().getWeight();
-
-        // Add random tumbling angular velocity
-        Vector3f angVel = new Vector3f(
-            (float) (Math.random() - 0.5) * 15f, 
-            (float) (Math.random() - 0.5) * 15f, 
-            (float) (Math.random() - 0.5) * 15f
-        );
-        itemEntity.setAngularVelocity(angVel);
-
-        world.spawnEntity(itemEntity);
-        com.za.zenith.utils.Logger.info("Dropped stack: %s (x%d)", toDrop.getItem().getName(), toDrop.getCount());
-    }
-    
-    private void finishDrag() {
-        if (heldStack == null || draggedSlots.isEmpty()) return;
-
-        if (dragButton == GLFW_MOUSE_BUTTON_1) {
-            int amountPerSlot = heldStack.getCount() / draggedSlots.size();
-            if (amountPerSlot > 0) {
-                for (com.za.zenith.entities.inventory.Slot slot : draggedSlots) {
-                    if (!slot.isItemValid(heldStack)) continue;
-                    ItemStack slotStack = slot.getStack();
-                    if (slotStack == null) {
-                        slot.setStack(heldStack.split(amountPerSlot));
-                    } else if (heldStack.isStackableWith(slotStack)) {
-                        ItemStack split = heldStack.split(amountPerSlot);
-                        if (split != null) {
-                            slotStack.setCount(slotStack.getCount() + split.getCount());
-                        }
-                    }
-                }
-            }
-        } else if (dragButton == GLFW_MOUSE_BUTTON_2) {
-            for (com.za.zenith.entities.inventory.Slot slot : draggedSlots) {
-                if (heldStack.getCount() <= 0) break;
-                if (!slot.isItemValid(heldStack)) continue;
-                ItemStack slotStack = slot.getStack();
-                if (slotStack == null) {
-                    slot.setStack(heldStack.split(1));
-                } else if (heldStack.isStackableWith(slotStack)) {
-                    ItemStack split = heldStack.split(1);
-                    if (split != null) {
-                        slotStack.setCount(slotStack.getCount() + 1);
-                    }
-                }
-            }
-        }
-        
-        if (heldStack.getCount() <= 0) {
-            heldStack = null;
-        }
-    }
-
-    private void handleInventoryClickOnSlot(Window window, int button, com.za.zenith.entities.inventory.Slot slot) {
-        Player player = GameLoop.getInstance().getPlayer();
-        if (player == null) return;
-
-        boolean shift = window.isKeyPressed(GLFW_KEY_LEFT_SHIFT) || window.isKeyPressed(GLFW_KEY_RIGHT_SHIFT);
-        long currentTime = System.currentTimeMillis();
-        boolean doubleClick = (currentTime - lastClickTime < 250) && (lastClickSlot == slot.getIndex());
-        
-        lastClickTime = currentTime;
-        lastClickSlot = slot.getIndex();
-
-        if (shift && button == GLFW_MOUSE_BUTTON_1) {
-            com.za.zenith.engine.graphics.ui.Screen activeScreen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-            if (activeScreen instanceof com.za.zenith.engine.graphics.ui.InventoryScreen invScreen) {
-                com.za.zenith.engine.graphics.ui.SlotUI slotUI = invScreen.getSlotAt(currentPos.x, currentPos.y);
-                if (slotUI != null) {
-                    if (doubleClick) {
-                        if (player.getInventory() instanceof Inventory inv) {
-                            inv.collectAllTo(slot);
-                        }
-                    } else {
-                        invScreen.onQuickMove(slotUI, player);
-                    }
-                }
-            }
-            return;
-        }
-
-        ItemStack slotStack = slot.getStack();
-        
-        if (button == GLFW_MOUSE_BUTTON_1) {
-            if (heldStack != null && slotStack != null && heldStack.isStackableWith(slotStack)) {
-                slotStack.setCount(slotStack.getCount() + heldStack.getCount());
-                heldStack = null;
-            } else if (slot.isItemValid(heldStack)) {
-                slot.setStack(heldStack);
-                heldStack = slotStack;
-                
-                // Trigger GUI re-init if accessory slot changed
-                if (slot.getIndex() == Inventory.SLOT_ACCESSORY) {
-                    com.za.zenith.engine.graphics.ui.Screen screen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-                    if (screen != null) {
-                        screen.init(window.getWidth(), window.getHeight());
-                    }
-                }
-            }
-        } else if (button == GLFW_MOUSE_BUTTON_2) {
-            if (heldStack == null) {
-                if (slotStack != null) {
-                    int toTake = (int) Math.ceil(slotStack.getCount() / 2.0);
-                    heldStack = slotStack.split(toTake);
-                    if (slotStack.getCount() <= 0) slot.setStack(null);
-                    
-                    // Trigger GUI re-init if accessory slot changed (removed)
-                    if (slot.getIndex() == Inventory.SLOT_ACCESSORY) {
-                        com.za.zenith.engine.graphics.ui.Screen screen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-                        if (screen != null) {
-                            screen.init(window.getWidth(), window.getHeight());
-                        }
-                    }
-                }
-            } else if (slot.isItemValid(heldStack)) {
-                if (slotStack == null) {
-                    slot.setStack(heldStack.split(1));
-                    if (heldStack.getCount() <= 0) heldStack = null;
-                    
-                    // Trigger GUI re-init if accessory slot changed
-                    if (slot.getIndex() == Inventory.SLOT_ACCESSORY) {
-                        com.za.zenith.engine.graphics.ui.Screen screen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-                        if (screen != null) {
-                            screen.init(window.getWidth(), window.getHeight());
-                        }
-                    }
-                } else if (heldStack.isStackableWith(slotStack)) {
-                    slotStack.setCount(slotStack.getCount() + 1);
-                    heldStack.setCount(heldStack.getCount() - 1);
-                    if (heldStack.getCount() <= 0) heldStack = null;
-                } else {
-                    slot.setStack(heldStack);
-                    heldStack = slotStack;
-                }
-            }
-        }
-    }
-
-    private void handleInventoryClick(Window window, int button) {
-        Player player = GameLoop.getInstance().getPlayer();
-        if (player == null) return;
-        
-        float mx = currentPos.x;
-        float my = currentPos.y;
-
-        com.za.zenith.engine.graphics.ui.Screen screen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-        if (screen instanceof com.za.zenith.engine.graphics.ui.InventoryScreen invScreen) {
-            com.za.zenith.engine.graphics.ui.SlotUI slotUI = invScreen.getSlotAt(mx, my);
-
-            if (slotUI != null) {
-                handleInventoryClickOnSlot(window, button, slotUI.getSlot());
-            } else {
-                // Clicked outside any slots
-                boolean handledByDev = false;
-                if (player.getMode() == PlayerMode.DEVELOPER) {
-                    Item devItem = getDevItemAt(mx, my);
-                    if (devItem != null) {
-                        handleDevPanelClick(window, mx, my);
-                        handledByDev = true;
-                    }
-                }
-
-                if (!handledByDev && heldStack != null) {
-                    dropStack(heldStack, player, GameLoop.getInstance().getWorld(), GameLoop.getInstance().getCamera(), true);
-                    heldStack = null;
-                }
-            }
-        }
+        com.za.zenith.engine.input.handlers.InventoryClickHandler.dropStack(stack, player, world, camera, dropAll);
     }
 
     public Item getDevItemAt(float mx, float my) {
-        com.za.zenith.engine.graphics.ui.renderers.InventoryScreenRenderer invRenderer = GameLoop.getInstance().getRenderer().getUIRenderer().getInventoryScreenRenderer();
-        com.za.zenith.engine.graphics.ui.ScrollPanel scroller = invRenderer.getDevScroller();
-        
-        if (!scroller.isMouseOver(mx, my)) return null;
-
-        com.za.zenith.engine.graphics.ui.Screen screen = com.za.zenith.engine.graphics.ui.ScreenManager.getInstance().getActiveScreen();
-        if (!(screen instanceof com.za.zenith.engine.graphics.ui.PlayerInventoryScreen pScreen)) return null;
-
-        com.za.zenith.engine.graphics.ui.GroupUI devGroup = null;
-        for (com.za.zenith.engine.graphics.ui.GroupUI group : pScreen.getGroupsUI()) {
-            if ("developer_items".equals(group.getConfig().type)) {
-                devGroup = group;
-                break;
-            }
-        }
-        if (devGroup == null) return null;
-
-        int cols = devGroup.getConfig().cols > 0 ? devGroup.getConfig().cols : 7;
-        int slotSize = (int)(18 * com.za.zenith.engine.graphics.ui.Hotbar.HOTBAR_SCALE);
-        int spacing = devGroup.getConfig().spacing;
-        int devX = devGroup.getX();
-        int startY = devGroup.getY();
-
-        java.util.List<Item> allItems = invRenderer.getFilteredDevItems();
-        float offset = scroller.getOffset();
-
-        for (int i = 0; i < allItems.size(); i++) {
-            int col = i % cols;
-            int row = i / cols;
-            
-            int x = devX + col * (slotSize + spacing);
-            int y = startY + row * (slotSize + spacing) - (int)offset;
-            
-            // Only handle clicks on visible items (inside scroller bounds)
-            if (my >= scroller.getY() && my <= scroller.getY() + scroller.getHeight()) {
-                if (mx >= x && mx <= x + slotSize && my >= y && my <= y + slotSize) {
-                    return allItems.get(i);
-                }
-            }
-        }
-        return null;
-    }
-
-    private void handleDevPanelClick(Window window, float mx, float my) {
-        Item item = getDevItemAt(mx, my);
-        if (item != null) {
-            boolean shift = window.isKeyPressed(GLFW_KEY_LEFT_SHIFT) || window.isKeyPressed(GLFW_KEY_RIGHT_SHIFT);
-            
-            if (shift) {
-                Player player = GameLoop.getInstance().getPlayer();
-                if (player != null) {
-                    player.getInventory().addItem(new ItemStack(item, item.getMaxStackSize()));
-                }
-            } else {
-                // Return logic: if already holding this item, clear it
-                if (heldStack != null && heldStack.getItem().getId() == item.getId()) {
-                    heldStack = null;
-                } else {
-                    heldStack = new ItemStack(item, item.getMaxStackSize());
-                }
-            }
-        }
+        return com.za.zenith.engine.input.handlers.InventoryClickHandler.getDevItemAt(mx, my, this);
     }
 
     public ItemStack getHeldStack() {
         return heldStack;
+    }
+
+    public void setHeldStack(ItemStack stack) {
+        this.heldStack = stack;
     }
 
     public void clearHeldStack() {
@@ -564,6 +292,30 @@ public class InputManager {
     
     public java.util.Set<com.za.zenith.entities.inventory.Slot> getDraggedSlots() {
         return draggedSlots;
+    }
+
+    public void setDragButton(int button) {
+        this.dragButton = button;
+    }
+
+    public void setDragging(boolean dragging) {
+        this.isDragging = dragging;
+    }
+
+    public long getLastClickTime() {
+        return lastClickTime;
+    }
+
+    public void setLastClickTime(long lastClickTime) {
+        this.lastClickTime = lastClickTime;
+    }
+
+    public int getLastClickSlot() {
+        return lastClickSlot;
+    }
+
+    public void setLastClickSlot(int lastClickSlot) {
+        this.lastClickSlot = lastClickSlot;
     }
 
     public void enableMouseCapture(Window window) {

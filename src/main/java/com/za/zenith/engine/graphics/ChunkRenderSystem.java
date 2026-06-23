@@ -3,7 +3,9 @@ package com.za.zenith.engine.graphics;
 import com.za.zenith.utils.Logger;
 import com.za.zenith.world.World;
 import com.za.zenith.world.chunks.Chunk;
-import com.za.zenith.world.chunks.ChunkMeshGenerator;
+import com.za.zenith.world.chunks.ChunkMeshResult;
+import com.za.zenith.world.chunks.RawChunkMeshResult;
+import com.za.zenith.world.chunks.ChunkMeshBuilder;
 import com.za.zenith.world.chunks.ChunkSection;
 import org.joml.Vector3f;
 
@@ -23,7 +25,7 @@ public class ChunkRenderSystem {
     private final MultiDrawBatch[] translucentBatches = new MultiDrawBatch[2];
     private final MultiDrawBatch[] waterBatches = new MultiDrawBatch[2];
     
-    private final Map<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>> pendingUpdates = new ConcurrentHashMap<>();
+    private final Map<Chunk, Future<RawChunkMeshResult>> pendingUpdates = new ConcurrentHashMap<>();
     private final com.za.zenith.utils.PriorityExecutorService meshExecutor;
     
     private Chunk[] visibleChunks = new Chunk[1024];
@@ -101,7 +103,7 @@ public class ChunkRenderSystem {
         if (chunk == null) return;
         Future<?> future = pendingUpdates.remove(chunk);
         if (future != null) future.cancel(true);
-        ChunkMeshGenerator.ChunkMeshResult result = chunk.getCurrentMeshResult();
+        ChunkMeshResult result = chunk.getCurrentMeshResult();
         if (result != null) {
             result.cleanup();
             chunk.setCurrentMeshResult(null);
@@ -205,7 +207,7 @@ public class ChunkRenderSystem {
                 boolean chunkReady = chunk != null && chunk.isReady();
 
                 ChunkSection section = chunkReady ? chunk.getSections()[cy] : null;
-                ChunkMeshGenerator.ChunkMeshResult result = chunkReady ? chunk.getCurrentMeshResult() : null;
+                ChunkMeshResult result = chunkReady ? chunk.getCurrentMeshResult() : null;
                 
                 if (chunkReady && result != null && section != null && !section.isEmpty()) {
                     if (isSectionMeshValid(result, cy, poolVer)) {
@@ -271,7 +273,7 @@ public class ChunkRenderSystem {
         }
     }
 
-    private boolean isSectionMeshValid(ChunkMeshGenerator.ChunkMeshResult result, int secIdx, int poolVer) {
+    private boolean isSectionMeshValid(ChunkMeshResult result, int secIdx, int poolVer) {
         Mesh mO = result.opaqueSections()[secIdx];
         Mesh mT = result.translucentSections()[secIdx];
         Mesh mW = result.waterSections()[secIdx];
@@ -295,7 +297,7 @@ public class ChunkRenderSystem {
         long uploadStart = System.nanoTime();
         List<ChunkUploadNode> readyUploads = new ArrayList<>();
         
-        for (Map.Entry<Chunk, Future<ChunkMeshGenerator.RawChunkMeshResult>> entry : pendingUpdates.entrySet()) {
+        for (Map.Entry<Chunk, Future<RawChunkMeshResult>> entry : pendingUpdates.entrySet()) {
             if (entry.getValue().isDone()) {
                 Chunk chunk = entry.getKey();
                 float distSq = camPos.distanceSquared(chunk.getPosition().x() * 16 + 8, camPos.y, chunk.getPosition().z() * 16 + 8);
@@ -311,10 +313,10 @@ public class ChunkRenderSystem {
             
             for (ChunkUploadNode node : readyUploads) {
                 try {
-                    ChunkMeshGenerator.RawChunkMeshResult raw = node.future.get();
+                    RawChunkMeshResult raw = node.future.get();
                     Chunk chunk = node.chunk;
                     if (world.getChunk(chunk.getPosition()) == chunk) {
-                        ChunkMeshGenerator.ChunkMeshResult res = raw.upload(meshPool);
+                        ChunkMeshResult res = raw.upload(meshPool);
                         
                         // Update visibility masks on the main thread chunks
                         if (raw.visibilityMasks() != null) {
@@ -327,7 +329,7 @@ public class ChunkRenderSystem {
                         }
                         
                         raw.cleanup();
-                        ChunkMeshGenerator.ChunkMeshResult old = chunk.getCurrentMeshResult();
+                        ChunkMeshResult old = chunk.getCurrentMeshResult();
                         if (old != null) old.cleanup();
                         chunk.setCurrentMeshResult(res);
                         chunk.setMeshUpdated(res.version());
@@ -401,11 +403,11 @@ public class ChunkRenderSystem {
 
         pendingUpdates.put(chunk, meshExecutor.submit(new com.za.zenith.utils.PriorityExecutorService.PrioritizedCallable<>() {
             @Override public int getPriority() { return (int)distSq; }
-            @Override public ChunkMeshGenerator.RawChunkMeshResult call() throws Exception {
+            @Override public RawChunkMeshResult call() throws Exception {
                 Chunk temp = new Chunk(snapshot);
                 temp.setDirtyCounter(version);
                 temp.setFirstSpawnTime(spawnTime);
-                return ChunkMeshGenerator.generateRawMesh(temp, world, atlas);
+                return ChunkMeshBuilder.generateRawMesh(temp, world, atlas);
             }
         }));
     }
@@ -422,7 +424,7 @@ public class ChunkRenderSystem {
                 int idx = sortIndices[i];
                 Chunk chunk = visibleChunks[idx];
                 int secIdx = visibleSectionIndices[idx];
-                ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
+                ChunkMeshResult res = chunk.getCurrentMeshResult();
                 if (res == null) continue;
                 Mesh m = res.translucentSections()[secIdx];
                 if (m == null) continue;
@@ -436,7 +438,7 @@ public class ChunkRenderSystem {
                 int idx = sortIndices[i];
                 Chunk chunk = visibleChunks[idx];
                 int secIdx = visibleSectionIndices[idx];
-                ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
+                ChunkMeshResult res = chunk.getCurrentMeshResult();
                 if (res == null) continue;
                 Mesh m = res.opaqueSections()[secIdx];
                 if (m == null) continue;
@@ -459,7 +461,7 @@ public class ChunkRenderSystem {
             int idx = sortIndices[i];
             Chunk chunk = visibleChunks[idx];
             int secIdx = visibleSectionIndices[idx];
-            ChunkMeshGenerator.ChunkMeshResult res = chunk.getCurrentMeshResult();
+            ChunkMeshResult res = chunk.getCurrentMeshResult();
             if (res == null) continue;
             Mesh m = res.waterSections()[secIdx];
             if (m == null) continue;
@@ -512,10 +514,10 @@ public class ChunkRenderSystem {
 
     private static class ChunkUploadNode {
         final Chunk chunk;
-        final Future<ChunkMeshGenerator.RawChunkMeshResult> future;
+        final Future<RawChunkMeshResult> future;
         final float distSq;
 
-        ChunkUploadNode(Chunk chunk, Future<ChunkMeshGenerator.RawChunkMeshResult> future, float distSq) {
+        ChunkUploadNode(Chunk chunk, Future<RawChunkMeshResult> future, float distSq) {
             this.chunk = chunk;
             this.future = future;
             this.distSq = distSq;

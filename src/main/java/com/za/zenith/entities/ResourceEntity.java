@@ -24,8 +24,8 @@ public class ResourceEntity extends Entity {
             float visualScale = stack.getItem().getDroppedScale();
             // Текстура сканируется в XY, но предмет лежит в XZ.
             // Центрируем хитбокс относительно позиции сущности.
-            float width = (texAABB.getMax().x - texAABB.getMin().x) * visualScale;
-            float depth = (texAABB.getMax().y - texAABB.getMin().y) * visualScale;
+            float width = (texAABB.maxX() - texAABB.minX()) * visualScale;
+            float depth = (texAABB.maxY() - texAABB.minY()) * visualScale;
             float height = 0.0625f * visualScale; // Толщина предмета
 
             // Создаем новый AABB, отцентрированный по XZ

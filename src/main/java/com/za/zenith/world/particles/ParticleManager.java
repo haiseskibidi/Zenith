@@ -164,8 +164,8 @@ public class ParticleManager {
 
         float minX = 1, minY = 1, minZ = 1, maxX = 0, maxY = 0, maxZ = 0;
         for (com.za.zenith.world.physics.AABB box : shape.getBoxes()) {
-            minX = Math.min(minX, box.getMin().x); minY = Math.min(minY, box.getMin().y); minZ = Math.min(minZ, box.getMin().z);
-            maxX = Math.max(maxX, box.getMax().x); maxY = Math.max(maxY, box.getMax().y); maxZ = Math.max(maxZ, box.getMax().z);
+            minX = Math.min(minX, box.minX()); minY = Math.min(minY, box.minY()); minZ = Math.min(minZ, box.minZ());
+            maxX = Math.max(maxX, box.maxX()); maxY = Math.max(maxY, box.maxY()); maxZ = Math.max(maxZ, box.maxZ());
         }
 
         float sizeX = maxX - minX, sizeY = maxY - minY, sizeZ = maxZ - minZ;

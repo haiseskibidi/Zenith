@@ -18,6 +18,7 @@ public class LampBlockEntity extends BlockEntity implements ITickable, IEnergySt
 
     @Override
     public void update(float deltaTime) {
+        if (world == null) return;
         boolean wasLit = lit;
         if (energy > 0) {
             energy -= consumption * deltaTime;

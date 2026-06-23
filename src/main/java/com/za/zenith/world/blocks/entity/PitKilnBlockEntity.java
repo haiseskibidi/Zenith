@@ -30,6 +30,7 @@ public class PitKilnBlockEntity extends BlockEntity implements ITickable, com.za
 
     @Override
     public void update(float deltaTime) {
+        if (world == null) return;
         if (!burning) return;
 
         cookTime += deltaTime;

@@ -596,12 +596,7 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
      * @return true, если блок имеет логику взаимодействия на ПКМ.
      */
     public boolean hasOnUse() {
-        if (components != null) {
-            for (var component : components) {
-                if (component.hasOnUse()) return true;
-            }
-        }
-        return false;
+        return BlockInteractionHandler.hasOnUse(this);
     }
 
     /**
@@ -609,52 +604,25 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
      * Если список пуст, взаимодействие работает по всему хитбоксу (если hasOnUse = true).
      */
     public java.util.List<InteractionZone> getInteractionZones(com.za.zenith.world.World world, BlockPos pos) {
-        if (components == null || components.isEmpty()) return java.util.Collections.emptyList();
-        java.util.List<InteractionZone> zones = new java.util.ArrayList<>();
-        for (var component : components) {
-            zones.addAll(component.getInteractionZones(world, pos));
-        }
-        return zones;
+        return BlockInteractionHandler.getInteractionZones(world, pos, this);
     }
 
     public boolean isInteractableAt(com.za.zenith.world.World world, BlockPos pos, org.joml.Vector3f localHit) {
-        if (!hasOnUse()) return false;
-        
-        java.util.List<InteractionZone> zones = getInteractionZones(world, pos);
-        if (zones.isEmpty()) return true; // Весь блок интерактивен
-        
-        for (InteractionZone zone : zones) {
-            if (zone.contains(localHit)) return true;
-        }
-        return false;
+        return BlockInteractionHandler.isInteractableAt(world, pos, localHit, this);
     }
 
     /**
      * Вызывается при нажатии ПКМ по блоку.
-     * @param hitX Относительная координата X клика (0.0-1.0)
-     * @param hitY Относительная координата Y клика (0.0-1.0)
-     * @param hitZ Относительная координата Z клика (0.0-1.0)
-     * @return true, если действие было поглощено и стандартная обработка не требуется.
      */
     public boolean onUse(com.za.zenith.world.World world, BlockPos pos, com.za.zenith.entities.Player player, com.za.zenith.world.items.ItemStack heldStack, float hitX, float hitY, float hitZ) {
-        if (components != null) {
-            for (var component : components) {
-                if (component.onUse(world, pos, player, heldStack, hitX, hitY, hitZ)) return true;
-            }
-        }
-        return false;
+        return BlockInteractionHandler.onUse(world, pos, player, heldStack, hitX, hitY, hitZ, this);
     }
 
     /**
      * Вызывается при нажатии ЛКМ по блоку.
      */
     public boolean onLeftClick(com.za.zenith.world.World world, BlockPos pos, com.za.zenith.entities.Player player, com.za.zenith.world.items.ItemStack heldStack, float hitX, float hitY, float hitZ, boolean isNewClick) {
-        if (components != null) {
-            for (var component : components) {
-                if (component.onLeftClick(world, pos, player, heldStack, hitX, hitY, hitZ, isNewClick)) return true;
-            }
-        }
-        return false;
+        return BlockInteractionHandler.onLeftClick(world, pos, player, heldStack, hitX, hitY, hitZ, isNewClick, this);
     }
 
     /**
@@ -689,43 +657,7 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
      * Спавнит предметы при разрушении блока.
      */
     public void spawnDrops(com.za.zenith.world.World world, BlockPos pos, Block block, com.za.zenith.entities.Player player) {
-        // Advanced drops
-        if (!dropRules.isEmpty()) {
-            String heldTool = "none";
-            if (player != null && player.getInventory().getSelectedItemStack() != null) {
-                Item item = player.getInventory().getSelectedItemStack().getItem();
-                com.za.zenith.world.items.component.ToolComponent tool = item.getComponent(com.za.zenith.world.items.component.ToolComponent.class);
-                if (tool != null) heldTool = tool.type().name().toLowerCase();
-            }
-
-            for (DropRule rule : dropRules) {
-                if (rule.requiredToolType().equalsIgnoreCase("none") || rule.requiredToolType().equalsIgnoreCase(heldTool)) {
-                    if (Math.random() <= rule.chance()) {
-                        Item itemToGive = com.za.zenith.world.items.ItemRegistry.getItem(Identifier.of(rule.dropItemIdentifier()));
-                        if (itemToGive != null) {
-                            spawnDropEntity(world, pos, new ItemStack(itemToGive));
-                        }
-                    }
-                }
-            }
-        } else {
-            // Legacy drops
-            float chance = dropChance;
-            if (Math.random() <= chance) {
-                Item itemToGive = (dropItem != null) ? com.za.zenith.world.items.ItemRegistry.getItem(Identifier.of(dropItem)) : com.za.zenith.world.items.ItemRegistry.getItem(identifier);
-                if (itemToGive != null) {
-                    spawnDropEntity(world, pos, new ItemStack(itemToGive));
-                }
-            }
-        }
-    }
-
-    private void spawnDropEntity(com.za.zenith.world.World world, BlockPos pos, ItemStack stack) {
-        Vector3f dropPos = new Vector3f(pos.x() + 0.5f, pos.y() + 0.5f, pos.z() + 0.5f);
-        ItemEntity drop = new ItemEntity(dropPos, stack);
-        drop.getVelocity().set((float)Math.random() * 0.2f - 0.1f, 0.2f, (float)Math.random() * 0.2f - 0.1f);
-        drop.setAngularVelocity(new Vector3f((float)(Math.random() - 0.5) * 10f, (float)(Math.random() - 0.5) * 10f, (float)(Math.random() - 0.5) * 10f));
-        world.spawnEntity(drop);
+        BlockDropManager.spawnDrops(world, pos, block, player, this);
     }
 
     /**
@@ -796,48 +728,11 @@ public class BlockDefinition implements com.za.zenith.utils.LiveReloadable {
     }
 
     public void onBlockAdded(com.za.zenith.world.World world, BlockPos pos) {
-        if (hasGravity()) {
-            checkFall(world, pos);
-        }
+        BlockGravitySystem.onBlockAdded(world, pos, this);
     }
 
     public void checkFall(com.za.zenith.world.World world, BlockPos pos) {
-        if (world.isGenerating()) return;
-
-        BlockPos belowPos = pos.down();
-        Block belowBlock = world.getBlock(belowPos);
-
-        if (belowBlock.isAir() || belowBlock.isReplaceable() || BlockRegistry.getBlock(belowBlock.getType()).isFluid()) {
-            Block currentBlock = world.getBlock(pos);
-            if (currentBlock.getType() == this.id) {
-                // Cache block properties before replacing with AIR
-                int typeToFall = currentBlock.getType();
-                byte metaToFall = currentBlock.getMetadata();
-
-                // Set current block to air (which notifies neighbors, including the block above)
-                world.setBlock(pos, new Block(Blocks.AIR.getId()));
-
-                // Hide the block at the start position until the chunk mesh updates to prevent visual duplication
-                if (com.za.zenith.engine.core.GameLoop.getInstance() != null) {
-                    com.za.zenith.engine.graphics.Renderer renderer = com.za.zenith.engine.core.GameLoop.getInstance().getRenderer();
-                    if (renderer != null) {
-                        renderer.addTemporaryHiddenBlock(pos);
-                    }
-                }
-
-                float startGravity = fallingSettings != null ? fallingSettings.getGravity() : -28.0f;
-                float startTerminal = fallingSettings != null ? fallingSettings.getTerminalVelocity() : -50.0f;
-
-                com.za.zenith.entities.FallingBlockEntity entity = new com.za.zenith.entities.FallingBlockEntity(
-                    new org.joml.Vector3f(pos.x() + 0.5f, pos.y(), pos.z() + 0.5f),
-                    typeToFall,
-                    metaToFall,
-                    startGravity,
-                    startTerminal
-                );
-                world.spawnEntity(entity);
-            }
-        }
+        BlockGravitySystem.checkFall(world, pos, this);
     }
 }
 

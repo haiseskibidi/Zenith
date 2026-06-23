@@ -385,7 +385,7 @@ public static Block grass_block; // Автоматически заполнит�
 
 ## 11. Easing Registry & Animation Math
 
-Zenith v4.0 перевел все интерполяции на Data-Driven рельсы.
+Движок Zenith перевел все интерполяции на Data-Driven рельсы.
 
 ### 11.1. EasingRegistry API
 Используйте этот класс для получения значений интерполяции в любой части кода (анимации, камера, UI).

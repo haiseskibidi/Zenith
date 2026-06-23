@@ -184,12 +184,12 @@ public class ParkourHandler {
             settings.playerWidth / 2, settings.standingHeight, settings.playerWidth / 2
         ).offset(tx, ty, tz);
 
-        int minX = (int) Math.floor(testBox.getMin().x);
-        int maxX = (int) Math.floor(testBox.getMax().x);
-        int minY = (int) Math.floor(testBox.getMin().y);
-        int maxY = (int) Math.floor(testBox.getMax().y);
-        int minZ = (int) Math.floor(testBox.getMin().z);
-        int maxZ = (int) Math.floor(testBox.getMax().z);
+        int minX = (int) Math.floor(testBox.minX());
+        int maxX = (int) Math.floor(testBox.maxX());
+        int minY = (int) Math.floor(testBox.minY());
+        int maxY = (int) Math.floor(testBox.maxY());
+        int minZ = (int) Math.floor(testBox.minZ());
+        int maxZ = (int) Math.floor(testBox.maxZ());
 
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
