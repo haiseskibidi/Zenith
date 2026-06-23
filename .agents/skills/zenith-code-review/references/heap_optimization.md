@@ -33,7 +33,35 @@ public void render(RenderState state) {
 
 ---
 
-## 2. Примитивный доступ вместо объектного
+## 2. Кэширование объектов в синглтонах и менеджерах
+
+Долгоживущие менеджеры (например, `AtmosphereManager`) не должны создавать новые вектора при расчете цвета или направления света.
+
+### Неправильно:
+```java
+public void update(World world, float deltaTime) {
+    Vector3f skyColor = new Vector3f(0.5f, 0.7f, 1.0f); // Аллокация каждый тик!
+    shader.setVector3f("skyColor", skyColor);
+}
+```
+
+### Правильно:
+```java
+public class AtmosphereManager {
+    // Вектор аллоцируется один раз при инициализации класса
+    private final Vector3f skyColor = new Vector3f(); 
+
+    public void update(World world, float deltaTime) {
+        // Обновляем значения существующего вектора без создания нового
+        skyColor.set(0.5f, 0.7f, 1.0f); 
+        shader.setVector3f("skyColor", skyColor);
+    }
+}
+```
+
+---
+
+## 3. Примитивный доступ вместо объектного
 
 Многие встроенные классы при обращении к внутренним объектам создают новые инстансы. Например, методы `AABB` часто возвращают новые `Vector3f` для `min`/`max` или копируют состояние.
 
@@ -59,7 +87,7 @@ if (state.getFrustum().testAab(
 
 ---
 
-## 3. Кэширование массивов примитивов
+## 4. Кэширование массивов примитивов
 
 Методы текстурных атласов или парсеров не должны выделять новые массивы для возврата данных, если эти данные фиксированы.
 
@@ -91,7 +119,30 @@ public float[] uvFor(String key) {
 
 ---
 
-## 4. Переиспользуемые Thread-Safe буферы в генераторах
+## 5. Обход списков без создания итераторов
+
+Использование сокращенного синтаксиса `for-each` для коллекций `List` неявно создает объект `Iterator` на куче. В горячих циклах это вызывает скрытую лавинообразную аллокацию.
+
+### Неправильно:
+```java
+for (ItemEntity item : world.getItemsInChunk(chunkPos)) {
+    // Неявно компилируется в: Iterator<ItemEntity> it = list.iterator(); ...
+    tryMerge(item);
+}
+```
+
+### Правильно (Классический цикл по индексу):
+```java
+List<ItemEntity> items = world.getItemsInChunk(chunkPos);
+for (int i = 0; i < items.size(); i++) {
+    ItemEntity item = items.get(i);
+    tryMerge(item);
+}
+```
+
+---
+
+## 6. Переиспользуемые Thread-Safe буферы в генераторах
 
 В ChunkMeshGenerator генерация тысяч полигонов чанка приводит к миллионам аллокаций, если вершины для каждого лица кубического бокса выделяются заново.
 

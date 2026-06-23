@@ -1,6 +1,6 @@
 # Шаблоны реализации компонентов (Component Implementation Patterns)
 
-Этот справочник содержит эталонные примеры реализации функционала предметов и блоков с использованием компонентного подхода вместо наследования.
+Этот справочник содержит эталонные примеры реализации функционала предметов, блоков и сети с использованием компонентного подхода и сетевой спецификации Zenith.
 
 ---
 
@@ -127,5 +127,48 @@ public class CarvableComponent extends BlockComponent {
       "final_block": "zenith:stump"
     }
   ]
+}
+```
+
+---
+
+## 3. Регистрация сетевых пакетов (Kryonet)
+
+Все новые пакеты обмена данными между клиентом и сервером должны быть зарегистрированы в Kryo-инстансах.
+
+### Шаблон 3.1: Создание класса пакета
+Пакет должен иметь дефолтный пустой конструктор для сериализации Kryo.
+
+```java
+package com.za.zenith.network.packets;
+
+public class BlockUpdatePacket {
+    public int x, y, z;
+    public int blockType;
+
+    // Обязательный дефолтный конструктор для Kryo
+    public BlockUpdatePacket() {}
+
+    public BlockUpdatePacket(int x, int y, int z, int blockType) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.blockType = blockType;
+    }
+}
+```
+
+### Шаблон 3.2: Регистрация пакета в GameClient и GameServer
+```java
+// Внутри метода registerPackets() в GameClient.java и GameServer.java
+private void registerPackets() {
+    var kryo = client.getKryo(); // или server.getKryo()
+    
+    // Регистрируем класс пакета
+    kryo.register(BlockUpdatePacket.class);
+    
+    // При необходимости регистрируем вспомогательные типы данных, 
+    // передаваемые внутри пакетов (например, массивы)
+    kryo.register(float[].class);
 }
 ```
