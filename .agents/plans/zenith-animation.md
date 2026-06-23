@@ -1,12 +1,12 @@
-# Zenith Animation 2.0: Quaternion & Modular Engine
+# Zenith Animation: Quaternion & Modular Engine
 
 ## 1. Vision
 Implement a professional-grade animation system similar to modern game engines (and Blender) that uses Quaternions for rotations. This solves the "propeller effect," gimbal lock, and interpolation artifacts associated with Euler angles.
 
 ## 2. Core Principles
 - **Quaternions Everywhere**: Internal rotations stored and calculated as `org.joml.Quaternionf`.
-- **Hybrid Support**: Support for both Legacy (V1, Euler) and Modern (V2, Quaternion) via a `"version": 2` flag in JSON.
-- **Intuitive Coordinate System (V2)**: 
+- **Hybrid Support**: Support for both Legacy (Euler) and Modern (Quaternion) via a `"version": 2` flag in JSON.
+- **Intuitive Coordinate System**: 
     - `+X`: Right
     - `+Y`: Up
     - `+Z`: Forward (into the screen)
@@ -24,7 +24,7 @@ Implement a professional-grade animation system similar to modern game engines (
 
 ### 3.2 ViewmodelController.java (The Logic)
 - **Additive evaluation**: All `evaluate` calls must use `+=` for positions and `quat.mul()` for rotations.
-- **V2 Parsing**: If `version == 2`, read `[X, Y, Z]` as degrees, convert to a temporary quaternion, and multiply it into the node's state.
+- **Quaternion Parsing**: If version is set to Quaternion mode, read `[X, Y, Z]` as degrees, convert to a temporary quaternion, and multiply it into the node's state.
 - **Slerp Support**: Implement Spherical Linear Interpolation for smooth, shortest-path bone transitions.
 
 ### 3.3 Player.java (The Orchestrator)
@@ -35,8 +35,8 @@ Implement a professional-grade animation system similar to modern game engines (
 ## 4. Implementation Steps
 
 ### Phase 1: Foundation (Current Focus)
-1.  **Refactor `ModelNode`**: Transition to Quaternions while keeping Euler methods for V1 compatibility.
-2.  **Update `ViewmodelController`**: Implement modular additive logic and V2 coordinate mapping.
+1.  **Refactor `ModelNode`**: Transition to Quaternions while keeping Euler methods for legacy compatibility.
+2.  **Update `ViewmodelController`**: Implement modular additive logic and coordinate mapping.
 3.  **Refactor `ViewmodelMeshGenerator`**: Ensure geometry is generated correctly for the new `+Z = Forward` standard.
 
 ### Phase 2: Flow & Switching
@@ -44,7 +44,7 @@ Implement a professional-grade animation system similar to modern game engines (
 2.  **Cross-fade Logic**: Modular blending system in `Player.java`.
 
 ### Phase 3: Content Migration
-1.  **Rebuild `hands.json` (V2)**: Clean anatomy using intuitive coordinates.
+1.  **Rebuild `hands.json`**: Clean anatomy using intuitive coordinates.
 2.  **Update Auto-Grip**: Generate Quaternion-based grips instead of Euler angles.
 
 ## 5. Editor Compatibility
