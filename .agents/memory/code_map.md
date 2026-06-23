@@ -98,7 +98,7 @@
 - **Zero-Allocation**: Использование пулов векторов для расчетов физики и магнита.
 - **Chunk Tracking**: Автоматическое обновление позиции в пространственной карте мира при пересечении границ чанков.
 
-### com.za.zenith.world.lighting.LightEngine (UPDATED v2.1)
+### com.za.zenith.world.lighting.LightEngine (UPDATED)
 Назначение: Высокопроизводительный движок 3D-освещения.
 Функции:
 - **Synchronous Throttled Fast-Path**: Мгновенно рассчитывает свет на главном потоке для локальных изменений (лимит 5 блоков за 20 мс) при ломании блоков игроком (в т.ч. Молотом Админа), полностью убирая визуальную задержку света. Автоматически переключается на асинхронный расчет при превышении лимита (например, взрыв TNT).
@@ -297,9 +297,14 @@
 - **StumpBlockEntity.java**: Сущность блока для пня (Stump).
 
 ## Animation & Locomotion System
-### com.za.zenith.entities.Player
+### com.za.zenith.entities.Player (UPDATED)
 Назначение: Главная сущность игрока.
-Функции: Управление инвентарем, статами (голод, стамина), паркуром и анимациями. Поддерживает методы `swing()` (удар) и `interact()` (быстрый сбор/подбор). Поддерживает методы `swing()` (удар) и `interact()` (быстрый сбор/подбор).
+Функции: Координирует движение, физику, инвентарь, характеристики и вьюмодельные анимации через ECS компоненты и хелперы.
+- **PlayerLocomotionState.java**: Хранит и вычисляет состояние visual locomotion, leanAmount, fallingTimer, таймеры приземления и шаг-вверх visual offset.
+- **ViewmodelBoneProcessor.java**: Выполняет привязку костей скелета вьюмодели, слияние профилей анимаций, Tarkov-style коллизии и физику рук без кучевых аллокаций.
+- **PlayerStatsCalculator.java**: Вычисляет динамические характеристики игрока и накладывает модификаторы экипировки.
+- **PlayerViewmodelAnimator.java**: Координирует параметры visual locomotion и вызывает обработку скелета.
+- **components/PlayerSurvivalComponent.java**: Компонент жизнедеятельности игрока (кислород, стамина, голод, загрязнение, кровь, паразиты, влажность).
 
 ### com.za.zenith.engine.input (UPDATED)
 Назначение: Архитектура ввода на основе Domain Controllers.
@@ -372,7 +377,7 @@
 Назначение: Реестр скелетных моделей.
 Функции: Загружает и хранит ViewmodelDefinition из ресурсов.
 
-## Data Management (Asset Manager v2.5 UPDATED)
+## Data Management (Asset Manager UPDATED)
 ### com.za.zenith.engine.resources.loaders
 - **ActionDataLoader.java**: Загрузка определений действий игрока.
 - **BlockDataLoader.java**: Загрузка параметров блоков и компонентов.
