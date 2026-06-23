@@ -114,12 +114,23 @@ public abstract class Entity {
         return new Vector3f(prevPosition).lerp(position, alpha);
     }
 
+    public Vector3f getInterpolatedPosition(float alpha, Vector3f dest) {
+        return dest.set(prevPosition).lerp(position, alpha);
+    }
+
     public Vector3f getInterpolatedRotation(float alpha) {
         Vector3f result = new Vector3f();
         result.x = lerpAngle(prevRotation.x, rotation.x, alpha);
         result.y = lerpAngle(prevRotation.y, rotation.y, alpha);
         result.z = lerpAngle(prevRotation.z, rotation.z, alpha);
         return result;
+    }
+
+    public Vector3f getInterpolatedRotation(float alpha, Vector3f dest) {
+        dest.x = lerpAngle(prevRotation.x, rotation.x, alpha);
+        dest.y = lerpAngle(prevRotation.y, rotation.y, alpha);
+        dest.z = lerpAngle(prevRotation.z, rotation.z, alpha);
+        return dest;
     }
 
     private float lerpAngle(float start, float end, float t) {

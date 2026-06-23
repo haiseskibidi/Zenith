@@ -20,7 +20,7 @@ public class ItemEntityStacker {
         float age = entity.getAge() + alpha * 0.016f;
         float scale = item.getDroppedScale() * (item.isBlock() ? 0.25f : 0.45f);
         float yOff = item.isBlock() ? 0 : scale * 0.5f;
-        var rot = entity.getInterpolatedRotation(alpha);
+        Vector3f rot = entity.getInterpolatedRotation(alpha, RenderContext.getVector());
         
         // Медленное плавное вращение вокруг вертикальной оси Y (как в Minecraft) для придания динамики
         float renderRotY = rot.y + age * 1.2f;

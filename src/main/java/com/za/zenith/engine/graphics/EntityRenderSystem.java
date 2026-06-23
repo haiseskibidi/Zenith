@@ -12,6 +12,7 @@ import com.za.zenith.engine.graphics.model.Viewmodel;
 import com.za.zenith.engine.graphics.model.ViewmodelRenderer;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import com.za.zenith.world.physics.AABB;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -104,8 +105,12 @@ public class EntityRenderSystem {
                 // Only process non-ground entities here (Ground entities handled via spatial map below)
                 if (entity.isGroundEntity()) continue;
 
-                Vector3f p = entity.getInterpolatedPosition(state.getAlpha());
-                if (!state.getFrustum().testAab(entity.getBoundingBox().getMin(), entity.getBoundingBox().getMax())) continue;
+                Vector3f p = entity.getInterpolatedPosition(state.getAlpha(), RenderContext.getVector());
+                AABB localBox = entity.getLocalBoundingBox();
+                if (!state.getFrustum().testAab(
+                    localBox.minX() + p.x, localBox.minY() + p.y, localBox.minZ() + p.z,
+                    localBox.maxX() + p.x, localBox.maxY() + p.y, localBox.maxZ() + p.z
+                )) continue;
                 
                 if (entity instanceof FallingBlockEntity fallingBlock) {
                     setEntityLight(world, p, blockShader, fallingBlock.isLanded());
@@ -143,10 +148,14 @@ public class EntityRenderSystem {
                     synchronized(groundEntities) {
                         for (int i = 0; i < groundEntities.size(); i++) {
                             com.za.zenith.entities.Entity entity = groundEntities.get(i);
-                            Vector3f p = entity.getInterpolatedPosition(state.getAlpha());
+                            Vector3f p = entity.getInterpolatedPosition(state.getAlpha(), RenderContext.getVector());
                             
                             // Frustum Culling
-                            if (!state.getFrustum().testAab(entity.getBoundingBox().getMin(), entity.getBoundingBox().getMax())) continue;
+                            AABB localBox = entity.getLocalBoundingBox();
+                            if (!state.getFrustum().testAab(
+                                localBox.minX() + p.x, localBox.minY() + p.y, localBox.minZ() + p.z,
+                                localBox.maxX() + p.x, localBox.maxY() + p.y, localBox.maxZ() + p.z
+                            )) continue;
                             
                             // Extra Distance Culling: small items don't need to render far
                             if (p.distanceSquared(localPlayer.getPosition()) > 2304.0f) continue; // 48m radius

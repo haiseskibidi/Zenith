@@ -161,6 +161,96 @@ public class ChunkMeshGenerator {
         com.za.zenith.utils.IntArrayList indices;
         int vertexIndex = 0;
         private final float[] tempLightBuf = new float[2];
+        private final float[] tempFaceVertices = new float[12];
+
+        public float[] getFaceVertices(int face, AABB box, float h0, float h1, float h2, float h3, boolean isWater) {
+            float minX = box.minX();
+            float minY = box.minY();
+            float minZ = box.minZ();
+            float maxX = box.maxX();
+            float maxY = box.maxY();
+            float maxZ = box.maxZ();
+            if (isWater) {
+                switch (face) {
+                    case 0:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY; tempFaceVertices[2] = maxZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY; tempFaceVertices[5] = maxZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = minY + h1; tempFaceVertices[8] = maxZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = minY + h0; tempFaceVertices[11] = maxZ;
+                        break;
+                    case 1:
+                        tempFaceVertices[0] = maxX; tempFaceVertices[1] = minY; tempFaceVertices[2] = minZ;
+                        tempFaceVertices[3] = minX; tempFaceVertices[4] = minY; tempFaceVertices[5] = minZ;
+                        tempFaceVertices[6] = minX; tempFaceVertices[7] = minY + h3; tempFaceVertices[8] = minZ;
+                        tempFaceVertices[9] = maxX; tempFaceVertices[10] = minY + h2; tempFaceVertices[11] = minZ;
+                        break;
+                    case 2:
+                        tempFaceVertices[0] = maxX; tempFaceVertices[1] = minY; tempFaceVertices[2] = maxZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY; tempFaceVertices[5] = minZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = minY + h2; tempFaceVertices[8] = minZ;
+                        tempFaceVertices[9] = maxX; tempFaceVertices[10] = minY + h1; tempFaceVertices[11] = maxZ;
+                        break;
+                    case 3:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY; tempFaceVertices[2] = minZ;
+                        tempFaceVertices[3] = minX; tempFaceVertices[4] = minY; tempFaceVertices[5] = maxZ;
+                        tempFaceVertices[6] = minX; tempFaceVertices[7] = minY + h0; tempFaceVertices[8] = maxZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = minY + h3; tempFaceVertices[11] = minZ;
+                        break;
+                    case 4:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY + h0; tempFaceVertices[2] = maxZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY + h1; tempFaceVertices[5] = maxZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = minY + h2; tempFaceVertices[8] = minZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = minY + h3; tempFaceVertices[11] = minZ;
+                        break;
+                    case 5:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY; tempFaceVertices[2] = minZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY; tempFaceVertices[5] = minZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = minY; tempFaceVertices[8] = maxZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = minY; tempFaceVertices[11] = maxZ;
+                        break;
+                }
+            } else {
+                switch (face) {
+                    case 0:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY; tempFaceVertices[2] = maxZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY; tempFaceVertices[5] = maxZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = maxY; tempFaceVertices[8] = maxZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = maxY; tempFaceVertices[11] = maxZ;
+                        break;
+                    case 1:
+                        tempFaceVertices[0] = maxX; tempFaceVertices[1] = minY; tempFaceVertices[2] = minZ;
+                        tempFaceVertices[3] = minX; tempFaceVertices[4] = minY; tempFaceVertices[5] = minZ;
+                        tempFaceVertices[6] = minX; tempFaceVertices[7] = maxY; tempFaceVertices[8] = minZ;
+                        tempFaceVertices[9] = maxX; tempFaceVertices[10] = maxY; tempFaceVertices[11] = minZ;
+                        break;
+                    case 2:
+                        tempFaceVertices[0] = maxX; tempFaceVertices[1] = minY; tempFaceVertices[2] = maxZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY; tempFaceVertices[5] = minZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = maxY; tempFaceVertices[8] = minZ;
+                        tempFaceVertices[9] = maxX; tempFaceVertices[10] = maxY; tempFaceVertices[11] = maxZ;
+                        break;
+                    case 3:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY; tempFaceVertices[2] = minZ;
+                        tempFaceVertices[3] = minX; tempFaceVertices[4] = minY; tempFaceVertices[5] = maxZ;
+                        tempFaceVertices[6] = minX; tempFaceVertices[7] = maxY; tempFaceVertices[8] = maxZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = maxY; tempFaceVertices[11] = minZ;
+                        break;
+                    case 4:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = maxY; tempFaceVertices[2] = maxZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = maxY; tempFaceVertices[5] = maxZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = maxY; tempFaceVertices[8] = minZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = maxY; tempFaceVertices[11] = minZ;
+                        break;
+                    case 5:
+                        tempFaceVertices[0] = minX; tempFaceVertices[1] = minY; tempFaceVertices[2] = minZ;
+                        tempFaceVertices[3] = maxX; tempFaceVertices[4] = minY; tempFaceVertices[5] = minZ;
+                        tempFaceVertices[6] = maxX; tempFaceVertices[7] = minY; tempFaceVertices[8] = maxZ;
+                        tempFaceVertices[9] = minX; tempFaceVertices[10] = minY; tempFaceVertices[11] = maxZ;
+                        break;
+                }
+            }
+            return tempFaceVertices;
+        }
 
         MeshData(int initialCapacity) {
             interleavedData = new com.za.zenith.utils.FloatArrayList(initialCapacity);
@@ -506,15 +596,6 @@ public class ChunkMeshGenerator {
             return data.build();
         }
         for (AABB box : shape.getBoxes()) {
-            Vector3f min = box.getMin(), max = box.getMax();
-            float[][] facePositions = new float[][]{
-                {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, max.y, max.z,  min.x, max.y, max.z},
-                {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, max.y, min.z,  max.x, max.y, min.z},
-                {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, max.y, min.z,  max.x, max.y, max.z},
-                {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, max.y, max.z,  min.x, max.y, min.z},
-                {min.x, max.y, max.z,  max.x, max.y, max.z,  max.x, max.y, min.z,  min.x, max.y, min.z},
-                {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}
-            };
             for (int face = 0; face < 6; face++) {
                 float faceBlockType = (float)block.getType();
                 if (def.isFluid()) {
@@ -537,7 +618,8 @@ public class ChunkMeshGenerator {
                         }
                     }
                 }
-                data.addFace(facePositions[face], FACE_NORMALS[face], faceBlockType, BlockTextureMapper.uvFor(block, face, atlas), face, -0.5f, 0, -0.5f, 0, overlayLayer, def.isSway(), neighborhood, wx, wy, wz);
+                float[] fp = data.getFaceVertices(face, box, 0, 0, 0, 0, false);
+                data.addFace(fp, FACE_NORMALS[face], faceBlockType, BlockTextureMapper.uvFor(block, face, atlas), face, -0.5f, 0, -0.5f, 0, overlayLayer, def.isSway(), neighborhood, wx, wy, wz);
             }
         }
         return data.build();
@@ -547,17 +629,9 @@ public class ChunkMeshGenerator {
         MeshData data = new MeshData(512);
         BlockDefinition def = BlockRegistry.getBlock(block.getType());
         boolean canSway = def != null && def.isSway();
-        Vector3f min = box.getMin(), max = box.getMax();
-        float[][] facePositions = new float[][]{
-            {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, max.y, max.z,  min.x, max.y, max.z},
-            {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, max.y, min.z,  max.x, max.y, min.z},
-            {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, max.y, min.z,  max.x, max.y, max.z},
-            {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, max.y, max.z,  min.x, max.y, min.z},
-            {min.x, max.y, max.z,  max.x, max.y, max.z,  max.x, max.y, min.z,  min.x, max.y, min.z},
-            {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}
-        };
         for (int face = 0; face < 6; face++) {
-            data.addFace(facePositions[face], FACE_NORMALS[face], (float) block.getType(), BlockTextureMapper.uvFor(block, face, atlas), face, 0, 0, 0, 0, -1.0f, canSway, null, 0, 0, 0);
+            float[] fp = data.getFaceVertices(face, box, 0, 0, 0, 0, false);
+            data.addFace(fp, FACE_NORMALS[face], (float) block.getType(), BlockTextureMapper.uvFor(block, face, atlas), face, 0, 0, 0, 0, -1.0f, canSway, null, 0, 0, 0);
         }
         return data.build();
     }
@@ -579,16 +653,6 @@ public class ChunkMeshGenerator {
                 VoxelShape shape = nBlock.getShape();
                 if (shape == null) continue;
                 for (AABB box : shape.getBoxes()) {
-                    Vector3f min = box.getMin(), max = box.getMax();
-                    float[][] facePositions = new float[][]{
-                        {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, max.y, max.z,  min.x, max.y, max.z},
-                        {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, max.y, min.z,  max.x, max.y, min.z},
-                        {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, max.y, min.z,  max.x, max.y, max.z},
-                        {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, max.y, max.z,  min.x, max.y, min.z},
-                        {min.x, max.y, max.z,  max.x, max.y, max.z,  max.x, max.y, min.z,  min.x, max.y, min.z},
-                        {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}
-                    };
-
                     float faceBlockType = (float)nBlock.getType();
                     float overlayLayer = -1.0f;
                     if (nDef.isFaceTinted(oppFace)) {
@@ -609,7 +673,8 @@ public class ChunkMeshGenerator {
                     float oy = dir.getDy();
                     float oz = dir.getDz();
 
-                    data.addFace(facePositions[oppFace], FACE_NORMALS[oppFace], faceBlockType, BlockTextureMapper.uvFor(nBlock, oppFace, atlas), oppFace, ox, oy, oz, 0, overlayLayer, nDef.isSway(), neighborhood, nPos.x(), nPos.y(), nPos.z());
+                    float[] fp = data.getFaceVertices(oppFace, box, 0, 0, 0, 0, false);
+                    data.addFace(fp, FACE_NORMALS[oppFace], faceBlockType, BlockTextureMapper.uvFor(nBlock, oppFace, atlas), oppFace, ox, oy, oz, 0, overlayLayer, nDef.isSway(), neighborhood, nPos.x(), nPos.y(), nPos.z());
                 }
             }
         }
@@ -705,31 +770,12 @@ public class ChunkMeshGenerator {
                         }
 
                         for (AABB box : shape.getBoxes()) {
-                            Vector3f min = box.getMin(), max = box.getMax();
-                            float[][] facePositions;
+                            float h0 = 0.0f, h1 = 0.0f, h2 = 0.0f, h3 = 0.0f;
                             if (isWater) {
-                                float h0 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 0, 1, blockType);
-                                float h1 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 1, 1, blockType);
-                                float h2 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 1, 0, blockType);
-                                float h3 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 0, 0, blockType);
-                                
-                                facePositions = new float[][]{
-                                    {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, min.y + h1, max.z,  min.x, min.y + h0, max.z}, // Face 0 (North, +Z)
-                                    {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, min.y + h3, min.z,  max.x, min.y + h2, min.z}, // Face 1 (South, -Z)
-                                    {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, min.y + h2, min.z,  max.x, min.y + h1, max.z}, // Face 2 (East, +X)
-                                    {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, min.y + h0, max.z,  min.x, min.y + h3, min.z}, // Face 3 (West, -X)
-                                    {min.x, min.y + h0, max.z,  max.x, min.y + h1, max.z,  max.x, min.y + h2, min.z,  min.x, min.y + h3, min.z}, // Face 4 (Up, +Y)
-                                    {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}  // Face 5 (Down, -Y)
-                                };
-                            } else {
-                                facePositions = new float[][]{
-                                    {min.x, min.y, max.z,  max.x, min.y, max.z,  max.x, max.y, max.z,  min.x, max.y, max.z},
-                                    {max.x, min.y, min.z,  min.x, min.y, min.z,  min.x, max.y, min.z,  max.x, max.y, min.z},
-                                    {max.x, min.y, max.z,  max.x, min.y, min.z,  max.x, max.y, min.z,  max.x, max.y, max.z},
-                                    {min.x, min.y, min.z,  min.x, min.y, max.z,  min.x, max.y, max.z,  min.x, max.y, min.z},
-                                    {min.x, max.y, max.z,  max.x, max.y, max.z,  max.x, max.y, min.z,  min.x, max.y, min.z},
-                                    {min.x, min.y, min.z,  max.x, min.y, min.z,  max.x, min.y, max.z,  min.x, min.y, max.z}
-                                };
+                                h0 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 0, 1, blockType);
+                                h1 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 1, 1, blockType);
+                                h2 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 1, 0, blockType);
+                                h3 = getCornerWaterHeight(neighborhood, worldX, worldY, worldZ, 0, 0, blockType);
                             }
                             
                             for (int face = 0; face < 6; face++) {
@@ -746,12 +792,12 @@ public class ChunkMeshGenerator {
 
                                 boolean onBoundary = false;
                                 switch (face) {
-                                    case 0: onBoundary = (box.getMax().z == 1.0f); break; 
-                                    case 1: onBoundary = (box.getMin().z == 0.0f); break; 
-                                    case 2: onBoundary = (box.getMax().x == 1.0f); break; 
-                                    case 3: onBoundary = (box.getMin().x == 0.0f); break; 
-                                    case 4: onBoundary = (box.getMax().y == 1.0f); break; 
-                                    case 5: onBoundary = (box.getMin().y == 0.0f); break; 
+                                    case 0: onBoundary = (box.maxZ() == 1.0f); break; 
+                                    case 1: onBoundary = (box.minZ() == 0.0f); break; 
+                                    case 2: onBoundary = (box.maxX() == 1.0f); break; 
+                                    case 3: onBoundary = (box.minX() == 0.0f); break; 
+                                    case 4: onBoundary = (box.maxY() == 1.0f); break; 
+                                    case 5: onBoundary = (box.minY() == 0.0f); break; 
                                 }
 
                                 if (def.isAlwaysRender() || !onBoundary) {
@@ -813,7 +859,8 @@ public class ChunkMeshGenerator {
                                             }
                                         }
                                     }
-                                    currentTarget.addFace(facePositions[face], FACE_NORMALS[face], faceBlockType, BlockTextureMapper.uvFor(block, face, atlas), face, (float)x, (float)y, (float)z, neighborMask, overlayLayer, def.isSway(), neighborhood, worldX, worldY, worldZ);
+                                    float[] fp = currentTarget.getFaceVertices(face, box, h0, h1, h2, h3, isWater);
+                                    currentTarget.addFace(fp, FACE_NORMALS[face], faceBlockType, BlockTextureMapper.uvFor(block, face, atlas), face, (float)x, (float)y, (float)z, neighborMask, overlayLayer, def.isSway(), neighborhood, worldX, worldY, worldZ);
                                 }
                             }
                         }

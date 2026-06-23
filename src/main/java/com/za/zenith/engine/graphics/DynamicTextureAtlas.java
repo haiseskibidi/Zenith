@@ -24,6 +24,7 @@ public class DynamicTextureAtlas {
     private int width;
     private int height;
     private int layers;
+    private final float[][] uvCache = new float[1024][];
 
     public DynamicTextureAtlas(int tileSize) {
         this.tileSize = tileSize;
@@ -34,6 +35,7 @@ public class DynamicTextureAtlas {
     }
 
     public void build() {
+        java.util.Arrays.fill(uvCache, null);
         int count = keyToPath.size();
         if (count == 0) {
             createWhiteTexture();
@@ -201,13 +203,23 @@ public class DynamicTextureAtlas {
 
     public float[] uvFor(String key) {
         Integer layer = keyToLayer.get(key);
-        float l = (layer != null) ? (float) layer : 0.0f;
-        // Returns 12 values: U, V, W for 4 vertices
+        int l = (layer != null) ? layer : 0;
+        if (l >= 0 && l < uvCache.length) {
+            if (uvCache[l] == null) {
+                uvCache[l] = new float[]{
+                    0, 0, (float)l,
+                    1, 0, (float)l,
+                    1, 1, (float)l,
+                    0, 1, (float)l
+                };
+            }
+            return uvCache[l];
+        }
         return new float[]{
-            0, 0, l,
-            1, 0, l,
-            1, 1, l,
-            0, 1, l
+            0, 0, (float)l,
+            1, 0, (float)l,
+            1, 1, (float)l,
+            0, 1, (float)l
         };
     }
 }
