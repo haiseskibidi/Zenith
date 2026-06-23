@@ -748,9 +748,9 @@ public class Player extends LivingEntity {
     private boolean canStandUp(World world) {
         com.za.zenith.world.physics.PhysicsSettings settings = com.za.zenith.world.physics.PhysicsSettings.getInstance();
         com.za.zenith.world.physics.AABB standingBox = new com.za.zenith.world.physics.AABB(-settings.playerWidth / 2, 0, -settings.playerWidth / 2, settings.playerWidth / 2, settings.standingHeight, settings.playerWidth / 2).offset(position);
-        for (int x = (int)Math.floor(standingBox.getMin().x); x <= (int)Math.floor(standingBox.getMax().x); x++) {
-            for (int y = (int)Math.floor(standingBox.getMin().y); y <= (int)Math.floor(standingBox.getMax().y); y++) {
-                for (int z = (int)Math.floor(standingBox.getMin().z); z <= (int)Math.floor(standingBox.getMax().z); z++) {
+        for (int x = (int)Math.floor(standingBox.minX()); x <= (int)Math.floor(standingBox.maxX()); x++) {
+            for (int y = (int)Math.floor(standingBox.minY()); y <= (int)Math.floor(standingBox.maxY()); y++) {
+                for (int z = (int)Math.floor(standingBox.minZ()); z <= (int)Math.floor(standingBox.maxZ()); z++) {
                     com.za.zenith.world.blocks.Block b = world.getBlock(x, y, z);
                     if (!b.isAir() && b.isSolid()) return false;
                 }
