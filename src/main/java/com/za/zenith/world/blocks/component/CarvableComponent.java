@@ -17,14 +17,14 @@ public class CarvableComponent extends BlockComponent {
     @SerializedName("final_block")
     private String finalBlockId;
     @SerializedName("tool_tag")
-    private String toolTag = "zenith:axes";
+    private String toolTag = "zenith:knives";
 
     @Override
     public boolean onLeftClick(World world, BlockPos pos, Player player, ItemStack heldStack, float hitX, float hitY, float hitZ, boolean isNewClick) {
-        // Обтёсывание работает только при ударе по верхней грани
-        if (hitY < 0.9f) return false;
+        // Обтёсывание работает только при новом клике и ударе по верхней грани
+        if (!isNewClick || hitY < 0.9f) return false;
 
-        if (heldStack != null && (heldStack.getItem().hasTag(Identifier.of(toolTag)) || heldStack.getItem().getIdentifier().getPath().contains("axe"))) {
+        if (heldStack != null && (heldStack.getItem().hasTag(Identifier.of(toolTag)) || heldStack.getItem().getIdentifier().getPath().contains("knife"))) {
             var be = world.getBlockEntity(pos);
             if (!(be instanceof ModularBlockEntity modular)) return false;
 

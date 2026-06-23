@@ -17,11 +17,6 @@
       "slots": 9,
       "grid_size": 3,
       "recipe_type": "in_world_crafting"
-    },
-    {
-      "type": "zenith:carvable",
-      "final_block": "zenith:stripped_oak_log",
-      "required_hits": 10
     }
   ]
 }

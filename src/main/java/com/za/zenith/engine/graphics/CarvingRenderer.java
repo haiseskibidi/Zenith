@@ -26,17 +26,33 @@ public class CarvingRenderer {
         if (mask < 0) return; // Нет маски для отрисовки
         
         BlockPos pos = modular.getPos();
+        com.za.zenith.world.World world = modular.getWorld();
+        if (world == null) return;
         
-        if (modular.getWorld() == null) return;
-        int blockType = modular.getWorld().getBlock(pos).getType();
+        int blockType = world.getBlock(pos).getType();
         com.za.zenith.world.blocks.BlockTextures textures = com.za.zenith.world.blocks.BlockRegistry.getTextures(blockType);
         if (textures == null || textures.getTop() == null) return;
         
-        float[] uv = atlas.uvFor(textures.getTop());
+        String textureName = textures.getTop();
+        if (textureName != null && textureName.contains("stripped_")) {
+            textureName = textureName.replace("stripped_", "");
+        }
+        float[] uv = atlas.uvFor(textureName);
         if (uv == null) return;
 
         if (fullFaceMesh == null) {
             createFullFaceMesh();
+        }
+
+        // 1. Устанавливаем освещение из чанка для оверлея
+        int lx = pos.x(), ly = pos.y() + 1, lz = pos.z();
+        com.za.zenith.world.chunks.Chunk chunk = world.getChunk(com.za.zenith.world.chunks.ChunkPos.fromBlockPos(lx, lz));
+        if (chunk != null) {
+            float sun = chunk.getSunlight(lx & 15, ly, lz & 15);
+            float block = chunk.getBlockLight(lx & 15, ly, lz & 15);
+            shader.setVector3f("uOverrideLight", sun, block, 1.0f);
+        } else {
+            shader.setVector3f("uOverrideLight", 15.0f, 0.0f, 1.0f);
         }
 
         shader.setBoolean("useMask", true);
@@ -48,6 +64,27 @@ public class CarvingRenderer {
         boolean isProxy = pos.equals(breakingPos);
         if (isProxy) {
             shader.setBoolean("uIsProxy", true);
+            
+            // Загружаем wobble анимацию для блока
+            var def = com.za.zenith.world.blocks.BlockRegistry.getBlock(blockType);
+            String animName = (def != null && def.getWobbleAnimation() != null) ? def.getWobbleAnimation() : "block_wobble";
+            var profile = com.za.zenith.entities.parkour.animation.AnimationRegistry.get(animName);
+            
+            float sx = 1.0f, sy = 1.0f, sz = 1.0f, ox = 0.0f, oy = 0.0f, oz = 0.0f, sh = 0.0f;
+            if (profile != null) {
+                float nt = wobbleTimer / Math.max(0.001f, profile.getDuration());
+                sx = profile.evaluate("scale_x", nt, 1.0f); 
+                sy = profile.evaluate("scale_y", nt, 1.0f); 
+                sz = profile.evaluate("scale_z", nt, 1.0f);
+                ox = profile.evaluate("offset_x", nt, 0.0f); 
+                oy = profile.evaluate("offset_y", nt, 0.0f); 
+                oz = profile.evaluate("offset_z", nt, 0.0f);
+                sh = profile.evaluate("shake", nt, 0.0f);
+            }
+            shader.setVector3f("uWobbleScale", RenderContext.getVector().set(sx, sy, sz));
+            shader.setVector3f("uWobbleOffset", RenderContext.getVector().set(ox, oy, oz));
+            shader.setFloat("uWobbleShake", sh);
+            shader.setFloat("uWobbleTime", wobbleTimer);
         }
 
         // Use the exact same model matrix setup as the breaking proxy block
@@ -63,6 +100,7 @@ public class CarvingRenderer {
 
         shader.setBoolean("useMask", false);
         shader.setFloat("brightnessMultiplier", 1.0f);
+        shader.setVector3f("uOverrideLight", -1.0f, -1.0f, -1.0f); // Сбрасываем освещение
     }
 
     private void createFullFaceMesh() {
